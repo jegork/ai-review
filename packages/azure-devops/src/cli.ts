@@ -1,4 +1,4 @@
-import type { FocusArea, ReviewConfig, ReviewStyle } from "@rusty-bot/core";
+import type { FocusArea, ReviewConfig, ReviewStyle, McpServerConfig } from "@rusty-bot/core";
 import {
   filterFiles,
   stripDeletionOnlyHunks,
@@ -9,6 +9,7 @@ import {
   AzureDevOpsTicketProvider,
   runReview,
   formatSummaryComment,
+  parseMcpServersEnv,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
@@ -110,6 +111,15 @@ async function main(): Promise<void> {
 
   const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
+  let mcpServers: McpServerConfig[] = [];
+  if (process.env.RUSTY_MCP_SERVERS) {
+    try {
+      mcpServers = parseMcpServersEnv(process.env.RUSTY_MCP_SERVERS);
+    } catch (err) {
+      log(`Warning: failed to parse RUSTY_MCP_SERVERS: ${err}`);
+    }
+  }
+
   // parseDiff expects a raw unified diff string; compressed is already
   // the formatted diff text from compressDiff, so pass it to the agent directly
   const review = await runReview(
@@ -117,7 +127,7 @@ async function main(): Promise<void> {
     compressed,
     metadata,
     tickets.length > 0 ? tickets : undefined,
-    { provider, sourceRef: metadata.sourceBranch },
+    { provider, sourceRef: metadata.sourceBranch, mcpServers },
   );
 
   const criticalCount = review.findings.filter((f) => f.severity === "critical").length;

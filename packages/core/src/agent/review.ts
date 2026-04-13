@@ -5,10 +5,14 @@ import { buildSystemPrompt, buildUserMessage } from "./prompts.js";
 import { resolveModelConfig, resolveModel, getModelDisplayName } from "./model.js";
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
 import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
+import type { McpServerConfig } from "../mcp/types.js";
+import { connectMcpServers } from "../mcp/client.js";
 
 export interface RunReviewOptions {
   provider?: GitProvider;
   sourceRef?: string;
+  /** MCP servers to connect to for additional tools. */
+  mcpServers?: McpServerConfig[];
 }
 
 function buildTools(options?: RunReviewOptions): ToolsInput {
@@ -35,29 +39,46 @@ export async function runReview(
   const model = resolveModel(modelConfig);
   const modelName = getModelDisplayName(modelConfig);
 
-  const agent = new Agent({
-    id: "review-agent",
-    name: "Rusty Bot Reviewer",
-    instructions: systemPrompt,
-    model,
-    tools: buildTools(options),
-  });
+  const builtInTools = buildTools(options);
 
-  const response = await agent.generate(userMessage, {
-    structuredOutput: {
-      schema: ReviewOutputSchema,
-    },
-  });
+  let mcpTools: ToolsInput = {};
+  let disconnectMcp: (() => Promise<void>) | undefined;
 
-  const parsed = response.object;
+  if (options?.mcpServers && options.mcpServers.length > 0) {
+    const mcp = await connectMcpServers(options.mcpServers);
+    mcpTools = mcp.tools;
+    disconnectMcp = mcp.disconnect;
+  }
 
-  return {
-    summary: parsed.summary,
-    recommendation: parsed.recommendation,
-    findings: parsed.findings,
-    observations: parsed.observations,
-    filesReviewed: parsed.filesReviewed,
-    modelUsed: modelName,
-    tokenCount: response.usage?.totalTokens ?? 0,
-  };
+  try {
+    const agent = new Agent({
+      id: "review-agent",
+      name: "Rusty Bot Reviewer",
+      instructions: systemPrompt,
+      model,
+      tools: { ...builtInTools, ...mcpTools },
+    });
+
+    const response = await agent.generate(userMessage, {
+      structuredOutput: {
+        schema: ReviewOutputSchema,
+      },
+    });
+
+    const parsed = response.object;
+
+    return {
+      summary: parsed.summary,
+      recommendation: parsed.recommendation,
+      findings: parsed.findings,
+      observations: parsed.observations,
+      filesReviewed: parsed.filesReviewed,
+      modelUsed: modelName,
+      tokenCount: response.usage?.totalTokens ?? 0,
+    };
+  } finally {
+    if (disconnectMcp) {
+      await disconnectMcp();
+    }
+  }
 }
