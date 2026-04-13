@@ -117,6 +117,7 @@ async function main(): Promise<void> {
     compressed,
     metadata,
     tickets.length > 0 ? tickets : undefined,
+    { provider, sourceRef: metadata.sourceBranch },
   );
 
   const criticalCount = review.findings.filter((f) => f.severity === "critical").length;

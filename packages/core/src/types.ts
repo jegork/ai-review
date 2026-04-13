@@ -83,10 +83,17 @@ export interface TicketRef {
   url?: string;
 }
 
+export interface CodeSearchResult {
+  file: string;
+  line: number;
+  content: string;
+}
+
 export interface GitProvider {
   getDiff(): Promise<FilePatch[]>;
   getPRMetadata(): Promise<PRMetadata>;
   getFileContent(path: string, ref: string): Promise<string | null>;
+  searchCode(query: string): Promise<CodeSearchResult[]>;
   postSummaryComment(markdown: string): Promise<void>;
   postInlineComments(findings: Finding[]): Promise<void>;
   deleteExistingBotComments(): Promise<void>;

@@ -88,7 +88,10 @@ export async function orchestrateReview(params: {
     const ticketProviders = await buildTicketProviders(owner, repo);
     const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
-    const result = await runReview(config, compressed, metadata, tickets);
+    const result = await runReview(config, compressed, metadata, tickets, {
+      provider,
+      sourceRef: metadata.sourceBranch,
+    });
 
     const summary = formatSummaryComment(result);
     await provider.postSummaryComment(summary);

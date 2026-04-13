@@ -1,5 +1,12 @@
 import type { Octokit } from "octokit";
-import type { GitProvider, FilePatch, PRMetadata, Finding, Hunk } from "@rusty-bot/core";
+import type {
+  GitProvider,
+  FilePatch,
+  PRMetadata,
+  Finding,
+  Hunk,
+  CodeSearchResult,
+} from "@rusty-bot/core";
 import { formatInlineComment } from "@rusty-bot/core";
 
 const BOT_MARKER = "<!-- rusty-bot-review -->";
@@ -151,6 +158,23 @@ export class GitHubProvider implements GitProvider {
       return data as unknown as string;
     } catch {
       return null;
+    }
+  }
+
+  async searchCode(query: string): Promise<CodeSearchResult[]> {
+    try {
+      const { data } = await this.octokit.request("GET /search/code", {
+        q: `${query} repo:${this.owner}/${this.repo}`,
+        per_page: 20,
+        headers: { accept: "application/vnd.github.text-match+json" },
+      });
+      return (data.items ?? []).map((item) => ({
+        file: item.path,
+        line: 0,
+        content: item.text_matches?.[0]?.fragment ?? "",
+      }));
+    } catch {
+      return [];
     }
   }
 

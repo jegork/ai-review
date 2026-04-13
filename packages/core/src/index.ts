@@ -13,6 +13,7 @@ export type {
   TicketInfo,
   TicketSource,
   TicketRef,
+  CodeSearchResult,
   GitProvider,
   TicketProvider,
 } from "./types.js";

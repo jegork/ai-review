@@ -1,14 +1,33 @@
 import { Agent } from "@mastra/core/agent";
+import type { ToolsInput } from "@mastra/core/agent";
 import { ReviewOutputSchema } from "./schema.js";
 import { buildSystemPrompt, buildUserMessage } from "./prompts.js";
 import { resolveModelConfig, resolveModel, getModelDisplayName } from "./model.js";
-import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult } from "../types.js";
+import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
+import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
+
+export interface RunReviewOptions {
+  provider?: GitProvider;
+  sourceRef?: string;
+}
+
+function buildTools(options?: RunReviewOptions): ToolsInput {
+  const tools: ToolsInput = {};
+  if (options?.provider) {
+    tools.searchCode = createSearchCodeTool(options.provider);
+    if (options.sourceRef) {
+      tools.getFileContext = createGetFileContextTool(options.provider, options.sourceRef);
+    }
+  }
+  return tools;
+}
 
 export async function runReview(
   config: ReviewConfig,
   diff: string,
   prMetadata: PRMetadata,
   ticketContext?: TicketInfo[],
+  options?: RunReviewOptions,
 ): Promise<ReviewResult> {
   const systemPrompt = buildSystemPrompt(config);
   const userMessage = buildUserMessage(diff, prMetadata, ticketContext);
@@ -21,6 +40,7 @@ export async function runReview(
     name: "Rusty Bot Reviewer",
     instructions: systemPrompt,
     model,
+    tools: buildTools(options),
   });
 
   const response = await agent.generate(userMessage, {

@@ -1,4 +1,11 @@
-import type { GitProvider, FilePatch, PRMetadata, Finding, Hunk } from "@rusty-bot/core";
+import type {
+  GitProvider,
+  FilePatch,
+  PRMetadata,
+  Finding,
+  Hunk,
+  CodeSearchResult,
+} from "@rusty-bot/core";
 import { formatInlineComment } from "@rusty-bot/core";
 
 const BOT_MARKER = "<!-- rusty-bot-review -->";
@@ -262,6 +269,43 @@ export class AzureDevOpsProvider implements GitProvider {
       return await response.text();
     } catch {
       return null;
+    }
+  }
+
+  async searchCode(query: string): Promise<CodeSearchResult[]> {
+    try {
+      // azure devops code search API uses the almsearch endpoint
+      const searchUrl = `${this.orgUrl}/${this.project}/_apis/search/codesearchresults?${API_VERSION}`;
+      const response = await fetch(searchUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          searchText: query,
+          $top: 20,
+          filters: {
+            Repository: [this.repoName],
+          },
+        }),
+      });
+      if (!response.ok) return [];
+      const data = (await response.json()) as {
+        results?: Array<{
+          fileName: string;
+          path: string;
+          matches?: Record<string, Array<{ charOffset: number; length: number }>>;
+          contentId?: string;
+        }>;
+      };
+      return (data.results ?? []).map((r) => ({
+        file: r.path?.replace(/^\//, "") ?? r.fileName,
+        line: 0,
+        content: "",
+      }));
+    } catch {
+      return [];
     }
   }
 
