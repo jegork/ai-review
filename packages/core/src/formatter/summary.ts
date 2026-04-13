@@ -1,0 +1,137 @@
+import type { ReviewResult, Severity, Finding, Observation } from "../types.js";
+
+const SEVERITY_ORDER: Severity[] = ["critical", "warning", "suggestion"];
+
+const SEVERITY_LABEL: Record<Severity, string> = {
+  critical: "CRITICAL",
+  warning: "WARNING",
+  suggestion: "SUGGESTION",
+};
+
+const RECOMMENDATION_TEXT: Record<ReviewResult["recommendation"], string> = {
+  looks_good: "Looks good!",
+  address_before_merge: "Address before merge",
+  critical_issues: "Critical issues found",
+};
+
+function buildIssueTable(items: (Finding | Observation)[]): string {
+  const rows = items.map(
+    (item) => `| \`${item.file}\` | ${item.line} | ${item.message} |`
+  );
+  return ["| File | Line | Issue |", "|------|------|-------|", ...rows].join(
+    "\n"
+  );
+}
+
+function countBySeverity(findings: Finding[]): Record<Severity, number> {
+  const counts: Record<Severity, number> = {
+    critical: 0,
+    warning: 0,
+    suggestion: 0,
+  };
+  for (const f of findings) {
+    counts[f.severity]++;
+  }
+  return counts;
+}
+
+export function formatSummaryComment(review: ReviewResult): string {
+  const counts = countBySeverity(review.findings);
+  const totalIssues = review.findings.length;
+
+  const lines: string[] = [];
+
+  lines.push("# Code Review Summary");
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push(
+    `**Status:** ${totalIssues} Issues Found | **Recommendation:** ${RECOMMENDATION_TEXT[review.recommendation]}`
+  );
+  lines.push("");
+
+  lines.push("## Overview");
+  lines.push("");
+  lines.push("| Severity | Count |");
+  lines.push("|----------|-------|");
+  for (const sev of SEVERITY_ORDER) {
+    lines.push(`| ${SEVERITY_LABEL[sev]} | ${counts[sev]} |`);
+  }
+  lines.push("");
+
+  const severitiesWithFindings = SEVERITY_ORDER.filter(
+    (sev) => counts[sev] > 0
+  );
+
+  lines.push("<details>");
+  lines.push("<summary>Issue Details (click to expand)</summary>");
+  lines.push("");
+
+  if (severitiesWithFindings.length === 0) {
+    lines.push("No issues found.");
+    lines.push("");
+  } else {
+    for (const sev of severitiesWithFindings) {
+      const items = review.findings.filter((f) => f.severity === sev);
+      lines.push(SEVERITY_LABEL[sev]);
+      lines.push("");
+      lines.push(buildIssueTable(items));
+      lines.push("");
+    }
+  }
+
+  lines.push("</details>");
+  lines.push("");
+
+  if (review.observations.length > 0) {
+    lines.push("<details>");
+    lines.push("<summary>Other Observations (not in diff)</summary>");
+    lines.push("");
+    lines.push(
+      "Issues found in unchanged code that cannot receive inline comments:"
+    );
+    lines.push("");
+    lines.push(buildIssueTable(review.observations));
+    lines.push("");
+    lines.push("</details>");
+    lines.push("");
+  }
+
+  const fileIssueCounts = new Map<string, number>();
+  for (const file of review.filesReviewed) {
+    fileIssueCounts.set(file, 0);
+  }
+  for (const f of review.findings) {
+    fileIssueCounts.set(
+      f.file,
+      (fileIssueCounts.get(f.file) ?? 0) + 1
+    );
+  }
+
+  lines.push("<details>");
+  lines.push(
+    `<summary>Files Reviewed (${review.filesReviewed.length} files)</summary>`
+  );
+  lines.push("");
+  for (const file of review.filesReviewed) {
+    const count = fileIssueCounts.get(file) ?? 0;
+    lines.push(`- \`${file}\` - ${count} issues`);
+  }
+  lines.push("");
+  lines.push("</details>");
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push("## Summary");
+  lines.push("");
+  lines.push(review.summary);
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push(
+    `Reviewed by ${review.modelUsed} · ${review.tokenCount} tokens`
+  );
+  lines.push("");
+
+  return lines.join("\n");
+}

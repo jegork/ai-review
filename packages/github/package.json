@@ -1,0 +1,27 @@
+{
+  "name": "@rusty-bot/github",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.13",
+    "@mastra/hono": "^1.0.0",
+    "@octokit/app": "^15.0.0",
+    "@rusty-bot/core": "workspace:*",
+    "hono": "^4.7.0",
+    "octokit": "^4.1.0"
+  }
+}

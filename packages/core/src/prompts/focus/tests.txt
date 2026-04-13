@@ -1,0 +1,8 @@
+Pay special attention to TEST COVERAGE:
+- New code paths that lack corresponding test cases
+- Modified logic where existing tests may no longer be sufficient
+- Missing edge case tests (null inputs, empty collections, boundary values)
+- Missing error path tests (what happens when things fail?)
+- Test quality (are tests actually asserting meaningful behavior, or just that code runs?)
+- Missing integration tests for code that interacts with external systems
+- Flaky test patterns (time-dependent, order-dependent, network-dependent)

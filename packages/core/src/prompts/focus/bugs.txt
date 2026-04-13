@@ -1,0 +1,9 @@
+Pay special attention to BUG DETECTION:
+- Logic errors, off-by-one errors, incorrect boolean logic
+- Null/undefined handling gaps, unhandled edge cases
+- Type mismatches, incorrect type assertions or casts
+- Race conditions, concurrency bugs, deadlocks
+- Error handling gaps (swallowed exceptions, missing error propagation)
+- Resource leaks (unclosed connections, file handles, streams)
+- Incorrect state management, stale closures
+- Boundary conditions (empty arrays, zero values, max integers, empty strings)

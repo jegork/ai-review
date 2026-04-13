@@ -1,0 +1,8 @@
+Pay special attention to DOCUMENTATION:
+- Public APIs without clear documentation (parameters, return values, exceptions)
+- Complex logic without explanatory comments
+- Missing or outdated README updates for new features
+- Unclear function/method names that need documentation to understand
+- Missing JSDoc/docstrings on exported interfaces and types
+- Breaking API changes without migration notes
+- Missing changelog entries for user-facing changes

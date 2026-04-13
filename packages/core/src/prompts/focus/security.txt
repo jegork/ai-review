@@ -1,0 +1,9 @@
+Pay special attention to SECURITY VULNERABILITIES:
+- SQL injection, NoSQL injection, command injection, code injection
+- Cross-site scripting (XSS), cross-site request forgery (CSRF)
+- Authentication and authorization bypasses, missing access controls
+- Sensitive data exposure (hardcoded secrets, tokens, API keys, PII in logs)
+- Insecure deserialization, path traversal, SSRF
+- Missing input validation and sanitization at trust boundaries
+- Insecure cryptography (weak algorithms, hardcoded IVs, ECB mode)
+- Race conditions that could lead to privilege escalation

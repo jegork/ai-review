@@ -1,0 +1,8 @@
+Pay special attention to CODE STYLE:
+- Naming conventions (descriptive names, consistent casing)
+- Code organization (function length, single responsibility, logical grouping)
+- Dead code, unused imports, unreachable branches
+- Magic numbers and strings (should be named constants)
+- Inconsistent patterns within the codebase
+- Overly complex expressions that could be simplified
+- Proper use of language features and idioms

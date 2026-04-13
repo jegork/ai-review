@@ -1,0 +1,28 @@
+{
+  "name": "@rusty-bot/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc && cp -r src/prompts dist/prompts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mastra/core": "^1.5.0",
+    "@mastra/libsql": "^1.0.0",
+    "picomatch": "^4.0.4",
+    "tiktoken": "^1.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/picomatch": "^4.0.3"
+  }
+}

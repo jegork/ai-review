@@ -1,0 +1,9 @@
+Pay special attention to PERFORMANCE ISSUES:
+- N+1 query patterns, missing database indexes, unoptimized queries
+- Inefficient loops (nested loops on large datasets, unnecessary iterations)
+- Missing pagination on potentially large result sets
+- Memory leaks (unclosed resources, growing collections, event listener leaks)
+- Unnecessary re-renders in UI frameworks, missing memoization
+- Blocking operations on the main thread or event loop
+- Redundant API calls, missing caching opportunities
+- Large payload sizes, missing compression

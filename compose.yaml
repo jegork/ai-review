@@ -1,0 +1,12 @@
+services:
+  rusty-bot:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file: .env
+    volumes:
+      - rusty-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  rusty-data:
