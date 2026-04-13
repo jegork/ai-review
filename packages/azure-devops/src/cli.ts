@@ -1,7 +1,7 @@
 import type { FocusArea, ReviewConfig, ReviewStyle } from "@rusty-bot/core";
 import {
-  parseDiff,
   filterFiles,
+  stripDeletionOnlyHunks,
   compressDiff,
   extractTicketRefs,
   resolveTickets,
@@ -47,7 +47,8 @@ export function parseConfig(): {
     throw new Error(`invalid review style: ${reviewStyle}`);
   }
 
-  const focusAreas = (process.env.RUSTY_FOCUS_AREAS?.split(",").filter(Boolean) ?? []) as FocusArea[];
+  const focusAreas = (process.env.RUSTY_FOCUS_AREAS?.split(",").filter(Boolean) ??
+    []) as FocusArea[];
   const ignorePatterns = process.env.RUSTY_IGNORE_PATTERNS?.split(",").filter(Boolean) ?? [];
   const customInstructions = process.env.RUSTY_CUSTOM_INSTRUCTIONS;
   const failOnCritical = process.env.RUSTY_FAIL_ON_CRITICAL !== "false";
@@ -80,10 +81,13 @@ async function main(): Promise<void> {
 
   const rawPatches = await provider.getDiff();
   const filtered = filterFiles(rawPatches, config.ignorePatterns);
-  const skippedCount = rawPatches.length - filtered.length;
-  log(`Files changed: ${rawPatches.length} (${filtered.length} reviewed, ${skippedCount} skipped)`);
+  const reviewable = stripDeletionOnlyHunks(filtered);
+  const skippedCount = rawPatches.length - reviewable.length;
+  log(
+    `Files changed: ${rawPatches.length} (${reviewable.length} reviewed, ${skippedCount} skipped)`,
+  );
 
-  const { compressed, skippedFiles } = compressDiff(filtered, MAX_TOKENS);
+  const { compressed, skippedFiles } = compressDiff(reviewable, MAX_TOKENS);
   if (skippedFiles.length > 0) {
     log(`Skipped large files: ${skippedFiles.join(", ")}`);
   }
@@ -106,7 +110,12 @@ async function main(): Promise<void> {
 
   // parseDiff expects a raw unified diff string; compressed is already
   // the formatted diff text from compressDiff, so pass it to the agent directly
-  const review = await runReview(config, compressed, metadata, tickets.length > 0 ? tickets : undefined);
+  const review = await runReview(
+    config,
+    compressed,
+    metadata,
+    tickets.length > 0 ? tickets : undefined,
+  );
 
   const criticalCount = review.findings.filter((f) => f.severity === "critical").length;
   const warningCount = review.findings.filter((f) => f.severity === "warning").length;
@@ -128,9 +137,7 @@ async function main(): Promise<void> {
 }
 
 // only run when invoked directly, not when imported in tests
-const isDirectRun =
-  process.argv[1] &&
-  import.meta.url === `file://${process.argv[1]}`;
+const isDirectRun = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
 
 if (isDirectRun) {
   main().catch((err) => {

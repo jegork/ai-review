@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parseDiff } from "../diff/parser.js";
-import { filterFiles } from "../diff/filter.js";
+import { filterFiles, stripDeletionOnlyHunks } from "../diff/filter.js";
 import { compressDiff, countTokens } from "../diff/compress.js";
+import type { FilePatch } from "../types.js";
 
 const singleFileDiff = `diff --git a/src/index.ts b/src/index.ts
 --- a/src/index.ts
@@ -318,8 +319,28 @@ describe("compressDiff", () => {
 
   it("sorts files by token cost descending", () => {
     const patches = [
-      { path: "small.ts", hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, content: "+x" }], additions: 1, deletions: 0, isBinary: false },
-      { path: "big.ts", hunks: [{ oldStart: 1, oldLines: 10, newStart: 1, newLines: 20, content: "+a\n+b\n+c\n+d\n+e\n+f\n+g\n+h\n+i\n+j" }], additions: 10, deletions: 0, isBinary: false },
+      {
+        path: "small.ts",
+        hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, content: "+x" }],
+        additions: 1,
+        deletions: 0,
+        isBinary: false,
+      },
+      {
+        path: "big.ts",
+        hunks: [
+          {
+            oldStart: 1,
+            oldLines: 10,
+            newStart: 1,
+            newLines: 20,
+            content: "+a\n+b\n+c\n+d\n+e\n+f\n+g\n+h\n+i\n+j",
+          },
+        ],
+        additions: 10,
+        deletions: 0,
+        isBinary: false,
+      },
     ];
     const result = compressDiff(patches, 10000);
     // big.ts should appear first since it has more tokens
@@ -333,5 +354,150 @@ describe("compressDiff", () => {
     const result = compressDiff(patches, 0);
     expect(result.compressed).toBe("");
     expect(result.skippedFiles).toEqual(["src/index.ts"]);
+  });
+});
+
+describe("stripDeletionOnlyHunks", () => {
+  it("keeps hunks that have additions", () => {
+    const patches: FilePatch[] = [
+      {
+        path: "src/index.ts",
+        additions: 2,
+        deletions: 1,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 1,
+            oldLines: 3,
+            newStart: 1,
+            newLines: 4,
+            content: " ctx\n-old\n+new\n+added",
+          },
+        ],
+      },
+    ];
+    const result = stripDeletionOnlyHunks(patches);
+    expect(result).toHaveLength(1);
+    expect(result[0].hunks).toHaveLength(1);
+  });
+
+  it("removes hunks that only have deletions", () => {
+    const patches: FilePatch[] = [
+      {
+        path: "src/index.ts",
+        additions: 1,
+        deletions: 2,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 1,
+            oldLines: 3,
+            newStart: 1,
+            newLines: 1,
+            content: " ctx\n-removed1\n-removed2",
+          },
+          { oldStart: 10, oldLines: 2, newStart: 8, newLines: 3, content: " ctx\n+added" },
+        ],
+      },
+    ];
+    const result = stripDeletionOnlyHunks(patches);
+    expect(result).toHaveLength(1);
+    expect(result[0].hunks).toHaveLength(1);
+    expect(result[0].hunks[0].content).toContain("+added");
+  });
+
+  it("removes entire file when all hunks are deletion-only", () => {
+    const patches: FilePatch[] = [
+      {
+        path: "src/removed.ts",
+        additions: 0,
+        deletions: 5,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 1,
+            oldLines: 5,
+            newStart: 1,
+            newLines: 0,
+            content: "-line1\n-line2\n-line3\n-line4\n-line5",
+          },
+        ],
+      },
+    ];
+    const result = stripDeletionOnlyHunks(patches);
+    expect(result).toHaveLength(0);
+  });
+
+  it("handles empty patches array", () => {
+    expect(stripDeletionOnlyHunks([])).toHaveLength(0);
+  });
+
+  it("recalculates additions count after stripping", () => {
+    const patches: FilePatch[] = [
+      {
+        path: "src/mixed.ts",
+        additions: 3,
+        deletions: 2,
+        isBinary: false,
+        hunks: [
+          { oldStart: 1, oldLines: 2, newStart: 1, newLines: 0, content: "-del1\n-del2" },
+          { oldStart: 5, oldLines: 1, newStart: 3, newLines: 2, content: " ctx\n+add1" },
+        ],
+      },
+    ];
+    const result = stripDeletionOnlyHunks(patches);
+    expect(result[0].additions).toBe(1);
+  });
+
+  it("preserves context-only lines in kept hunks", () => {
+    const patches: FilePatch[] = [
+      {
+        path: "src/ctx.ts",
+        additions: 1,
+        deletions: 0,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 1,
+            oldLines: 3,
+            newStart: 1,
+            newLines: 4,
+            content: " line1\n line2\n+new\n line3",
+          },
+        ],
+      },
+    ];
+    const result = stripDeletionOnlyHunks(patches);
+    expect(result).toHaveLength(1);
+    expect(result[0].hunks[0].content).toContain(" line1");
+  });
+
+  it("handles multiple files with mixed hunks", () => {
+    const patches: FilePatch[] = [
+      {
+        path: "src/a.ts",
+        additions: 0,
+        deletions: 1,
+        isBinary: false,
+        hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 0, content: "-gone" }],
+      },
+      {
+        path: "src/b.ts",
+        additions: 1,
+        deletions: 0,
+        isBinary: false,
+        hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, content: " ctx\n+new" }],
+      },
+      {
+        path: "src/c.ts",
+        additions: 0,
+        deletions: 2,
+        isBinary: false,
+        hunks: [{ oldStart: 1, oldLines: 2, newStart: 1, newLines: 0, content: "-a\n-b" }],
+      },
+    ];
+    const result = stripDeletionOnlyHunks(patches);
+    expect(result).toHaveLength(1);
+    expect(result[0].path).toBe("src/b.ts");
   });
 });

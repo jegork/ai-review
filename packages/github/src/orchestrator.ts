@@ -3,6 +3,7 @@ import type { FocusArea, TicketProvider } from "@rusty-bot/core";
 import {
   parseDiff,
   filterFiles,
+  stripDeletionOnlyHunks,
   compressDiff,
   extractTicketRefs,
   resolveTickets,
@@ -13,22 +14,10 @@ import {
   LinearTicketProvider,
 } from "@rusty-bot/core";
 import { GitHubProvider } from "./provider.js";
-import {
-  getRepoConfig,
-  saveReview,
-  getSetting,
-  type ReviewRecord,
-} from "./storage.js";
+import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./storage.js";
 
 const MAX_DIFF_TOKENS = 60_000;
-const ALL_FOCUS_AREAS: FocusArea[] = [
-  "security",
-  "performance",
-  "bugs",
-  "style",
-  "tests",
-  "docs",
-];
+const ALL_FOCUS_AREAS: FocusArea[] = ["security", "performance", "bugs", "style", "tests", "docs"];
 
 async function buildTicketProviders(
   owner: string,
@@ -71,7 +60,7 @@ export async function orchestrateReview(params: {
   try {
     const repoConfig = await getRepoConfig(owner, repo);
     const config = {
-      style: repoConfig?.style ?? "balanced" as const,
+      style: repoConfig?.style ?? ("balanced" as const),
       focusAreas: repoConfig?.focusAreas ?? ALL_FOCUS_AREAS,
       ignorePatterns: repoConfig?.ignorePatterns ?? [],
       customInstructions: repoConfig?.customInstructions,
@@ -88,12 +77,10 @@ export async function orchestrateReview(params: {
 
     const patches = parseDiff(rawDiff);
     const filtered = filterFiles(patches, config.ignorePatterns);
-    const { compressed } = compressDiff(filtered, MAX_DIFF_TOKENS);
+    const reviewable = stripDeletionOnlyHunks(filtered);
+    const { compressed } = compressDiff(reviewable, MAX_DIFF_TOKENS);
 
-    const ticketRefs = extractTicketRefs(
-      metadata.description,
-      metadata.sourceBranch,
-    );
+    const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
     const ticketProviders = await buildTicketProviders(owner, repo);
     const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
