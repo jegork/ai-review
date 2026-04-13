@@ -1,11 +1,5 @@
 import type { Octokit } from "octokit";
-import type {
-  GitProvider,
-  FilePatch,
-  PRMetadata,
-  Finding,
-  Hunk,
-} from "@rusty-bot/core";
+import type { GitProvider, FilePatch, PRMetadata, Finding, Hunk } from "@rusty-bot/core";
 
 const BOT_MARKER = "<!-- rusty-bot-review -->";
 
@@ -22,9 +16,7 @@ function parseHunkHeader(line: string): {
   newStart: number;
   newLines: number;
 } {
-  const match = line.match(
-    /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/,
-  );
+  const match = line.match(/^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/);
   if (!match) {
     return { oldStart: 0, oldLines: 0, newStart: 0, newLines: 0 };
   }
@@ -99,11 +91,7 @@ function parseDiff(rawDiff: string): FilePatch[] {
 
 function formatFindingBody(finding: Finding): string {
   const severityIcon =
-    finding.severity === "critical"
-      ? "🔴"
-      : finding.severity === "warning"
-        ? "🟡"
-        : "🔵";
+    finding.severity === "critical" ? "🔴" : finding.severity === "warning" ? "🟡" : "🔵";
 
   let body = `${severityIcon} **${finding.severity}** (${finding.category})\n\n${finding.message}`;
 
@@ -128,17 +116,14 @@ export class GitHubProvider implements GitProvider {
   }
 
   async getRawDiff(): Promise<string> {
-    const response = await this.octokit.request(
-      "GET /repos/{owner}/{repo}/pulls/{pull_number}",
-      {
-        owner: this.owner,
-        repo: this.repo,
-        pull_number: this.pullNumber,
-        headers: {
-          accept: "application/vnd.github.v3.diff",
-        },
+    const response = await this.octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+      owner: this.owner,
+      repo: this.repo,
+      pull_number: this.pullNumber,
+      headers: {
+        accept: "application/vnd.github.v3.diff",
       },
-    );
+    });
 
     return response.data as unknown as string;
   }
@@ -149,14 +134,11 @@ export class GitHubProvider implements GitProvider {
   }
 
   async getPRMetadata(): Promise<PRMetadata> {
-    const { data } = await this.octokit.request(
-      "GET /repos/{owner}/{repo}/pulls/{pull_number}",
-      {
-        owner: this.owner,
-        repo: this.repo,
-        pull_number: this.pullNumber,
-      },
-    );
+    const { data } = await this.octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+      owner: this.owner,
+      repo: this.repo,
+      pull_number: this.pullNumber,
+    });
 
     return {
       id: String(data.number),
@@ -169,16 +151,28 @@ export class GitHubProvider implements GitProvider {
     };
   }
 
-  async postSummaryComment(markdown: string): Promise<void> {
-    await this.octokit.request(
-      "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
-      {
+  async getFileContent(path: string, ref: string): Promise<string | null> {
+    try {
+      const { data } = await this.octokit.request("GET /repos/{owner}/{repo}/contents/{path}", {
         owner: this.owner,
         repo: this.repo,
-        issue_number: this.pullNumber,
-        body: `${BOT_MARKER}\n${markdown}`,
-      },
-    );
+        path,
+        ref,
+        headers: { accept: "application/vnd.github.v3.raw" },
+      });
+      return data as unknown as string;
+    } catch {
+      return null;
+    }
+  }
+
+  async postSummaryComment(markdown: string): Promise<void> {
+    await this.octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
+      owner: this.owner,
+      repo: this.repo,
+      issue_number: this.pullNumber,
+      body: `${BOT_MARKER}\n${markdown}`,
+    });
   }
 
   async postInlineComments(findings: Finding[]): Promise<void> {
@@ -191,17 +185,14 @@ export class GitHubProvider implements GitProvider {
       body: formatFindingBody(finding),
     }));
 
-    await this.octokit.request(
-      "POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
-      {
-        owner: this.owner,
-        repo: this.repo,
-        pull_number: this.pullNumber,
-        event: "COMMENT",
-        body: "",
-        comments,
-      },
-    );
+    await this.octokit.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews", {
+      owner: this.owner,
+      repo: this.repo,
+      pull_number: this.pullNumber,
+      event: "COMMENT",
+      body: "",
+      comments,
+    });
   }
 
   async deleteExistingBotComments(): Promise<void> {
@@ -214,20 +205,15 @@ export class GitHubProvider implements GitProvider {
       },
     );
 
-    const botComments = comments.filter((c: { body?: string }) =>
-      c.body?.includes(BOT_MARKER),
-    );
+    const botComments = comments.filter((c: { body?: string }) => c.body?.includes(BOT_MARKER));
 
     await Promise.all(
       botComments.map((c: { id: number }) =>
-        this.octokit.request(
-          "DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}",
-          {
-            owner: this.owner,
-            repo: this.repo,
-            comment_id: c.id,
-          },
-        ),
+        this.octokit.request("DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}", {
+          owner: this.owner,
+          repo: this.repo,
+          comment_id: c.id,
+        }),
       ),
     );
   }

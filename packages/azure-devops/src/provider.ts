@@ -1,10 +1,4 @@
-import type {
-  GitProvider,
-  FilePatch,
-  PRMetadata,
-  Finding,
-  Hunk,
-} from "@rusty-bot/core";
+import type { GitProvider, FilePatch, PRMetadata, Finding, Hunk } from "@rusty-bot/core";
 import { formatInlineComment } from "@rusty-bot/core";
 
 const BOT_MARKER = "<!-- rusty-bot-review -->";
@@ -42,9 +36,7 @@ function parseHunkHeader(line: string): {
   newStart: number;
   newLines: number;
 } {
-  const match = line.match(
-    /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/,
-  );
+  const match = line.match(/^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/);
   if (!match) {
     return { oldStart: 0, oldLines: 0, newStart: 0, newLines: 0 };
   }
@@ -163,9 +155,7 @@ export class AzureDevOpsProvider implements GitProvider {
     const pr = await this.request<{
       sourceRefName: string;
       targetRefName: string;
-    }>(
-      `${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`,
-    );
+    }>(`${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`);
 
     const sourceRef = pr.sourceRefName.replace("refs/heads/", "");
     const targetRef = pr.targetRefName.replace("refs/heads/", "");
@@ -243,9 +233,7 @@ export class AzureDevOpsProvider implements GitProvider {
       targetRefName: string;
       url: string;
       repository: { webUrl: string };
-    }>(
-      `${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`,
-    );
+    }>(`${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`);
 
     return {
       id: String(data.pullRequestId),
@@ -256,6 +244,25 @@ export class AzureDevOpsProvider implements GitProvider {
       targetBranch: data.targetRefName.replace("refs/heads/", ""),
       url: `${this.orgUrl}/${this.project}/_git/${this.repoName}/pullrequest/${this.pullRequestId}`,
     };
+  }
+
+  async getFileContent(path: string, ref: string): Promise<string | null> {
+    try {
+      const url =
+        `${this.baseUrl}/items?path=${encodeURIComponent(path)}` +
+        `&versionDescriptor.version=${encodeURIComponent(ref)}` +
+        `&versionDescriptor.versionType=branch&${API_VERSION}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          Accept: "text/plain",
+        },
+      });
+      if (!response.ok) return null;
+      return await response.text();
+    } catch {
+      return null;
+    }
   }
 
   async postSummaryComment(markdown: string): Promise<void> {

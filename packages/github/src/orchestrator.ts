@@ -4,6 +4,7 @@ import {
   parseDiff,
   filterFiles,
   stripDeletionOnlyHunks,
+  expandContext,
   compressDiff,
   extractTicketRefs,
   resolveTickets,
@@ -78,7 +79,10 @@ export async function orchestrateReview(params: {
     const patches = parseDiff(rawDiff);
     const filtered = filterFiles(patches, config.ignorePatterns);
     const reviewable = stripDeletionOnlyHunks(filtered);
-    const { compressed } = compressDiff(reviewable, MAX_DIFF_TOKENS);
+    const expanded = await expandContext(reviewable, (path) =>
+      provider.getFileContent(path, metadata.sourceBranch),
+    );
+    const { compressed } = compressDiff(expanded, MAX_DIFF_TOKENS);
 
     const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
     const ticketProviders = await buildTicketProviders(owner, repo);

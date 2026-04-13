@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseDiff } from "../diff/parser.js";
 import { filterFiles, stripDeletionOnlyHunks } from "../diff/filter.js";
 import { compressDiff, countTokens } from "../diff/compress.js";
+import { expandContext } from "../diff/context.js";
 import type { FilePatch } from "../types.js";
 
 const singleFileDiff = `diff --git a/src/index.ts b/src/index.ts
@@ -499,5 +500,119 @@ describe("stripDeletionOnlyHunks", () => {
     const result = stripDeletionOnlyHunks(patches);
     expect(result).toHaveLength(1);
     expect(result[0].path).toBe("src/b.ts");
+  });
+});
+
+describe("expandContext", () => {
+  const fileContent = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join("\n");
+  const fetcher = async (_path: string) => fileContent;
+  const nullFetcher = async (_path: string) => null;
+
+  function makePatch(overrides?: Partial<FilePatch>): FilePatch {
+    return {
+      path: "src/index.ts",
+      additions: 1,
+      deletions: 0,
+      isBinary: false,
+      hunks: [
+        {
+          oldStart: 15,
+          oldLines: 2,
+          newStart: 15,
+          newLines: 3,
+          content: " line 15\n+new line\n line 16",
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("adds context lines before and after hunk", async () => {
+    const result = await expandContext([makePatch()], fetcher, 5);
+    expect(result).toHaveLength(1);
+    const hunk = result[0].hunks[0];
+    // should include lines 10-14 as context before
+    expect(hunk.content).toContain(" line 10");
+    expect(hunk.content).toContain(" line 14");
+    // original hunk content preserved
+    expect(hunk.content).toContain("+new line");
+    // should include lines 17-20 as context after (newEnd = 15+3-1=17, +5 = 22)
+    expect(hunk.content).toContain(" line 18");
+    expect(hunk.newStart).toBe(10);
+  });
+
+  it("clamps to file start when hunk is near the beginning", async () => {
+    const patch = makePatch({
+      hunks: [
+        { oldStart: 2, oldLines: 2, newStart: 2, newLines: 3, content: " line 2\n+added\n line 3" },
+      ],
+    });
+    const result = await expandContext([patch], fetcher, 5);
+    const hunk = result[0].hunks[0];
+    expect(hunk.newStart).toBe(1);
+    expect(hunk.content).toContain(" line 1");
+  });
+
+  it("clamps to file end when hunk is near the end", async () => {
+    const patch = makePatch({
+      hunks: [
+        {
+          oldStart: 28,
+          oldLines: 2,
+          newStart: 28,
+          newLines: 3,
+          content: " line 28\n+added\n line 29",
+        },
+      ],
+    });
+    const result = await expandContext([patch], fetcher, 5);
+    const hunk = result[0].hunks[0];
+    // before-context added
+    expect(hunk.content).toContain(" line 23");
+    expect(hunk.content).toContain(" line 27");
+    // original hunk preserved
+    expect(hunk.content).toContain("+added");
+    expect(hunk.content).toContain(" line 28");
+    expect(hunk.newStart).toBe(23);
+  });
+
+  it("preserves original patch when file content is unavailable", async () => {
+    const patch = makePatch();
+    const result = await expandContext([patch], nullFetcher, 5);
+    expect(result[0].hunks[0].content).toBe(patch.hunks[0].content);
+  });
+
+  it("skips binary files", async () => {
+    const patch = makePatch({ isBinary: true, hunks: [] });
+    const result = await expandContext([patch], fetcher, 5);
+    expect(result[0]).toEqual(patch);
+  });
+
+  it("handles zero extra lines", async () => {
+    const patch = makePatch();
+    const result = await expandContext([patch], fetcher, 0);
+    expect(result[0].hunks[0].content).toBe(patch.hunks[0].content);
+    expect(result[0].hunks[0].newStart).toBe(15);
+  });
+
+  it("handles multiple hunks in one file", async () => {
+    const patch = makePatch({
+      hunks: [
+        { oldStart: 5, oldLines: 1, newStart: 5, newLines: 2, content: " line 5\n+first" },
+        { oldStart: 20, oldLines: 1, newStart: 21, newLines: 2, content: " line 21\n+second" },
+      ],
+    });
+    const result = await expandContext([patch], fetcher, 3);
+    expect(result[0].hunks).toHaveLength(2);
+    expect(result[0].hunks[0].content).toContain(" line 2");
+    expect(result[0].hunks[1].content).toContain(" line 18");
+  });
+
+  it("handles multiple files", async () => {
+    const patches = [makePatch({ path: "a.ts" }), makePatch({ path: "b.ts" })];
+    const result = await expandContext(patches, fetcher, 3);
+    expect(result).toHaveLength(2);
+    expect(result[0].hunks[0].content).toContain(" line 12");
+    expect(result[1].hunks[0].content).toContain(" line 12");
   });
 });

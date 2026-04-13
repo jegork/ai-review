@@ -1,19 +1,10 @@
 export type ReviewStyle = "strict" | "balanced" | "lenient" | "roast";
 
-export type FocusArea =
-  | "security"
-  | "performance"
-  | "bugs"
-  | "style"
-  | "tests"
-  | "docs";
+export type FocusArea = "security" | "performance" | "bugs" | "style" | "tests" | "docs";
 
 export type Severity = "critical" | "warning" | "suggestion";
 
-export type Recommendation =
-  | "looks_good"
-  | "address_before_merge"
-  | "critical_issues";
+export type Recommendation = "looks_good" | "address_before_merge" | "critical_issues";
 
 export interface Finding {
   file: string;
@@ -95,6 +86,7 @@ export interface TicketRef {
 export interface GitProvider {
   getDiff(): Promise<FilePatch[]>;
   getPRMetadata(): Promise<PRMetadata>;
+  getFileContent(path: string, ref: string): Promise<string | null>;
   postSummaryComment(markdown: string): Promise<void>;
   postInlineComments(findings: Finding[]): Promise<void>;
   deleteExistingBotComments(): Promise<void>;

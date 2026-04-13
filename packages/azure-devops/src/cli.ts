@@ -2,6 +2,7 @@ import type { FocusArea, ReviewConfig, ReviewStyle } from "@rusty-bot/core";
 import {
   filterFiles,
   stripDeletionOnlyHunks,
+  expandContext,
   compressDiff,
   extractTicketRefs,
   resolveTickets,
@@ -82,12 +83,13 @@ async function main(): Promise<void> {
   const rawPatches = await provider.getDiff();
   const filtered = filterFiles(rawPatches, config.ignorePatterns);
   const reviewable = stripDeletionOnlyHunks(filtered);
-  const skippedCount = rawPatches.length - reviewable.length;
-  log(
-    `Files changed: ${rawPatches.length} (${reviewable.length} reviewed, ${skippedCount} skipped)`,
+  const expanded = await expandContext(reviewable, (path) =>
+    provider.getFileContent(path, metadata.sourceBranch),
   );
+  const skippedCount = rawPatches.length - expanded.length;
+  log(`Files changed: ${rawPatches.length} (${expanded.length} reviewed, ${skippedCount} skipped)`);
 
-  const { compressed, skippedFiles } = compressDiff(reviewable, MAX_TOKENS);
+  const { compressed, skippedFiles } = compressDiff(expanded, MAX_TOKENS);
   if (skippedFiles.length > 0) {
     log(`Skipped large files: ${skippedFiles.join(", ")}`);
   }
