@@ -84,7 +84,10 @@ app.post("/api/webhooks/github", async (c) => {
   const pullNumber = pr.number as number;
 
   const appId = process.env.GITHUB_APP_ID ?? "";
-  const privateKey = process.env.GITHUB_PRIVATE_KEY ?? "";
+  let privateKey = process.env.GITHUB_PRIVATE_KEY ?? "";
+  if (!privateKey && process.env.GITHUB_PRIVATE_KEY_PATH) {
+    privateKey = await readFile(process.env.GITHUB_PRIVATE_KEY_PATH, "utf-8");
+  }
 
   // dispatch review async so we return 200 immediately
   createAppOctokit(appId, privateKey, installationId)
