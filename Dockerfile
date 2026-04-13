@@ -29,7 +29,7 @@ COPY packages/github/package.json ./packages/github/
 COPY packages/azure-devops/package.json ./packages/azure-devops/
 COPY packages/dashboard/package.json ./packages/dashboard/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 COPY --from=build /app/packages/core/dist ./packages/core/dist
 COPY --from=build /app/packages/github/dist ./packages/github/dist
