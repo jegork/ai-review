@@ -6,12 +6,15 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "lint": "eslint packages/*/src/**/*.ts",
-    "format": "prettier --write 'packages/*/src/**/*.ts'"
+    "format": "prettier --write 'packages/*/src/**/*.ts'",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^9.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
     "prettier": "^3.4.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
@@ -19,8 +22,16 @@
   "engines": {
     "node": ">=22.0.0"
   },
+  "lint-staged": {
+    "packages/*/src/**/*.{ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ]
+  },
   "packageManager": "pnpm@10.6.5",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   }
 }

@@ -31,7 +31,9 @@ export function resolveModelConfig(): ModelConfig {
 }
 
 // returns either a model router string or a provider model instance
-export function resolveModel(config: ModelConfig): string | ReturnType<ReturnType<typeof createAzure>> {
+export function resolveModel(
+  config: ModelConfig,
+): string | ReturnType<ReturnType<typeof createAzure>> {
   switch (config.type) {
     case "router":
       return config.model;
@@ -46,7 +48,10 @@ export function resolveModel(config: ModelConfig): string | ReturnType<ReturnTyp
         const token = await credential.getToken(scope);
         const headers = new Headers(init?.headers as ConstructorParameters<typeof Headers>[0]);
         headers.set("Authorization", `Bearer ${token.token}`);
-        return globalThis.fetch(input as Parameters<typeof fetch>[0], { ...init, headers } as RequestInit);
+        return globalThis.fetch(
+          input as Parameters<typeof fetch>[0],
+          { ...init, headers } as RequestInit,
+        );
       }) as typeof globalThis.fetch;
 
       const azure = createAzure({
