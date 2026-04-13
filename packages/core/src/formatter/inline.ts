@@ -15,9 +15,9 @@ export function formatInlineComment(finding: Finding): string {
 
   if (finding.suggestedFix) {
     lines.push("");
-    lines.push("```suggestion");
+    lines.push("**Suggested fix:**");
+    lines.push("");
     lines.push(finding.suggestedFix);
-    lines.push("```");
   }
 
   return lines.join("\n");

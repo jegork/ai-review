@@ -31,12 +31,33 @@ describe("formatSummaryComment", () => {
   it("renders a full summary with all severity levels", () => {
     const review = makeReview({
       findings: [
-        makeFinding({ severity: "critical", file: "src/auth.ts", line: 42, message: "SQL injection risk" }),
-        makeFinding({ severity: "warning", file: "src/utils.ts", line: 15, message: "Unused variable" }),
-        makeFinding({ severity: "suggestion", file: "src/helpers.ts", line: 88, message: "Consider extracting method" }),
+        makeFinding({
+          severity: "critical",
+          file: "src/auth.ts",
+          line: 42,
+          message: "SQL injection risk",
+        }),
+        makeFinding({
+          severity: "warning",
+          file: "src/utils.ts",
+          line: 15,
+          message: "Unused variable",
+        }),
+        makeFinding({
+          severity: "suggestion",
+          file: "src/helpers.ts",
+          line: 88,
+          message: "Consider extracting method",
+        }),
       ],
       observations: [
-        { file: "src/legacy.ts", line: 125, severity: "warning", category: "security", message: "Hardcoded secret" },
+        {
+          file: "src/legacy.ts",
+          line: 125,
+          severity: "warning",
+          category: "security",
+          message: "Hardcoded secret",
+        },
       ],
       filesReviewed: ["src/auth.ts", "src/utils.ts", "src/helpers.ts"],
       modelUsed: "claude-opus-4-20250514",
@@ -86,7 +107,12 @@ describe("formatSummaryComment", () => {
       recommendation: "critical_issues",
       findings: [
         makeFinding({ severity: "critical", message: "Memory leak" }),
-        makeFinding({ severity: "critical", file: "src/db.ts", line: 99, message: "Connection not closed" }),
+        makeFinding({
+          severity: "critical",
+          file: "src/db.ts",
+          line: 99,
+          message: "Connection not closed",
+        }),
       ],
       filesReviewed: ["src/index.ts", "src/db.ts"],
     });
@@ -105,7 +131,13 @@ describe("formatSummaryComment", () => {
   it("includes observations section when observations exist", () => {
     const review = makeReview({
       observations: [
-        { file: "src/old.ts", line: 200, severity: "suggestion", category: "style", message: "Dead code" },
+        {
+          file: "src/old.ts",
+          line: 200,
+          severity: "suggestion",
+          category: "style",
+          message: "Dead code",
+        },
       ],
       filesReviewed: ["src/main.ts"],
     });
@@ -179,9 +211,8 @@ describe("formatInlineComment", () => {
 
     expect(result).toContain("**CRITICAL** (security)");
     expect(result).toContain("Unsanitized user input");
-    expect(result).toContain("```suggestion");
+    expect(result).toContain("**Suggested fix:**");
     expect(result).toContain("const safe = sanitize(input);");
-    expect(result).toContain("```");
   });
 
   it("renders an inline comment without suggested fix", () => {
@@ -195,7 +226,7 @@ describe("formatInlineComment", () => {
 
     expect(result).toContain("**SUGGESTION** (style)");
     expect(result).toContain("Consider using const instead of let");
-    expect(result).not.toContain("```suggestion");
+    expect(result).not.toContain("**Suggested fix:**");
   });
 
   it("renders warning severity correctly", () => {
@@ -218,6 +249,7 @@ describe("formatInlineComment", () => {
 
     const result = formatInlineComment(finding);
 
-    expect(result).toContain("```suggestion\nconst a = 1;\nconst b = 2;\nreturn a + b;\n```");
+    expect(result).toContain("**Suggested fix:**");
+    expect(result).toContain("const a = 1;\nconst b = 2;\nreturn a + b;");
   });
 });

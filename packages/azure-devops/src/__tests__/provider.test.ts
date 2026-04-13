@@ -138,13 +138,9 @@ describe("AzureDevOpsProvider", () => {
     });
 
     it("throws on API error", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockFetchResponse({ message: "not found" }, false, 404),
-      );
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ message: "not found" }, false, 404));
 
-      await expect(provider.getPRMetadata()).rejects.toThrow(
-        "Azure DevOps API error 404",
-      );
+      await expect(provider.getPRMetadata()).rejects.toThrow("Azure DevOps API error 404");
     });
   });
 
@@ -162,9 +158,7 @@ describe("AzureDevOpsProvider", () => {
       );
 
       const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
-      expect(body.comments[0].content).toBe(
-        "<!-- rusty-bot-review -->\n## Review\nLooks good!",
-      );
+      expect(body.comments[0].content).toBe("<!-- rusty-bot-review -->\n## Review\nLooks good!");
       expect(body.comments[0].parentCommentId).toBe(0);
       expect(body.comments[0].commentType).toBe(1);
       expect(body.status).toBe(1);
@@ -212,12 +206,12 @@ describe("AzureDevOpsProvider", () => {
       expect(firstBody.threadContext.rightFileEnd).toEqual({ line: 10, offset: 1 });
       expect(firstBody.comments[0].content).toContain("<!-- rusty-bot-review -->");
       expect(firstBody.comments[0].content).toContain("SQL injection risk");
-      expect(firstBody.comments[0].content).toContain("```suggestion");
+      expect(firstBody.comments[0].content).toContain("**Suggested fix:**");
 
       const secondBody = JSON.parse(fetchSpy.mock.calls[1][1].body);
       expect(secondBody.threadContext.filePath).toBe("/src/utils.ts");
       expect(secondBody.threadContext.rightFileStart.line).toBe(25);
-      expect(secondBody.comments[0].content).not.toContain("```suggestion");
+      expect(secondBody.comments[0].content).not.toContain("**Suggested fix:**");
     });
 
     it("skips API call when findings array is empty", async () => {
@@ -229,7 +223,13 @@ describe("AzureDevOpsProvider", () => {
       fetchSpy.mockResolvedValue(mockFetchResponse({}));
 
       await provider.postInlineComments([
-        { file: "deep/nested/file.ts", line: 1, severity: "warning", category: "bugs", message: "bug" },
+        {
+          file: "deep/nested/file.ts",
+          line: 1,
+          severity: "warning",
+          category: "bugs",
+          message: "bug",
+        },
       ]);
 
       const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
@@ -242,9 +242,17 @@ describe("AzureDevOpsProvider", () => {
       fetchSpy.mockResolvedValueOnce(
         mockFetchResponse({
           value: [
-            { id: 1, comments: [{ id: 1, content: "<!-- rusty-bot-review -->\nold review" }], status: 1 },
+            {
+              id: 1,
+              comments: [{ id: 1, content: "<!-- rusty-bot-review -->\nold review" }],
+              status: 1,
+            },
             { id: 2, comments: [{ id: 2, content: "human comment" }], status: 1 },
-            { id: 3, comments: [{ id: 3, content: "another <!-- rusty-bot-review --> comment" }], status: 1 },
+            {
+              id: 3,
+              comments: [{ id: 3, content: "another <!-- rusty-bot-review --> comment" }],
+              status: 1,
+            },
           ],
         }),
       );
@@ -269,9 +277,7 @@ describe("AzureDevOpsProvider", () => {
     it("does nothing when there are no bot threads", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockFetchResponse({
-          value: [
-            { id: 1, comments: [{ id: 1, content: "normal comment" }], status: 1 },
-          ],
+          value: [{ id: 1, comments: [{ id: 1, content: "normal comment" }], status: 1 }],
         }),
       );
 
@@ -288,7 +294,11 @@ describe("AzureDevOpsProvider", () => {
         mockFetchResponse({
           value: [
             { id: 1, comments: [], status: 1 },
-            { id: 2, comments: [{ id: 1, content: "<!-- rusty-bot-review -->\nreview" }], status: 1 },
+            {
+              id: 2,
+              comments: [{ id: 1, content: "<!-- rusty-bot-review -->\nreview" }],
+              status: 1,
+            },
           ],
         }),
       );
