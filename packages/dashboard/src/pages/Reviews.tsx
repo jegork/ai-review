@@ -5,9 +5,15 @@ import { api } from "../api";
 const PAGE_SIZE = 20;
 
 const recommendationColor: Record<string, string> = {
-  approve: "text-green-400",
-  "request-changes": "text-red-400",
-  comment: "text-yellow-400",
+  looks_good: "text-green-400",
+  critical_issues: "text-red-400",
+  address_before_merge: "text-yellow-400",
+};
+
+const recommendationLabel: Record<string, string> = {
+  looks_good: "Looks good",
+  critical_issues: "Critical issues",
+  address_before_merge: "Address before merge",
 };
 
 export function Reviews() {
@@ -35,7 +41,7 @@ export function Reviews() {
               <th className="text-left px-4 py-3 text-slate-400 font-medium">Repository</th>
               <th className="text-left px-4 py-3 text-slate-400 font-medium">PR</th>
               <th className="text-left px-4 py-3 text-slate-400 font-medium">Timestamp</th>
-              <th className="text-right px-4 py-3 text-slate-400 font-medium">Findings</th>
+              <th className="text-right px-4 py-3 text-slate-400 font-medium">C / W / S</th>
               <th className="text-left px-4 py-3 text-slate-400 font-medium">Recommendation</th>
               <th className="text-left px-4 py-3 text-slate-400 font-medium">Model</th>
             </tr>
@@ -49,21 +55,38 @@ export function Reviews() {
                 <td className="px-4 py-3 text-slate-200 font-medium">
                   {review.owner}/{review.repo}
                 </td>
-                <td className="px-4 py-3 text-slate-300">#{review.prNumber}</td>
+                <td className="px-4 py-3">
+                  {review.prUrl ? (
+                    <a
+                      href={review.prUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:underline"
+                    >
+                      #{review.prNumber}
+                    </a>
+                  ) : (
+                    <span className="text-slate-300">#{review.prNumber}</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-slate-400">
-                  {new Date(review.createdAt).toLocaleString()}
+                  {new Date(review.timestamp).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right text-slate-300">
-                  {review.findings.length}
+                  <span className="text-red-400">{review.criticalCount}</span>
+                  {" / "}
+                  <span className="text-yellow-400">{review.warningCount}</span>
+                  {" / "}
+                  <span className="text-blue-400">{review.suggestionCount}</span>
                 </td>
                 <td className="px-4 py-3">
                   <span
                     className={`font-medium ${recommendationColor[review.recommendation] ?? "text-slate-300"}`}
                   >
-                    {review.recommendation}
+                    {recommendationLabel[review.recommendation] ?? review.recommendation}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-slate-500 font-mono text-xs">{review.model}</td>
+                <td className="px-4 py-3 text-slate-500 font-mono text-xs">{review.modelUsed}</td>
               </tr>
             ))}
             {data?.items.length === 0 && (

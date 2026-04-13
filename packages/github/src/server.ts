@@ -147,8 +147,9 @@ app.put("/api/config/settings", async (c) => {
 app.get("/api/reviews", async (c) => {
   const limit = Number(c.req.query("limit") ?? "50");
   const offset = Number(c.req.query("offset") ?? "0");
-  const reviews = await listReviews(limit, offset);
-  return c.json(reviews);
+  const allReviews = await listReviews(1000, 0);
+  const items = await listReviews(limit, offset);
+  return c.json({ items, total: allReviews.length });
 });
 
 app.get("/api/reviews/:id", async (c) => {

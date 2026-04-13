@@ -15,25 +15,18 @@ vi.mock("../storage.js", async () => {
   let settings: Record<string, string> = {};
 
   return {
-    listRepoConfigs: vi.fn(async () =>
-      Object.entries(configs).map(([id, c]) => ({ id, ...c })),
-    ),
+    listRepoConfigs: vi.fn(async () => Object.entries(configs).map(([id, c]) => ({ id, ...c }))),
     getRepoConfig: vi.fn(
-      async (owner: string, repo: string) =>
-        configs[`${owner}/${repo}`] ?? null,
+      async (owner: string, repo: string) => configs[`${owner}/${repo}`] ?? null,
     ),
-    setRepoConfig: vi.fn(
-      async (owner: string, repo: string, config: Record<string, unknown>) => {
-        configs[`${owner}/${repo}`] = config;
-      },
-    ),
+    setRepoConfig: vi.fn(async (owner: string, repo: string, config: Record<string, unknown>) => {
+      configs[`${owner}/${repo}`] = config;
+    }),
     listReviews: vi.fn(async (limit = 50, offset = 0) => {
       const sorted = [...reviews].reverse();
       return sorted.slice(offset, offset + limit);
     }),
-    getReview: vi.fn(
-      async (id: string) => reviews.find((r) => r.id === id) ?? null,
-    ),
+    getReview: vi.fn(async (id: string) => reviews.find((r) => r.id === id) ?? null),
     saveReview: vi.fn(async (review: Record<string, unknown>) => {
       reviews.push(review);
       return review.id;
@@ -183,9 +176,7 @@ describe("server", () => {
     });
 
     it("ignores draft PRs", async () => {
-      const body = JSON.stringify(
-        makePRPayload({ draft: true }),
-      );
+      const body = JSON.stringify(makePRPayload({ draft: true }));
       const res = await app.request("/api/webhooks/github", {
         method: "POST",
         headers: {
@@ -313,7 +304,9 @@ describe("server", () => {
     it("returns empty list initially", async () => {
       const res = await app.request("/api/reviews");
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual([]);
+      const data = (await res.json()) as { items: unknown[]; total: number };
+      expect(data.items).toEqual([]);
+      expect(data.total).toBe(0);
     });
 
     it("returns 404 for missing review", async () => {
@@ -340,8 +333,9 @@ describe("server", () => {
 
       const listRes = await app.request("/api/reviews");
       expect(listRes.status).toBe(200);
-      const list = (await listRes.json()) as unknown[];
-      expect(list.length).toBe(1);
+      const data = (await listRes.json()) as { items: unknown[]; total: number };
+      expect(data.items.length).toBe(1);
+      expect(data.total).toBe(1);
 
       const detailRes = await app.request("/api/reviews/review-1");
       expect(detailRes.status).toBe(200);
@@ -369,8 +363,9 @@ describe("server", () => {
       }
 
       const res = await app.request("/api/reviews?limit=2&offset=1");
-      const list = (await res.json()) as unknown[];
-      expect(list.length).toBe(2);
+      const data = (await res.json()) as { items: unknown[]; total: number };
+      expect(data.items.length).toBe(2);
+      expect(data.total).toBe(5);
     });
   });
 });

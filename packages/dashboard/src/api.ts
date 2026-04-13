@@ -17,20 +17,20 @@ export interface Settings {
   [key: string]: string;
 }
 
-export interface ReviewFinding {
-  severity: string;
-  message: string;
-}
-
 export interface Review {
   id: string;
   owner: string;
   repo: string;
   prNumber: number;
-  createdAt: string;
-  findings: ReviewFinding[];
+  timestamp: string;
+  findingsCount: number;
+  criticalCount: number;
+  warningCount: number;
+  suggestionCount: number;
+  modelUsed: string;
+  tokenCount: number;
   recommendation: string;
-  model: string;
+  prUrl: string;
 }
 
 export interface PaginatedReviews {
