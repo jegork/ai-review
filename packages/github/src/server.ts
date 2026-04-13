@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
+import { resolve, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { readFile, stat } from "node:fs/promises";
 import type { FocusArea, ReviewStyle } from "@rusty-bot/core";
 import { validateWebhookSignature, parseWebhookEvent } from "./webhook.js";
 import { createAppOctokit } from "./auth.js";
@@ -24,18 +27,11 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 
 const SENSITIVE_KEY_PATTERNS = ["token", "key", "secret", "password"];
 
-function redactSettings(
-  settings: Record<string, string>,
-): Record<string, string> {
+function redactSettings(settings: Record<string, string>): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(settings)) {
-    const isSensitive = SENSITIVE_KEY_PATTERNS.some((p) =>
-      key.toLowerCase().includes(p),
-    );
-    result[key] =
-      isSensitive && value.length > 4
-        ? `${value.slice(0, 4)}...`
-        : value;
+    const isSensitive = SENSITIVE_KEY_PATTERNS.some((p) => key.toLowerCase().includes(p));
+    result[key] = isSensitive && value.length > 4 ? `${value.slice(0, 4)}...` : value;
   }
   return result;
 }
@@ -92,9 +88,7 @@ app.post("/api/webhooks/github", async (c) => {
 
   // dispatch review async so we return 200 immediately
   createAppOctokit(appId, privateKey, installationId)
-    .then((octokit) =>
-      orchestrateReview({ octokit, owner, repo, pullNumber, installationId }),
-    )
+    .then((octokit) => orchestrateReview({ octokit, owner, repo, pullNumber, installationId }))
     .catch((err) => console.error("failed to dispatch review:", err));
 
   return c.json({ ok: true });
@@ -127,14 +121,7 @@ app.put("/api/config/repos/:owner/:repo", async (c) => {
     owner,
     repo,
     style: body.style ?? "balanced",
-    focusAreas: body.focusAreas ?? [
-      "security",
-      "performance",
-      "bugs",
-      "style",
-      "tests",
-      "docs",
-    ],
+    focusAreas: body.focusAreas ?? ["security", "performance", "bugs", "style", "tests", "docs"],
     ignorePatterns: body.ignorePatterns ?? [],
     customInstructions: body.customInstructions,
   };
@@ -171,6 +158,48 @@ app.get("/api/reviews/:id", async (c) => {
     return c.json({ error: "not found" }, 404);
   }
   return c.json(review);
+});
+
+// serve dashboard static files — must be after API routes
+const MIME_TYPES: Record<string, string> = {
+  ".html": "text/html",
+  ".js": "application/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+};
+
+const __serverDir = dirname(fileURLToPath(import.meta.url));
+const DASHBOARD_DIR =
+  process.env.RUSTY_DASHBOARD_DIR ?? resolve(__serverDir, "../../dashboard/dist");
+
+async function serveDashboardFile(filePath: string): Promise<Response | null> {
+  try {
+    const full = join(DASHBOARD_DIR, filePath);
+    // prevent path traversal
+    if (!full.startsWith(DASHBOARD_DIR)) return null;
+    await stat(full);
+    const content = await readFile(full);
+    const ext = filePath.substring(filePath.lastIndexOf("."));
+    return new Response(content, {
+      headers: { "Content-Type": MIME_TYPES[ext] ?? "application/octet-stream" },
+    });
+  } catch {
+    return null;
+  }
+}
+
+app.get("*", async (c) => {
+  const path = c.req.path;
+  // try exact file first (for /assets/index-xxx.js etc)
+  const file = await serveDashboardFile(path);
+  if (file) return file;
+  // fallback to index.html for SPA routing
+  const index = await serveDashboardFile("/index.html");
+  if (index) return index;
+  return c.json({ error: "not found" }, 404);
 });
 
 if (process.env.NODE_ENV !== "test") {
