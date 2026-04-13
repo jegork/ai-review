@@ -129,9 +129,7 @@ describe("GitHubProvider", () => {
 
     it("does nothing when there are no bot comments", async () => {
       octokit.request.mockResolvedValueOnce({
-        data: [
-          { id: 1, body: "normal comment" },
-        ],
+        data: [{ id: 1, body: "normal comment" }],
       });
 
       await provider.deleteExistingBotComments();
@@ -209,8 +207,8 @@ describe("GitHubProvider", () => {
 
       const call = octokit.request.mock.calls[0][1];
       expect(call.comments[0].body).toContain("SQL injection risk");
-      expect(call.comments[0].body).toContain("```suggestion");
-      expect(call.comments[1].body).not.toContain("```suggestion");
+      expect(call.comments[0].body).toContain("**Suggested fix:**");
+      expect(call.comments[1].body).not.toContain("**Suggested fix:**");
     });
 
     it("skips API call when findings array is empty", async () => {

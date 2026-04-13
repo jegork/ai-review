@@ -1,5 +1,6 @@
 import type { Octokit } from "octokit";
 import type { GitProvider, FilePatch, PRMetadata, Finding, Hunk } from "@rusty-bot/core";
+import { formatInlineComment } from "@rusty-bot/core";
 
 const BOT_MARKER = "<!-- rusty-bot-review -->";
 
@@ -89,19 +90,6 @@ function parseDiff(rawDiff: string): FilePatch[] {
   return patches;
 }
 
-function formatFindingBody(finding: Finding): string {
-  const severityIcon =
-    finding.severity === "critical" ? "🔴" : finding.severity === "warning" ? "🟡" : "🔵";
-
-  let body = `${severityIcon} **${finding.severity}** (${finding.category})\n\n${finding.message}`;
-
-  if (finding.suggestedFix) {
-    body += `\n\n**Suggested fix:**\n\`\`\`suggestion\n${finding.suggestedFix}\n\`\`\``;
-  }
-
-  return body;
-}
-
 export class GitHubProvider implements GitProvider {
   private readonly octokit: Octokit;
   private readonly owner: string;
@@ -182,7 +170,7 @@ export class GitHubProvider implements GitProvider {
       path: finding.file,
       line: finding.line,
       side: "RIGHT" as const,
-      body: formatFindingBody(finding),
+      body: formatInlineComment(finding),
     }));
 
     await this.octokit.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews", {
