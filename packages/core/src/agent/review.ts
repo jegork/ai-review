@@ -1,13 +1,8 @@
 import { Agent } from "@mastra/core/agent";
 import { ReviewOutputSchema } from "./schema.js";
 import { buildSystemPrompt, buildUserMessage } from "./prompts.js";
+import { resolveModelConfig, resolveModel, getModelDisplayName } from "./model.js";
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult } from "../types.js";
-
-const DEFAULT_MODEL = "anthropic/claude-sonnet-4-20250514";
-
-function getModel(): string {
-  return process.env.RUSTY_LLM_MODEL ?? DEFAULT_MODEL;
-}
 
 export async function runReview(
   config: ReviewConfig,
@@ -17,7 +12,9 @@ export async function runReview(
 ): Promise<ReviewResult> {
   const systemPrompt = buildSystemPrompt(config);
   const userMessage = buildUserMessage(diff, prMetadata, ticketContext);
-  const model = getModel();
+  const modelConfig = resolveModelConfig();
+  const model = resolveModel(modelConfig);
+  const modelName = getModelDisplayName(modelConfig);
 
   const agent = new Agent({
     id: "review-agent",
@@ -40,7 +37,7 @@ export async function runReview(
     findings: parsed.findings,
     observations: parsed.observations,
     filesReviewed: parsed.filesReviewed,
-    modelUsed: model,
+    modelUsed: modelName,
     tokenCount: response.usage?.totalTokens ?? 0,
   };
 }
