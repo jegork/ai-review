@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import type { FocusArea, ReviewConfig, ReviewStyle } from "@rusty-bot/core";
 import {
   filterFiles,
@@ -10,7 +9,7 @@ import {
   AzureDevOpsTicketProvider,
   runMultiCallReview,
   formatSummaryComment,
-  loadMcpServerConfigs,
+  loadMcpServerConfigsFromEnv,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
@@ -108,8 +107,7 @@ async function main(): Promise<void> {
   const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
   const languageSummary = summarizeLanguages(expanded);
-  const mcpConfigPath = process.env.RUSTY_MCP_CONFIG ?? join(process.cwd(), "mcp-servers.json");
-  const mcpServers = await loadMcpServerConfigs(mcpConfigPath);
+  const mcpServers = await loadMcpServerConfigsFromEnv();
 
   const review = await runMultiCallReview(
     expanded,

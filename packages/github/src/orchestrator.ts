@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import type { Octokit } from "octokit";
 import type { FocusArea, TicketProvider } from "@rusty-bot/core";
 import {
@@ -14,7 +13,7 @@ import {
   GitHubTicketProvider,
   JiraTicketProvider,
   LinearTicketProvider,
-  loadMcpServerConfigs,
+  loadMcpServerConfigsFromEnv,
 } from "@rusty-bot/core";
 import { GitHubProvider } from "./provider.js";
 import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./storage.js";
@@ -90,8 +89,7 @@ export async function orchestrateReview(params: {
     const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
     const languageSummary = summarizeLanguages(reviewable);
-    const mcpConfigPath = process.env.RUSTY_MCP_CONFIG ?? join(process.cwd(), "mcp-servers.json");
-    const mcpServers = await loadMcpServerConfigs(mcpConfigPath);
+    const mcpServers = await loadMcpServerConfigsFromEnv();
 
     const result = await runMultiCallReview(expanded, config, metadata, tickets, {
       provider,
