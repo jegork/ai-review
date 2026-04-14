@@ -323,6 +323,62 @@ describe("AzureDevOpsProvider", () => {
     });
   });
 
+  describe("getDiff", () => {
+    function mockPRAndIterations() {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          pullRequestId: 42,
+          title: "feat: stuff",
+          description: "",
+          createdBy: { displayName: "User", uniqueName: "u@e.com" },
+          sourceRefName: "refs/heads/feature",
+          targetRefName: "refs/heads/main",
+          repository: { webUrl: "" },
+        }),
+      );
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ value: [{ id: 1 }] }));
+    }
+
+    it("skips change entries where item.path is null", async () => {
+      mockPRAndIterations();
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            { changeType: "edit", item: { path: "/src/real.ts", gitObjectType: "blob" } },
+            { changeType: "edit", item: { path: null, gitObjectType: "blob" } },
+          ],
+        }),
+      );
+
+      // file content fetches for the one valid entry
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse("const a = 1;", true));
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse("const a = 2;", true));
+
+      const patches = await provider.getDiff();
+
+      const paths = patches.map((p) => p.path);
+      expect(paths).not.toContain(null);
+      expect(paths).toContain("src/real.ts");
+    });
+
+    it("handles response where all entries have null paths", async () => {
+      mockPRAndIterations();
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            { changeType: "edit", item: { path: null } },
+            { changeType: "add", item: { path: null } },
+          ],
+        }),
+      );
+
+      const patches = await provider.getDiff();
+      expect(patches).toEqual([]);
+    });
+  });
+
   describe("constructor", () => {
     it("strips trailing slash from orgUrl", async () => {
       const p = new AzureDevOpsProvider({

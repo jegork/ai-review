@@ -160,6 +160,7 @@ export class AzureDevOpsProvider implements GitProvider {
     const patches: FilePatch[] = [];
 
     for (const entry of changes.changeEntries) {
+      if (entry.item.path === null) continue;
       if (entry.item.gitObjectType === "tree") continue;
 
       const filePath = entry.item.path.replace(/^\//, "");
