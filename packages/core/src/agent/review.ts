@@ -46,6 +46,8 @@ export async function runReview(
     name: "Rusty Bot Reviewer",
     instructions: systemPrompt,
     model,
+    // MCPClient.listTools() namespaces tools as serverName_toolName,
+    // so collisions with built-in tool names are unlikely in practice.
     tools: { ...builtInTools, ...extraTools },
   });
 

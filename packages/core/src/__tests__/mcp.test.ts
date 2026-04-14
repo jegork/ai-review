@@ -46,6 +46,24 @@ describe("loadMcpServerConfigs", () => {
 
     await expect(loadMcpServerConfigs(filePath)).rejects.toThrow("must be a JSON object");
   });
+
+  it("throws when a server entry is not an object", async () => {
+    const filePath = join(TMP_DIR, "bad-entry.json");
+    await writeFile(filePath, JSON.stringify({ docs: 42 }));
+
+    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow(
+      'MCP server "docs": value must be an object',
+    );
+  });
+
+  it("throws when a server entry has neither command nor url", async () => {
+    const filePath = join(TMP_DIR, "no-transport.json");
+    await writeFile(filePath, JSON.stringify({ docs: { args: ["--help"] } }));
+
+    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow(
+      'MCP server "docs": must have either "command" (stdio) or "url" (http)',
+    );
+  });
 });
 
 describe("connectMcpServers", () => {

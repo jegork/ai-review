@@ -52,5 +52,15 @@ export async function loadMcpServerConfigs(filePath: string): Promise<McpServerC
     throw new Error("MCP servers config must be a JSON object keyed by server name");
   }
 
+  for (const [name, entry] of Object.entries(parsed)) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error(`MCP server "${name}": value must be an object`);
+    }
+    const def = entry as Record<string, unknown>;
+    if (!def.command && !def.url) {
+      throw new Error(`MCP server "${name}": must have either "command" (stdio) or "url" (http)`);
+    }
+  }
+
   return parsed as McpServerConfig;
 }
