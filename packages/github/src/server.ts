@@ -120,7 +120,6 @@ app.put("/api/config/repos/:owner/:repo", async (c) => {
     style?: ReviewStyle;
     focusAreas?: FocusArea[];
     ignorePatterns?: string[];
-    customInstructions?: string;
   } = await c.req.json();
 
   const config: RepoConfig = {
@@ -129,7 +128,6 @@ app.put("/api/config/repos/:owner/:repo", async (c) => {
     style: body.style ?? "balanced",
     focusAreas: body.focusAreas ?? ["security", "performance", "bugs", "style", "tests", "docs"],
     ignorePatterns: body.ignorePatterns ?? [],
-    customInstructions: body.customInstructions,
   };
 
   await setRepoConfig(owner, repo, config);

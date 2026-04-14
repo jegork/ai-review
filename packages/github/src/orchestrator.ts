@@ -10,6 +10,7 @@ import {
   resolveTicketsWithStatus,
   runMultiCallReview,
   formatSummaryComment,
+  fetchConventionFile,
   GitHubTicketProvider,
   JiraTicketProvider,
   LinearTicketProvider,
@@ -63,12 +64,6 @@ export async function orchestrateReview(params: {
 
   try {
     const repoConfig = await getRepoConfig(owner, repo);
-    const config = {
-      style: repoConfig?.style ?? ("balanced" as const),
-      focusAreas: repoConfig?.focusAreas ?? ALL_FOCUS_AREAS,
-      ignorePatterns: repoConfig?.ignorePatterns ?? [],
-      customInstructions: repoConfig?.customInstructions,
-    };
 
     const provider = new GitHubProvider({ octokit, owner, repo, pullNumber });
 
@@ -78,6 +73,18 @@ export async function orchestrateReview(params: {
       provider.getPRMetadata(),
       provider.getRawDiff(),
     ]);
+
+    const conventionFile = await fetchConventionFile(
+      (path, ref) => provider.getFileContent(path, ref),
+      metadata.targetBranch,
+    );
+
+    const config = {
+      style: repoConfig?.style ?? ("balanced" as const),
+      focusAreas: repoConfig?.focusAreas ?? ALL_FOCUS_AREAS,
+      ignorePatterns: repoConfig?.ignorePatterns ?? [],
+      ...(conventionFile ? { conventionFile } : {}),
+    };
 
     const patches = parseDiff(rawDiff);
     const filtered = filterFiles(patches, config.ignorePatterns);

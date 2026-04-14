@@ -6,6 +6,7 @@ import {
   summarizeLanguages,
   extractTicketRefs,
   resolveTicketsWithStatus,
+  fetchConventionFile,
   AzureDevOpsTicketProvider,
   runMultiCallReview,
   formatSummaryComment,
@@ -50,7 +51,6 @@ export function parseConfig(): {
   const focusAreas = (process.env.RUSTY_FOCUS_AREAS?.split(",").filter(Boolean) ??
     []) as FocusArea[];
   const ignorePatterns = process.env.RUSTY_IGNORE_PATTERNS?.split(",").filter(Boolean) ?? [];
-  const customInstructions = process.env.RUSTY_CUSTOM_INSTRUCTIONS;
   const failOnCritical = process.env.RUSTY_FAIL_ON_CRITICAL !== "false";
 
   return {
@@ -65,7 +65,6 @@ export function parseConfig(): {
       style: reviewStyle as ReviewStyle,
       focusAreas,
       ignorePatterns,
-      ...(customInstructions ? { customInstructions } : {}),
     },
     failOnCritical,
     env: { orgUrl, project, accessToken },
@@ -80,6 +79,14 @@ async function main(): Promise<void> {
     { prId: metadata.id, source: metadata.sourceBranch, target: metadata.targetBranch },
     "reviewing PR",
   );
+
+  const conventionFile = await fetchConventionFile(
+    (path, ref) => provider.getFileContent(path, ref),
+    metadata.targetBranch,
+  );
+  if (conventionFile) {
+    config.conventionFile = conventionFile;
+  }
 
   await provider.deleteExistingBotComments();
 

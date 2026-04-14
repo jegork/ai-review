@@ -25,14 +25,14 @@ export function buildSystemPrompt(config: ReviewConfig): string {
   const base = loadTemplate("base.txt");
   const styleInstructions = buildStyleInstructions(config.style);
   const focusInstructions = buildFocusInstructions(config.focusAreas);
-  const customInstructions = config.customInstructions
-    ? `\n\nAdditional instructions from the repository maintainer:\n${config.customInstructions}`
+  const conventionInstructions = config.conventionFile
+    ? `\n\nAdditional instructions from the repository maintainer:\n${config.conventionFile}`
     : "";
 
   return base
     .replace("{{style_instructions}}", styleInstructions)
     .replace("{{focus_instructions}}", focusInstructions)
-    .replace("{{custom_instructions}}", customInstructions);
+    .replace("{{convention_instructions}}", conventionInstructions);
 }
 
 export function buildUserMessage(
