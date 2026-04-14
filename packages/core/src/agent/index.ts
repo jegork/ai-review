@@ -1,11 +1,21 @@
-export { ReviewOutputSchema } from "./schema.js";
+export { ReviewOutputSchema, SkimReviewOutputSchema } from "./schema.js";
 export { buildSystemPrompt, buildUserMessage } from "./prompts.js";
 export { runReview } from "./review.js";
-export type { RunReviewOptions } from "./review.js";
-export { runMultiCallReview, filterObservationsForPrFiles } from "./multi-call.js";
+export type { RunReviewOptions, ReviewTier } from "./review.js";
+export {
+  runMultiCallReview,
+  runCascadeReview,
+  mergeResults,
+  filterObservationsForPrFiles,
+} from "./multi-call.js";
 export type { MultiCallReviewOptions } from "./multi-call.js";
 export { runConsensusReview } from "./consensus.js";
-export { resolveModelConfig, resolveModel, getModelDisplayName } from "./model.js";
+export {
+  resolveModelConfig,
+  resolveTriageModelConfig,
+  resolveModel,
+  getModelDisplayName,
+} from "./model.js";
 export type { ModelConfig } from "./model.js";
 export { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
 export { clusterFindings, clusterObservations } from "./cluster.js";

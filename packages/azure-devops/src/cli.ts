@@ -9,10 +9,14 @@ import {
   fetchConventionFile,
   AzureDevOpsTicketProvider,
   runMultiCallReview,
+  runCascadeReview,
   formatSummaryComment,
   loadMcpServerConfigsFromEnv,
   logger,
   flushLogger,
+  isCascadeEnabled,
+  runTriage,
+  splitByClassification,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
@@ -93,12 +97,9 @@ async function main(): Promise<void> {
   const rawPatches = await provider.getDiff();
   const filtered = filterFiles(rawPatches, config.ignorePatterns);
   const reviewable = stripDeletionOnlyHunks(filtered);
-  const expanded = await expandContext(reviewable, (path) =>
-    provider.getFileContent(path, metadata.sourceBranch),
-  );
-  const skippedCount = rawPatches.length - expanded.length;
+  const skippedCount = rawPatches.length - reviewable.length;
   log.info(
-    { total: rawPatches.length, reviewed: expanded.length, skipped: skippedCount },
+    { total: rawPatches.length, reviewed: reviewable.length, skipped: skippedCount },
     "files changed",
   );
 
@@ -121,22 +122,76 @@ async function main(): Promise<void> {
     ticketProviders,
   );
 
-  const languageSummary = summarizeLanguages(expanded);
+  const languageSummary = summarizeLanguages(reviewable);
   const mcpServers = await loadMcpServerConfigsFromEnv();
 
-  const review = await runMultiCallReview(
-    expanded,
-    config,
-    metadata,
-    tickets.length > 0 ? tickets : undefined,
-    {
-      provider,
-      sourceRef: metadata.sourceBranch,
-      languageSummary,
-      mcpServers,
-      maxTokens: MAX_TOKENS,
-    },
-  );
+  let review;
+
+  if (isCascadeEnabled()) {
+    log.info({ fileCount: reviewable.length }, "cascade enabled, running triage");
+
+    let triageResult;
+    try {
+      triageResult = await runTriage(reviewable);
+    } catch (err) {
+      log.warn({ err }, "triage failed, falling back to full review");
+    }
+
+    if (triageResult) {
+      const { skip, skim, deepReview } = splitByClassification(reviewable, triageResult.files);
+      log.info(
+        { skipped: skip.length, skimmed: skim.length, deepReview: deepReview.length },
+        "triage classification",
+      );
+
+      const expandedDeep = await expandContext(deepReview, (path) =>
+        provider.getFileContent(path, metadata.sourceBranch),
+      );
+
+      review = await runCascadeReview(
+        skim,
+        expandedDeep,
+        config,
+        metadata,
+        tickets.length > 0 ? tickets : undefined,
+        {
+          provider,
+          sourceRef: metadata.sourceBranch,
+          languageSummary,
+          mcpServers,
+          maxTokens: MAX_TOKENS,
+        },
+      );
+
+      review.triageStats = {
+        filesSkipped: skip.length,
+        filesSkimmed: skim.length,
+        filesDeepReviewed: deepReview.length,
+        triageModelUsed: triageResult.modelUsed,
+        triageTokenCount: triageResult.tokenCount,
+      };
+    }
+  }
+
+  if (!review) {
+    const expanded = await expandContext(reviewable, (path) =>
+      provider.getFileContent(path, metadata.sourceBranch),
+    );
+
+    review = await runMultiCallReview(
+      expanded,
+      config,
+      metadata,
+      tickets.length > 0 ? tickets : undefined,
+      {
+        provider,
+        sourceRef: metadata.sourceBranch,
+        languageSummary,
+        mcpServers,
+        maxTokens: MAX_TOKENS,
+      },
+    );
+  }
 
   const criticalCount = review.findings.filter((f) => f.severity === "critical").length;
   const warningCount = review.findings.filter((f) => f.severity === "warning").length;

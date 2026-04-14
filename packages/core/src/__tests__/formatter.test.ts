@@ -376,3 +376,77 @@ describe("formatInlineComment", () => {
     expect(result).toContain("```suggestion");
   });
 });
+
+describe("formatSummaryComment with triage stats", () => {
+  it("includes triage section when triageStats is present", () => {
+    const review: ReviewResult = {
+      summary: "Looks good.",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      filesReviewed: ["src/index.ts"],
+      modelUsed: "claude-sonnet-4",
+      tokenCount: 5000,
+      triageStats: {
+        filesSkipped: 3,
+        filesSkimmed: 2,
+        filesDeepReviewed: 5,
+        triageModelUsed: "claude-haiku-3",
+        triageTokenCount: 800,
+      },
+    };
+
+    const result = formatSummaryComment(review);
+    expect(result).toContain("Triage Summary");
+    expect(result).toContain("Skipped");
+    expect(result).toContain("3");
+    expect(result).toContain("Skimmed");
+    expect(result).toContain("2");
+    expect(result).toContain("Deep Reviewed");
+    expect(result).toContain("5");
+    expect(result).toContain("claude-haiku-3");
+    expect(result).toContain("800 tokens");
+  });
+
+  it("omits triage section when triageStats is not present", () => {
+    const review: ReviewResult = {
+      summary: "OK",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      filesReviewed: [],
+      modelUsed: "gpt-4o",
+      tokenCount: 1000,
+    };
+
+    const result = formatSummaryComment(review);
+    expect(result).not.toContain("Triage Summary");
+  });
+
+  it("triage section appears before overview section", () => {
+    const review: ReviewResult = {
+      summary: "Fine.",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      filesReviewed: [],
+      modelUsed: "test",
+      tokenCount: 100,
+      triageStats: {
+        filesSkipped: 1,
+        filesSkimmed: 1,
+        filesDeepReviewed: 1,
+        triageModelUsed: "haiku",
+        triageTokenCount: 50,
+      },
+    };
+
+    const result = formatSummaryComment(review);
+    const triageIdx = result.indexOf("Triage Summary");
+    const overviewIdx = result.indexOf("## Overview");
+    expect(triageIdx).toBeLessThan(overviewIdx);
+  });
+});

@@ -3,6 +3,7 @@ import type {
   Severity,
   Finding,
   Observation,
+  TriageStats,
   TicketComplianceStatus,
   TicketResolutionStatus,
 } from "../types.js";
@@ -47,6 +48,24 @@ function countBySeverity(findings: Finding[]): Record<Severity, number> {
     counts[f.severity]++;
   }
   return counts;
+}
+
+function buildTriageSection(stats: TriageStats): string {
+  const lines: string[] = [];
+  lines.push("<details>");
+  lines.push("<summary>Triage Summary</summary>");
+  lines.push("");
+  lines.push("| Classification | Files |");
+  lines.push("|----------------|-------|");
+  lines.push(`| Skipped | ${stats.filesSkipped} |`);
+  lines.push(`| Skimmed | ${stats.filesSkimmed} |`);
+  lines.push(`| Deep Reviewed | ${stats.filesDeepReviewed} |`);
+  lines.push("");
+  lines.push(`Triage model: \`${stats.triageModelUsed}\` · ${stats.triageTokenCount} tokens`);
+  lines.push("");
+  lines.push("</details>");
+  lines.push("");
+  return lines.join("\n");
 }
 
 function buildTicketFetchMessage(status: TicketResolutionStatus): string {
@@ -98,6 +117,10 @@ export function formatSummaryComment(
     `**Status:** ${totalIssues} Issues Found | **Recommendation:** ${RECOMMENDATION_TEXT[review.recommendation]}`,
   );
   lines.push("");
+
+  if (review.triageStats) {
+    lines.push(buildTriageSection(review.triageStats));
+  }
 
   lines.push("## Overview");
   lines.push("");
