@@ -16,6 +16,12 @@ import { logger } from "../logger.js";
 
 const DEFAULT_CONSENSUS_PASSES = 3;
 
+const RECOMMENDATION_SEVERITY: Record<Recommendation, number> = {
+  looks_good: 0,
+  address_before_merge: 1,
+  critical_issues: 2,
+};
+
 function deriveBaseSeed(prMetadata: PRMetadata): number {
   let hash = 0;
   const str = `${prMetadata.id}:${prMetadata.sourceBranch}`;
@@ -25,10 +31,26 @@ function deriveBaseSeed(prMetadata: PRMetadata): number {
   return hash >>> 0;
 }
 
-function deriveRecommendation(findings: Finding[]): Recommendation {
+function deriveRecommendation(
+  findings: Finding[],
+  passRecommendations: Recommendation[],
+  threshold: number,
+): Recommendation {
   const hasCritical = findings.some((f) => f.severity === "critical");
   if (hasCritical) return "critical_issues";
   if (findings.length > 0) return "address_before_merge";
+
+  // when findings are empty, check if a majority of passes flagged issues —
+  // this catches cases where the LLM describes problems in its summary/recommendation
+  // but doesn't emit structured findings
+  const nonGoodCount = passRecommendations.filter((r) => RECOMMENDATION_SEVERITY[r] > 0).length;
+
+  if (nonGoodCount >= threshold) {
+    const hasCriticalRec = passRecommendations.filter((r) => r === "critical_issues").length;
+    if (hasCriticalRec >= threshold) return "critical_issues";
+    return "address_before_merge";
+  }
+
   return "looks_good";
 }
 
@@ -62,6 +84,7 @@ export async function runConsensusReview(
 
   const findingsByPass = results.map((r) => r.findings);
   const observationsByPass = results.map((r) => r.observations);
+  const passRecommendations = results.map((r) => r.recommendation);
 
   const findingClusters = clusterFindings(findingsByPass);
   const observationClusters = clusterObservations(observationsByPass);
@@ -88,6 +111,7 @@ export async function runConsensusReview(
       surviving: survivingFindings.length,
       dropped: totalRawFindings - survivingFindings.length,
       droppedObservations: totalRawObservations - survivingObservations.length,
+      passRecommendations,
     },
     "consensus voting complete",
   );
@@ -100,7 +124,7 @@ export async function runConsensusReview(
 
   return {
     summary,
-    recommendation: deriveRecommendation(survivingFindings),
+    recommendation: deriveRecommendation(survivingFindings, passRecommendations, threshold),
     findings: survivingFindings,
     observations: survivingObservations,
     ticketCompliance: results[0]?.ticketCompliance ?? [],

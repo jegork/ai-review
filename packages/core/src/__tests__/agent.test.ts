@@ -225,6 +225,29 @@ describe("ReviewOutputSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("validates finding without suggestedFix (structural issues)", () => {
+    const valid = {
+      summary: "Resource leak found",
+      recommendation: "address_before_merge" as const,
+      findings: [
+        {
+          file: "src/parser.ts",
+          line: 42,
+          endLine: 80,
+          severity: "critical" as const,
+          category: "bugs" as const,
+          message: "WASM objects leaked on early return paths — wrap in try/finally",
+          suggestedFix: null,
+        },
+      ],
+      ticketCompliance: [],
+      observations: [],
+      filesReviewed: ["src/parser.ts"],
+    };
+    const result = ReviewOutputSchema.safeParse(valid);
+    expect(result.success).toBe(true);
+  });
+
   it("rejects invalid recommendation", () => {
     const invalid = {
       summary: "ok",

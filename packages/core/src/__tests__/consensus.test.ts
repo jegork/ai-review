@@ -9,7 +9,6 @@ function makeFinding(overrides: Partial<Finding> = {}): Finding {
     severity: "warning",
     category: "bugs",
     message: "potential null reference in handler function",
-    suggestedFix: "",
     ...overrides,
   };
 }
@@ -36,11 +35,20 @@ const uniqueFinding = makeFinding({
 });
 
 let callCount = 0;
+let mockBehavior: "default" | "no-findings-but-flagged" = "default";
 
 vi.mock("../agent/review.js", () => ({
   runReview: vi.fn(async () => {
     const idx = callCount++;
-    // pass 0 and 1 return the shared finding; pass 2 returns a unique one
+
+    if (mockBehavior === "no-findings-but-flagged") {
+      return makeResult({
+        recommendation: "address_before_merge",
+        summary: "resource cleanup issue should be fixed before merge",
+        findings: [],
+      });
+    }
+
     if (idx % 3 === 2) {
       return makeResult({ findings: [uniqueFinding], tokenCount: 100 });
     }
@@ -69,6 +77,7 @@ const config: ReviewConfig = {
 describe("runConsensusReview", () => {
   beforeEach(() => {
     callCount = 0;
+    mockBehavior = "default";
     vi.clearAllMocks();
   });
 
@@ -85,8 +94,6 @@ describe("runConsensusReview", () => {
     const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
     const { runReview } = await import("../agent/review.js");
     expect(runReview).toHaveBeenCalledTimes(3);
-    // shared finding appears in 2/3 passes → survives (threshold=2)
-    // unique finding appears in 1/3 → dropped
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0].file).toBe("src/index.ts");
     expect(result.findings[0].voteCount).toBe(2);
@@ -95,9 +102,7 @@ describe("runConsensusReview", () => {
   it("drops findings below custom threshold", async () => {
     const strictConfig = { ...config, consensusPasses: 3, consensusThreshold: 3 };
     const result = await runConsensusReview([], strictConfig, prMetadata, "diff content");
-    // shared finding in 2/3 passes, threshold=3 → dropped
     expect(result.findings).toHaveLength(0);
-    expect(result.recommendation).toBe("looks_good");
   });
 
   it("includes consensus metadata", async () => {
@@ -109,7 +114,6 @@ describe("runConsensusReview", () => {
   it("derives recommendation from filtered findings only", async () => {
     const consensusConfig = { ...config, consensusPasses: 3 };
     const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
-    // surviving finding has severity "warning"
     expect(result.recommendation).toBe("address_before_merge");
   });
 
@@ -124,5 +128,26 @@ describe("runConsensusReview", () => {
     const { runReview } = await import("../agent/review.js");
     expect(runReview).toHaveBeenCalledTimes(3);
     expect(result.consensusMetadata?.passes).toBe(3);
+  });
+
+  it("uses per-pass recommendations when findings are empty but majority flags issues", async () => {
+    mockBehavior = "no-findings-but-flagged";
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    expect(result.findings).toHaveLength(0);
+    // 3/3 passes said "address_before_merge" → recommendation should reflect that
+    expect(result.recommendation).toBe("address_before_merge");
+  });
+
+  it("keeps looks_good when minority of passes flag issues", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ recommendation: "address_before_merge", findings: [] }))
+      .mockResolvedValueOnce(makeResult({ recommendation: "looks_good", findings: [] }))
+      .mockResolvedValueOnce(makeResult({ recommendation: "looks_good", findings: [] }));
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    // 1/3 passes flagged → below threshold=2 → looks_good
+    expect(result.recommendation).toBe("looks_good");
   });
 });
