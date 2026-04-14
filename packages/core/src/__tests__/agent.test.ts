@@ -52,9 +52,7 @@ describe("buildSystemPrompt", () => {
 
   it("all 4 styles produce distinct prompts", () => {
     const styles = ["strict", "balanced", "lenient", "roast"] as const;
-    const prompts = styles.map((style) =>
-      buildSystemPrompt({ ...baseConfig, style }),
-    );
+    const prompts = styles.map((style) => buildSystemPrompt({ ...baseConfig, style }));
     for (let i = 0; i < prompts.length; i++) {
       for (let j = i + 1; j < prompts.length; j++) {
         expect(prompts[i]).not.toBe(prompts[j]);
@@ -86,17 +84,8 @@ describe("buildSystemPrompt", () => {
   });
 
   it("all 6 focus areas produce distinct sections", () => {
-    const areas = [
-      "security",
-      "performance",
-      "bugs",
-      "style",
-      "tests",
-      "docs",
-    ] as const;
-    const prompts = areas.map((area) =>
-      buildSystemPrompt({ ...baseConfig, focusAreas: [area] }),
-    );
+    const areas = ["security", "performance", "bugs", "style", "tests", "docs"] as const;
+    const prompts = areas.map((area) => buildSystemPrompt({ ...baseConfig, focusAreas: [area] }));
     for (let i = 0; i < prompts.length; i++) {
       for (let j = i + 1; j < prompts.length; j++) {
         expect(prompts[i]).not.toBe(prompts[j]);
@@ -190,6 +179,7 @@ describe("ReviewOutputSchema", () => {
           severity: "warning" as const,
           category: "security" as const,
           message: "Missing rate limiting on login endpoint",
+          suggestedFix: "",
         },
       ],
       observations: [],
