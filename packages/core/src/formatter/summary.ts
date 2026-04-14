@@ -15,12 +15,8 @@ const RECOMMENDATION_TEXT: Record<ReviewResult["recommendation"], string> = {
 };
 
 function buildIssueTable(items: (Finding | Observation)[]): string {
-  const rows = items.map(
-    (item) => `| \`${item.file}\` | ${item.line} | ${item.message} |`
-  );
-  return ["| File | Line | Issue |", "|------|------|-------|", ...rows].join(
-    "\n"
-  );
+  const rows = items.map((item) => `| \`${item.file}\` | ${item.line} | ${item.message} |`);
+  return ["| File | Line | Issue |", "|------|------|-------|", ...rows].join("\n");
 }
 
 function countBySeverity(findings: Finding[]): Record<Severity, number> {
@@ -46,7 +42,7 @@ export function formatSummaryComment(review: ReviewResult): string {
   lines.push("---");
   lines.push("");
   lines.push(
-    `**Status:** ${totalIssues} Issues Found | **Recommendation:** ${RECOMMENDATION_TEXT[review.recommendation]}`
+    `**Status:** ${totalIssues} Issues Found | **Recommendation:** ${RECOMMENDATION_TEXT[review.recommendation]}`,
   );
   lines.push("");
 
@@ -59,9 +55,7 @@ export function formatSummaryComment(review: ReviewResult): string {
   }
   lines.push("");
 
-  const severitiesWithFindings = SEVERITY_ORDER.filter(
-    (sev) => counts[sev] > 0
-  );
+  const severitiesWithFindings = SEVERITY_ORDER.filter((sev) => counts[sev] > 0);
 
   lines.push("<details>");
   lines.push("<summary>Issue Details (click to expand)</summary>");
@@ -87,9 +81,7 @@ export function formatSummaryComment(review: ReviewResult): string {
     lines.push("<details>");
     lines.push("<summary>Other Observations (not in diff)</summary>");
     lines.push("");
-    lines.push(
-      "Issues found in unchanged code that cannot receive inline comments:"
-    );
+    lines.push("Issues found in unchanged code that cannot receive inline comments:");
     lines.push("");
     lines.push(buildIssueTable(review.observations));
     lines.push("");
@@ -102,16 +94,11 @@ export function formatSummaryComment(review: ReviewResult): string {
     fileIssueCounts.set(file, 0);
   }
   for (const f of review.findings) {
-    fileIssueCounts.set(
-      f.file,
-      (fileIssueCounts.get(f.file) ?? 0) + 1
-    );
+    fileIssueCounts.set(f.file, (fileIssueCounts.get(f.file) ?? 0) + 1);
   }
 
   lines.push("<details>");
-  lines.push(
-    `<summary>Files Reviewed (${review.filesReviewed.length} files)</summary>`
-  );
+  lines.push(`<summary>Files Reviewed (${review.filesReviewed.length} files)</summary>`);
   lines.push("");
   for (const file of review.filesReviewed) {
     const count = fileIssueCounts.get(file) ?? 0;
@@ -128,9 +115,7 @@ export function formatSummaryComment(review: ReviewResult): string {
   lines.push("");
   lines.push("---");
   lines.push("");
-  lines.push(
-    `Reviewed by ${review.modelUsed} · ${review.tokenCount} tokens`
-  );
+  lines.push(`Reviewed by ${review.modelUsed} · ${review.tokenCount} tokens`);
   lines.push("");
 
   return lines.join("\n");

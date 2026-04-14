@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+const API_BASE: string = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 export interface RepoConfig {
   owner: string;
@@ -10,11 +10,11 @@ export interface RepoConfig {
 }
 
 export interface Settings {
-  llmModel: string;
-  jiraToken: string;
-  linearToken: string;
-  adoToken: string;
-  [key: string]: string;
+  llmModel?: string;
+  jiraToken?: string;
+  linearToken?: string;
+  adoToken?: string;
+  [key: string]: string | undefined;
 }
 
 export interface Review {

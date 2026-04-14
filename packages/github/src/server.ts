@@ -95,7 +95,7 @@ app.post("/api/webhooks/github", async (c) => {
   // dispatch review async so we return 200 immediately
   createAppOctokit(appId, privateKey, installationId)
     .then((octokit) => orchestrateReview({ octokit, owner, repo, pullNumber, installationId }))
-    .catch((err) => log.error({ err }, "failed to dispatch review"));
+    .catch((err: unknown) => log.error({ err }, "failed to dispatch review"));
 
   return c.json({ ok: true });
 });
@@ -116,12 +116,12 @@ app.get("/api/config/repos/:owner/:repo", async (c) => {
 
 app.put("/api/config/repos/:owner/:repo", async (c) => {
   const { owner, repo } = c.req.param();
-  const body = (await c.req.json()) as {
+  const body: {
     style?: ReviewStyle;
     focusAreas?: FocusArea[];
     ignorePatterns?: string[];
     customInstructions?: string;
-  };
+  } = await c.req.json();
 
   const config: RepoConfig = {
     owner,
@@ -142,7 +142,7 @@ app.get("/api/config/settings", async (c) => {
 });
 
 app.put("/api/config/settings", async (c) => {
-  const body = (await c.req.json()) as Record<string, string>;
+  const body: Record<string, string> = await c.req.json();
   for (const [key, value] of Object.entries(body)) {
     await setSetting(key, value);
   }

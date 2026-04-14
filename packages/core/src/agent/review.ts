@@ -59,6 +59,6 @@ export async function runReview(
     observations: parsed.observations,
     filesReviewed: parsed.filesReviewed,
     modelUsed: modelName,
-    tokenCount: response.usage?.totalTokens ?? 0,
+    tokenCount: response.usage.totalTokens ?? 0,
   };
 }

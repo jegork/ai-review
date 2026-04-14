@@ -58,10 +58,7 @@ async function saveData(data: StorageData): Promise<void> {
   await writeFile(DATA_FILE, JSON.stringify(data, null, 2), "utf-8");
 }
 
-export async function getRepoConfig(
-  owner: string,
-  repo: string,
-): Promise<RepoConfig | null> {
+export async function getRepoConfig(owner: string, repo: string): Promise<RepoConfig | null> {
   const data = await loadData();
   return data.configs[makeConfigKey(owner, repo)] ?? null;
 }
@@ -88,10 +85,7 @@ export async function saveReview(review: ReviewRecord): Promise<string> {
   return review.id;
 }
 
-export async function listReviews(
-  limit = 50,
-  offset = 0,
-): Promise<ReviewRecord[]> {
+export async function listReviews(limit = 50, offset = 0): Promise<ReviewRecord[]> {
   const data = await loadData();
   // newest first
   const sorted = [...data.reviews].reverse();

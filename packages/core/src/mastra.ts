@@ -16,10 +16,8 @@ export function getStorage(): LibSQLStore {
 }
 
 export function getMastra(): Mastra {
-  if (!_mastra) {
-    _mastra = new Mastra({
-      storage: getStorage(),
-    });
-  }
+  _mastra ??= new Mastra({
+    storage: getStorage(),
+  });
   return _mastra;
 }

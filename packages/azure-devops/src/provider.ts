@@ -85,14 +85,17 @@ export class AzureDevOpsProvider implements GitProvider {
   }
 
   private async fetchApi(url: string, options?: RequestInit): Promise<Response> {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${this.accessToken}`,
-        "Content-Type": "application/json",
-        ...options?.headers,
-      },
-    });
+    const { headers: extraHeaders, ...restOptions } = options ?? {};
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.accessToken}`,
+      "Content-Type": "application/json",
+    };
+    if (extraHeaders) {
+      new Headers(extraHeaders).forEach((v, k) => {
+        headers[k] = v;
+      });
+    }
+    const response = await fetch(url, { ...restOptions, headers });
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
@@ -131,8 +134,8 @@ export class AzureDevOpsProvider implements GitProvider {
     options?: RequestInit,
   ): Promise<z.infer<T>> {
     const response = await this.fetchApi(url, options);
-    const json = await response.json();
-    return schema.parse(json);
+    const json: unknown = await response.json();
+    return schema.parse(json) as z.infer<T>;
   }
 
   async getDiff(): Promise<FilePatch[]> {
@@ -149,7 +152,9 @@ export class AzureDevOpsProvider implements GitProvider {
       AdoIterationsSchema,
     );
 
+    if (iterations.value.length === 0) return [];
     const lastIteration = iterations.value[iterations.value.length - 1];
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive guard against schema changes
     if (!lastIteration) return [];
 
     const changes = await this.request(

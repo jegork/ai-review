@@ -23,6 +23,7 @@ export function parseConfig(): {
   provider: AzureDevOpsProvider;
   config: ReviewConfig;
   failOnCritical: boolean;
+  env: { orgUrl: string; project: string; accessToken: string };
 } {
   const pullRequestId = process.env.SYSTEM_PULLREQUEST_PULLREQUESTID;
   const orgUrl = process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI;
@@ -30,14 +31,13 @@ export function parseConfig(): {
   const repoName = process.env.BUILD_REPOSITORY_NAME;
   const accessToken = process.env.SYSTEM_ACCESSTOKEN;
 
-  const missing: string[] = [];
-  if (!pullRequestId) missing.push("SYSTEM_PULLREQUEST_PULLREQUESTID");
-  if (!orgUrl) missing.push("SYSTEM_TEAMFOUNDATIONCOLLECTIONURI");
-  if (!project) missing.push("SYSTEM_TEAMPROJECT");
-  if (!repoName) missing.push("BUILD_REPOSITORY_NAME");
-  if (!accessToken) missing.push("SYSTEM_ACCESSTOKEN");
-
-  if (missing.length > 0) {
+  if (!pullRequestId || !orgUrl || !project || !repoName || !accessToken) {
+    const missing: string[] = [];
+    if (!pullRequestId) missing.push("SYSTEM_PULLREQUEST_PULLREQUESTID");
+    if (!orgUrl) missing.push("SYSTEM_TEAMFOUNDATIONCOLLECTIONURI");
+    if (!project) missing.push("SYSTEM_TEAMPROJECT");
+    if (!repoName) missing.push("BUILD_REPOSITORY_NAME");
+    if (!accessToken) missing.push("SYSTEM_ACCESSTOKEN");
     throw new Error(`missing required env vars: ${missing.join(", ")}`);
   }
 
@@ -54,11 +54,11 @@ export function parseConfig(): {
 
   return {
     provider: new AzureDevOpsProvider({
-      orgUrl: orgUrl!,
-      project: project!,
-      repoName: repoName!,
-      pullRequestId: parseInt(pullRequestId!, 10),
-      accessToken: accessToken!,
+      orgUrl,
+      project,
+      repoName,
+      pullRequestId: parseInt(pullRequestId, 10),
+      accessToken,
     }),
     config: {
       style: reviewStyle as ReviewStyle,
@@ -67,11 +67,12 @@ export function parseConfig(): {
       ...(customInstructions ? { customInstructions } : {}),
     },
     failOnCritical,
+    env: { orgUrl, project, accessToken },
   };
 }
 
 async function main(): Promise<void> {
-  const { provider, config, failOnCritical } = parseConfig();
+  const { provider, config, failOnCritical, env } = parseConfig();
 
   const metadata = await provider.getPRMetadata();
   log.info(
@@ -100,9 +101,9 @@ async function main(): Promise<void> {
     ticketProviders.set(
       "azure-devops",
       new AzureDevOpsTicketProvider({
-        orgUrl: process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI!,
-        project: process.env.SYSTEM_TEAMPROJECT!,
-        pat: process.env.SYSTEM_ACCESSTOKEN!,
+        orgUrl: env.orgUrl,
+        project: env.project,
+        pat: env.accessToken,
       }),
     );
   }
@@ -147,7 +148,7 @@ async function main(): Promise<void> {
 const isDirectRun = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
 
 if (isDirectRun) {
-  main().catch((err) => {
+  main().catch((err: unknown) => {
     log.fatal({ err }, "fatal error");
     flushLogger(() => process.exit(2));
   });

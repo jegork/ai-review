@@ -20,7 +20,7 @@ function extractPath(header: string, prefix: "---" | "+++"): string | null {
 
 function extractPathFromDiffLine(line: string): string | null {
   // "diff --git a/foo b/foo" -> "foo"
-  const match = line.match(/^diff --git a\/(.+?) b\//);
+  const match = /^diff --git a\/(.+?) b\//.exec(line);
   return match ? match[1] : null;
 }
 
@@ -44,7 +44,7 @@ function parseFileBlock(lines: string[]): FilePatch | null {
       isBinary = true;
       if (!path) {
         // try to extract from "Binary files a/foo and b/foo differ"
-        const match = line.match(/Binary files [ab]\/(.+?) and/);
+        const match = /Binary files [ab]\/(.+?) and/.exec(line);
         if (match) path = match[1];
       }
       continue;
@@ -75,13 +75,19 @@ function parseFileBlock(lines: string[]): FilePatch | null {
     const hunkMatch = HUNK_HEADER_RE.exec(line);
     if (hunkMatch) {
       const oldStart = parseInt(hunkMatch[1], 10);
-      const oldLines = hunkMatch[2] !== undefined ? parseInt(hunkMatch[2], 10) : 1;
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- capture groups can be undefined at runtime
+      const oldLines = hunkMatch[2] != null ? parseInt(hunkMatch[2], 10) : 1;
       const newStart = parseInt(hunkMatch[3], 10);
-      const newLines = hunkMatch[4] !== undefined ? parseInt(hunkMatch[4], 10) : 1;
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- capture groups can be undefined at runtime
+      const newLines = hunkMatch[4] != null ? parseInt(hunkMatch[4], 10) : 1;
 
       const contentLines: string[] = [];
       let j = i + 1;
-      while (j < lines.length && !HUNK_HEADER_RE.test(lines[j]) && !lines[j].startsWith("diff --git")) {
+      while (
+        j < lines.length &&
+        !HUNK_HEADER_RE.test(lines[j]) &&
+        !lines[j].startsWith("diff --git")
+      ) {
         contentLines.push(lines[j]);
         j++;
       }

@@ -1,17 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type {
-  ReviewStyle,
-  FocusArea,
-  Severity,
-  Finding,
-  ReviewResult,
-  ReviewConfig,
-  PRMetadata,
-  FilePatch,
-  TicketInfo,
-  GitProvider,
-  TicketProvider,
-} from "../types.js";
+import type { Finding, ReviewResult, ReviewConfig } from "../types.js";
 
 describe("types", () => {
   it("ReviewConfig accepts valid config", () => {

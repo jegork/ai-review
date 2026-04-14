@@ -1,10 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export function validateWebhookSignature(
-  body: string,
-  signature: string,
-  secret: string,
-): boolean {
+export function validateWebhookSignature(body: string, signature: string, secret: string): boolean {
   if (!signature.startsWith("sha256=")) return false;
 
   const expected = createHmac("sha256", secret).update(body).digest("hex");
@@ -17,12 +13,11 @@ export function validateWebhookSignature(
 }
 
 export function parseWebhookEvent(
-  headers: Record<string, string>,
+  headers: Partial<Record<string, string>>,
   body: Record<string, unknown>,
 ): { event: string; action: string; payload: Record<string, unknown> } {
-  const event =
-    headers["x-github-event"] ?? headers["X-GitHub-Event"] ?? "unknown";
-  const action = (body.action as string) ?? "";
+  const event = headers["x-github-event"] ?? headers["X-GitHub-Event"] ?? "unknown";
+  const action = typeof body.action === "string" ? body.action : "";
 
   return { event, action, payload: body };
 }
