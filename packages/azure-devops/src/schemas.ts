@@ -41,10 +41,10 @@ export const AdoThreadSchema = z.object({
   comments: z.array(
     z.object({
       id: z.number(),
-      content: z.string(),
+      content: z.string().optional(),
     }),
   ),
-  status: z.number(),
+  status: z.union([z.number(), z.string()]),
 });
 
 export const AdoThreadsSchema = z.object({
