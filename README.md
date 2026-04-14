@@ -49,7 +49,7 @@ podman compose up --build
 packages/
 ├── core/           # shared review engine
 │   ├── src/
-│   │   ├── agent/      # Mastra review agent, prompt templates, Zod output schema
+│   │   ├── agent/      # Mastra review agent, judge/filter pass, prompt templates, Zod output schema
 │   │   ├── diff/       # unified diff parser, file filter, token-aware compression
 │   │   ├── formatter/  # summary comment + inline comment markdown renderers
 │   │   ├── tickets/    # ticket ref extraction, providers (GitHub/Jira/Linear/ADO)
@@ -146,6 +146,9 @@ The task exits with code 1 when critical issues are found (configurable via `RUS
 | `RUSTY_AZURE_DEPLOYMENT` | Azure OpenAI deployment (managed identity mode) | — |
 | `RUSTY_LLM_BASE_URL` | OpenAI-compatible endpoint URL (e.g. LiteLLM) | — |
 | `RUSTY_LLM_API_KEY` | API key for custom endpoint | — |
+| `RUSTY_JUDGE_ENABLED` | enable post-generation judge/filter pass | `false` |
+| `RUSTY_JUDGE_THRESHOLD` | minimum confidence score (0–10) to keep a finding | `6` |
+| `RUSTY_JUDGE_MODEL` | model for the judge (can be cheaper than reviewer) | same as `RUSTY_LLM_MODEL` |
 
 ### LLM Provider Configuration
 
@@ -208,6 +211,39 @@ curl -X PUT http://localhost:3000/api/config/repos/owner/repo \
 | **Lenient** | Only critical bugs and security issues, encouraging tone |
 | **Roast** | Technically accurate feedback wrapped in sharp, witty commentary |
 
+### Judge / Filter Pass
+
+By default every finding the LLM produces gets posted directly. The judge pass adds a self-reflection stage: after generating findings, a second agent scores each one for confidence (0–10) and drops anything below a configurable threshold. This catches hallucinated findings, speculative claims, and low-value noise before they reach developers.
+
+Enable it with:
+
+```bash
+RUSTY_JUDGE_ENABLED=true
+RUSTY_JUDGE_THRESHOLD=6          # 0–10, findings below this are dropped
+RUSTY_JUDGE_MODEL=anthropic/claude-3-5-haiku-20241022  # optional, cheaper model
+```
+
+**How it works:**
+
+1. The reviewer generates findings as normal
+2. The judge agent receives the diff + all findings and scores each one 0–10
+3. Findings below the threshold are filtered out and logged at `debug` level
+4. The merge recommendation is recalculated based on surviving findings
+5. The summary footer shows token usage for review and judge separately, plus how many findings were filtered
+
+**Tuning the threshold:**
+
+| Threshold | Behavior |
+|-----------|----------|
+| 3–4 | Permissive — only drops clearly hallucinated findings |
+| 5–6 | Balanced — removes speculative and low-confidence noise |
+| 7–8 | Strict — only high-confidence, evidence-backed findings survive |
+| 9–10 | Very strict — likely over-filters, use for low-noise environments |
+
+**Cost:** The judge uses a single LLM call with structured output (no tools). Using a cheap model like Haiku adds ~1–3% to total cost. Using the same model as the reviewer adds ~30–50%.
+
+When the judge is disabled (default), the pipeline behaves exactly as before with zero overhead.
+
 ### Ticket Integration
 
 Rusty Bot automatically extracts ticket references from PR descriptions and branch names:
@@ -229,7 +265,7 @@ pnpm install
 # build all packages
 pnpm -r build
 
-# run tests (164 tests)
+# run tests (237 tests)
 pnpm test
 
 # start dev server
