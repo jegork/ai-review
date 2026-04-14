@@ -10,7 +10,8 @@ import type {
   TicketComplianceItem,
   TicketComplianceStatus,
 } from "../types.js";
-import { runReview, type RunReviewOptions } from "./review.js";
+import { type RunReviewOptions } from "./review.js";
+import { runConsensusReview } from "./consensus.js";
 import { judgeReviewResult, resolveJudgeConfig } from "./judge.js";
 import type { McpServerConfig } from "../mcp/types.js";
 import { connectMcpServers } from "../mcp/client.js";
@@ -87,7 +88,6 @@ function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult 
     totalTokens += result.tokenCount;
   }
 
-  // deduplicate findings by file+line+message
   const seen = new Set<string>();
   const dedupedFindings = allFindings.filter((f) => {
     const key = `${f.file}:${f.line}:${f.message}`;
@@ -104,12 +104,13 @@ function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult 
         ? ("address_before_merge" as const)
         : ("looks_good" as const);
 
-  // combine summaries
   const summaries = results.map((r) => r.summary).filter(Boolean);
   const summary =
     summaries.length === 1
       ? summaries[0]
       : `Reviewed in ${results.length} passes.\n\n${summaries.join("\n\n")}`;
+
+  const consensusMetadata = results[0]?.consensusMetadata;
 
   return {
     summary,
@@ -120,6 +121,7 @@ function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult 
     filesReviewed: [...allFiles],
     modelUsed,
     tokenCount: totalTokens,
+    ...(consensusMetadata && { consensusMetadata }),
   };
 }
 
@@ -185,7 +187,6 @@ export async function runMultiCallReview(
   const { mcpServers, maxTokens: maxTokensOpt, ...reviewOptions } = options ?? {};
   const maxTokens = maxTokensOpt ?? DEFAULT_MAX_TOKENS;
 
-  // connect to MCP servers once for the entire review
   let mcpDisconnect: (() => Promise<void>) | undefined;
   let resolvedOptions: RunReviewOptions = reviewOptions;
 
@@ -207,11 +208,16 @@ export async function runMultiCallReview(
 
     let result: ReviewResult;
 
-    // if everything fits in one call, use the simple path
     if (skippedFiles.length === 0) {
-      result = await runReview(config, compressed, prMetadata, ticketContext, resolvedOptions);
+      result = await runConsensusReview(
+        patches,
+        config,
+        prMetadata,
+        compressed,
+        ticketContext,
+        resolvedOptions,
+      );
     } else {
-      // split into groups that each fit within the token budget
       const groups = splitIntoGroups(patches, maxTokens);
 
       if (ticketContext && ticketContext.length > 0 && groups.length > 1) {
@@ -226,15 +232,14 @@ export async function runMultiCallReview(
         );
       }
 
-      // each chunk needs the same ticket context so compliance evidence can be
-      // gathered across the full PR, then merged into one checklist
       const results: ReviewResult[] = [];
       for (const group of groups) {
-        const { compressed: groupDiff } = compressDiff(group, maxTokens);
-        const groupResult = await runReview(
+        const groupCompressed = compressDiff(group, maxTokens).compressed;
+        const groupResult = await runConsensusReview(
+          group,
           config,
-          groupDiff,
           prMetadata,
+          groupCompressed,
           ticketContext,
           resolvedOptions,
         );
@@ -244,9 +249,7 @@ export async function runMultiCallReview(
       result = mergeResults(results, results[0]?.modelUsed ?? "unknown");
     }
 
-    // run judge/filter pass on merged findings
     const judgeConfig = resolveJudgeConfig();
-    // reuse the already-compressed diff when nothing was skipped
     const judgeDiff =
       skippedFiles.length === 0 ? compressed : compressDiff(patches, Infinity).compressed;
     return await judgeReviewResult(result, judgeDiff, judgeConfig);

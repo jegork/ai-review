@@ -20,6 +20,8 @@ export interface Finding {
   category: FocusArea;
   message: string;
   suggestedFix?: string;
+  /** number of consensus passes that flagged this finding */
+  voteCount?: number;
 }
 
 export interface Observation {
@@ -28,6 +30,8 @@ export interface Observation {
   severity: Severity;
   category: FocusArea;
   message: string;
+  /** number of consensus passes that flagged this observation */
+  voteCount?: number;
 }
 
 export interface ReviewResult {
@@ -43,6 +47,7 @@ export interface ReviewResult {
   filteredCount?: number;
   /** tokens consumed by the judge pass */
   judgeTokenCount?: number;
+  consensusMetadata?: { passes: number; threshold: number };
 }
 
 export interface ReviewConfig {
@@ -50,6 +55,8 @@ export interface ReviewConfig {
   focusAreas: FocusArea[];
   ignorePatterns: string[];
   customInstructions?: string;
+  consensusPasses?: number;
+  consensusThreshold?: number | null;
 }
 
 export interface PRMetadata {
