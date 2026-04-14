@@ -175,36 +175,37 @@ const MIME_TYPES: Record<string, string> = {
   ".ico": "image/x-icon",
 };
 
-const __serverDir = dirname(fileURLToPath(import.meta.url));
-const DASHBOARD_DIR =
-  process.env.RUSTY_DASHBOARD_DIR ?? resolve(__serverDir, "../../dashboard/dist");
+const dashboardEnabled = process.env.RUSTY_DASHBOARD === "true";
 
-async function serveDashboardFile(filePath: string): Promise<Response | null> {
-  try {
-    const full = join(DASHBOARD_DIR, filePath);
-    // prevent path traversal
-    if (!full.startsWith(DASHBOARD_DIR)) return null;
-    await stat(full);
-    const content = await readFile(full);
-    const ext = filePath.substring(filePath.lastIndexOf("."));
-    return new Response(content, {
-      headers: { "Content-Type": MIME_TYPES[ext] ?? "application/octet-stream" },
-    });
-  } catch {
-    return null;
-  }
+if (dashboardEnabled) {
+  const __serverDir = dirname(fileURLToPath(import.meta.url));
+  const dashboardDir =
+    process.env.RUSTY_DASHBOARD_DIR ?? resolve(__serverDir, "../../dashboard/dist");
+
+  const serveDashboardFile = async (filePath: string): Promise<Response | null> => {
+    try {
+      const full = join(dashboardDir, filePath);
+      if (!full.startsWith(dashboardDir)) return null;
+      await stat(full);
+      const content = await readFile(full);
+      const ext = filePath.substring(filePath.lastIndexOf("."));
+      return new Response(content, {
+        headers: { "Content-Type": MIME_TYPES[ext] ?? "application/octet-stream" },
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  app.get("*", async (c) => {
+    const path = c.req.path;
+    const file = await serveDashboardFile(path);
+    if (file) return file;
+    const index = await serveDashboardFile("/index.html");
+    if (index) return index;
+    return c.json({ error: "not found" }, 404);
+  });
 }
-
-app.get("*", async (c) => {
-  const path = c.req.path;
-  // try exact file first (for /assets/index-xxx.js etc)
-  const file = await serveDashboardFile(path);
-  if (file) return file;
-  // fallback to index.html for SPA routing
-  const index = await serveDashboardFile("/index.html");
-  if (index) return index;
-  return c.json({ error: "not found" }, 404);
-});
 
 if (process.env.NODE_ENV !== "test") {
   const port = Number(process.env.PORT ?? 3000);

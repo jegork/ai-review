@@ -3,10 +3,26 @@ import { DefaultAzureCredential } from "@azure/identity";
 
 export type ModelConfig =
   | { type: "router"; model: string }
+  | { type: "azure-api-key"; resourceName: string; deploymentName: string; apiKey: string }
   | { type: "azure-managed-identity"; resourceName: string; deploymentName: string }
   | { type: "openai-compatible"; baseUrl: string; model: string; apiKey?: string };
 
 export function resolveModelConfig(): ModelConfig {
+  const model = process.env.RUSTY_LLM_MODEL ?? "anthropic/claude-sonnet-4-20250514";
+
+  // azure-openai/deployment-name with API key
+  // accepts both AZURE_API_KEY (mastra convention) and AZURE_OPENAI_API_KEY
+  const azureApiKey = process.env.AZURE_API_KEY ?? process.env.AZURE_OPENAI_API_KEY;
+  if (model.startsWith("azure-openai/") && azureApiKey && process.env.AZURE_OPENAI_RESOURCE_NAME) {
+    return {
+      type: "azure-api-key",
+      resourceName: process.env.AZURE_OPENAI_RESOURCE_NAME,
+      deploymentName: model.replace("azure-openai/", ""),
+      apiKey: azureApiKey,
+    };
+  }
+
+  // azure with managed identity (no API key)
   if (process.env.RUSTY_AZURE_RESOURCE_NAME && process.env.RUSTY_AZURE_DEPLOYMENT) {
     return {
       type: "azure-managed-identity",
@@ -15,22 +31,19 @@ export function resolveModelConfig(): ModelConfig {
     };
   }
 
+  // custom openai-compatible endpoint (e.g. litellm)
   if (process.env.RUSTY_LLM_BASE_URL) {
     return {
       type: "openai-compatible",
       baseUrl: process.env.RUSTY_LLM_BASE_URL,
-      model: process.env.RUSTY_LLM_MODEL ?? "default",
+      model,
       apiKey: process.env.RUSTY_LLM_API_KEY,
     };
   }
 
-  return {
-    type: "router",
-    model: process.env.RUSTY_LLM_MODEL ?? "anthropic/claude-sonnet-4-20250514",
-  };
+  return { type: "router", model };
 }
 
-// returns either a model router string or a provider model instance
 export function resolveModel(
   config: ModelConfig,
 ): string | ReturnType<ReturnType<typeof createAzure>> {
@@ -38,12 +51,18 @@ export function resolveModel(
     case "router":
       return config.model;
 
+    case "azure-api-key": {
+      const azure = createAzure({
+        resourceName: config.resourceName,
+        apiKey: config.apiKey,
+      });
+      return azure(config.deploymentName);
+    }
+
     case "azure-managed-identity": {
       const credential = new DefaultAzureCredential();
       const scope = "https://cognitiveservices.azure.com/.default";
 
-      // inject bearer token via custom fetch
-      // inject managed identity token into every request
       const azureFetch = (async (input: unknown, init?: Record<string, unknown>) => {
         const token = await credential.getToken(scope);
         const headers = new Headers(init?.headers as ConstructorParameters<typeof Headers>[0]);
@@ -70,6 +89,8 @@ export function getModelDisplayName(config: ModelConfig): string {
   switch (config.type) {
     case "router":
       return config.model;
+    case "azure-api-key":
+      return `azure/${config.deploymentName}`;
     case "azure-managed-identity":
       return `azure/${config.deploymentName}`;
     case "openai-compatible":

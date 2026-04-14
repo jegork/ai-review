@@ -82,7 +82,7 @@ GITHUB_WEBHOOK_SECRET=your-secret
 
 ## Azure DevOps Pipeline Setup
 
-Rusty Bot runs as a container task in Azure Pipelines. Add this to your `azure-pipelines.yml`:
+Rusty Bot runs inside a container in Azure Pipelines. The pipeline env vars (`SYSTEM_PULLREQUEST_*`, etc.) are automatically available inside the container.
 
 ```yaml
 trigger: none
@@ -95,25 +95,24 @@ pr:
 pool:
   vmImage: ubuntu-latest
 
+container:
+  image: ghcr.io/jegork/ai-review:latest
+  env:
+    RUSTY_MODE: pipeline
+
 steps:
-  - script: |
-      podman run --rm \
-        -e RUSTY_MODE=pipeline \
-        -e SYSTEM_PULLREQUEST_PULLREQUESTID=$(System.PullRequest.PullRequestId) \
-        -e SYSTEM_TEAMFOUNDATIONCOLLECTIONURI=$(System.TeamFoundationCollectionUri) \
-        -e SYSTEM_TEAMPROJECT=$(System.TeamProject) \
-        -e BUILD_REPOSITORY_NAME=$(Build.Repository.Name) \
-        -e SYSTEM_ACCESSTOKEN=$(System.AccessToken) \
-        -e RUSTY_LLM_MODEL=$(RUSTY_LLM_MODEL) \
-        -e ANTHROPIC_API_KEY=$(ANTHROPIC_API_KEY) \
-        -e RUSTY_REVIEW_STYLE=$(RUSTY_REVIEW_STYLE) \
-        -e RUSTY_FOCUS_AREAS=$(RUSTY_FOCUS_AREAS) \
-        -e RUSTY_FAIL_ON_CRITICAL=true \
-        ghcr.io/your-org/rusty-bot:latest
+  - script: node /app/packages/azure-devops/dist/cli.js
     displayName: Rusty Bot PR Review
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+      RUSTY_LLM_MODEL: $(RUSTY_LLM_MODEL)
+      ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
+      RUSTY_REVIEW_STYLE: $(RUSTY_REVIEW_STYLE)
+      RUSTY_FOCUS_AREAS: $(RUSTY_FOCUS_AREAS)
+      RUSTY_FAIL_ON_CRITICAL: "true"
 ```
 
-Set `RUSTY_LLM_MODEL`, `ANTHROPIC_API_KEY`, and other variables as pipeline variables in Azure DevOps.
+Set `RUSTY_LLM_MODEL`, `ANTHROPIC_API_KEY`, and other variables as pipeline variables in Azure DevOps. For Azure OpenAI with managed identity, replace the API key vars with `RUSTY_AZURE_RESOURCE_NAME` and `RUSTY_AZURE_DEPLOYMENT`.
 
 The task exits with code 1 when critical issues are found (configurable via `RUSTY_FAIL_ON_CRITICAL`), which can gate PR merges.
 
@@ -141,22 +140,25 @@ The task exits with code 1 when critical issues are found (configurable via `RUS
 | `RUSTY_JIRA_API_TOKEN` | Jira API token | — |
 | `RUSTY_LINEAR_API_KEY` | Linear API key | — |
 | `RUSTY_ADO_PAT` | Azure DevOps PAT (server mode) | — |
-| `RUSTY_AZURE_RESOURCE_NAME` | Azure OpenAI resource name (managed identity) | — |
-| `RUSTY_AZURE_DEPLOYMENT` | Azure OpenAI deployment name (managed identity) | — |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key (or `AZURE_API_KEY`) | — |
+| `AZURE_OPENAI_RESOURCE_NAME` | Azure OpenAI resource name | — |
+| `RUSTY_AZURE_RESOURCE_NAME` | Azure OpenAI resource (managed identity mode) | — |
+| `RUSTY_AZURE_DEPLOYMENT` | Azure OpenAI deployment (managed identity mode) | — |
 | `RUSTY_LLM_BASE_URL` | OpenAI-compatible endpoint URL (e.g. LiteLLM) | — |
 | `RUSTY_LLM_API_KEY` | API key for custom endpoint | — |
 
 ### LLM Provider Configuration
 
-Rusty Bot supports three ways to connect to an LLM:
+Rusty Bot supports four ways to connect to an LLM, resolved in this order:
 
-**1. Mastra model router (default)** — direct provider API keys:
+**1. Azure OpenAI with API key** — for Azure AI Foundry deployments:
 ```bash
-RUSTY_LLM_MODEL=anthropic/claude-sonnet-4-20250514
-ANTHROPIC_API_KEY=sk-ant-...
+RUSTY_LLM_MODEL=azure-openai/gpt-5.3-codex
+AZURE_OPENAI_API_KEY=your-key
+AZURE_OPENAI_RESOURCE_NAME=ai-code-review-foundry
 ```
 
-Supports 99+ providers: `openai/gpt-4o`, `google/gemini-2.5-flash`, `azure-openai/deployment-name`, `openrouter/...`, etc.
+The resource name is the subdomain from your endpoint URL (e.g. `https://ai-code-review-foundry.cognitiveservices.azure.com` → `ai-code-review-foundry`). Uses `@ai-sdk/azure` directly.
 
 **2. Azure OpenAI with Managed Identity** — no API keys needed when running on Azure:
 ```bash
@@ -173,7 +175,13 @@ RUSTY_LLM_MODEL=gpt-4o
 RUSTY_LLM_API_KEY=optional-key
 ```
 
-Priority: Azure managed identity > custom endpoint > model router string.
+**4. Mastra model router (default)** — direct provider API keys:
+```bash
+RUSTY_LLM_MODEL=anthropic/claude-sonnet-4-20250514
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Supports 99+ providers: `openai/gpt-4o`, `google/gemini-2.5-flash`, `openrouter/...`, etc.
 
 ### Per-Repository Configuration
 

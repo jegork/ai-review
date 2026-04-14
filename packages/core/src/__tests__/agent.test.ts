@@ -179,6 +179,7 @@ describe("ReviewOutputSchema", () => {
           severity: "warning" as const,
           category: "security" as const,
           message: "Missing rate limiting on login endpoint",
+          suggestedFix: "",
         },
       ],
       observations: [],

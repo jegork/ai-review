@@ -9,6 +9,7 @@ import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
 export interface RunReviewOptions {
   provider?: GitProvider;
   sourceRef?: string;
+  languageSummary?: string;
 }
 
 function buildTools(options?: RunReviewOptions): ToolsInput {
@@ -30,7 +31,7 @@ export async function runReview(
   options?: RunReviewOptions,
 ): Promise<ReviewResult> {
   const systemPrompt = buildSystemPrompt(config);
-  const userMessage = buildUserMessage(diff, prMetadata, ticketContext);
+  const userMessage = buildUserMessage(diff, prMetadata, ticketContext, options?.languageSummary);
   const modelConfig = resolveModelConfig();
   const model = resolveModel(modelConfig);
   const modelName = getModelDisplayName(modelConfig);

@@ -6,7 +6,7 @@ export const FindingSchema = z.object({
   severity: z.enum(["critical", "warning", "suggestion"]),
   category: z.enum(["security", "performance", "bugs", "style", "tests", "docs"]),
   message: z.string(),
-  suggestedFix: z.string().optional(),
+  suggestedFix: z.string().describe("suggested code fix, or empty string if none"),
 });
 
 export const ObservationSchema = z.object({
