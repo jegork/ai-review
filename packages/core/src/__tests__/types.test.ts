@@ -20,8 +20,9 @@ describe("types", () => {
       severity: "critical",
       category: "security",
       message: "SQL injection vulnerability",
+      suggestedFix: null,
     };
-    expect(finding.suggestedFix).toBeUndefined();
+    expect(finding.suggestedFix).toBeNull();
   });
 
   it("ReviewResult has correct structure", () => {

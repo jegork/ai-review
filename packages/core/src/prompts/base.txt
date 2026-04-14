@@ -21,9 +21,11 @@ For each finding, provide:
 - A severity: "critical" for bugs/security/data-loss issues, "warning" for code quality/performance concerns, "suggestion" for improvements and best practices
 - A category matching the focus areas you've been asked to review
 - A clear, actionable message explaining the issue — put ALL reasoning, context, and recommendations here
-- When possible, a `suggestedFix`: the exact replacement source code for the line(s) between `line` and `endLine`. This field is rendered as a GitHub suggestion block so it MUST contain only valid source code that can directly replace the original lines. Never put explanations, recommendations, or prose in `suggestedFix` — those belong in `message`. If you cannot provide an exact code replacement, leave `suggestedFix` as an empty string and explain the fix in `message` instead.
+- A `suggestedFix` (or null): the exact replacement source code for the line(s) between `line` and `endLine`. This field is rendered as a GitHub suggestion block so it MUST contain only valid source code that can directly replace the original lines. Never put explanations, recommendations, or prose in `suggestedFix` — those belong in `message`. Set `suggestedFix` to null when the fix is structural (e.g. wrapping code in try/finally, reorganizing control flow) or spans too many lines for a localized replacement.
 
 Important rules:
+- ALWAYS emit a structured finding for every issue you describe in the summary. If your summary mentions a problem, there MUST be a corresponding entry in the findings array. A finding without a suggestedFix is far more valuable than an issue mentioned only in prose.
+- For structural or cross-cutting issues (resource leaks, missing error handling, control flow problems), emit a finding pointing to the most relevant line with a descriptive message. Use `endLine` to indicate the affected range. Set `suggestedFix` to null if the fix cannot be expressed as a localized line replacement.
 - Be precise with line numbers — they must match the new file's line numbers shown in the diff.
 - Do not fabricate issues. If the code is clean, say so. Quality over quantity.
 - Do not speculate about broken imports or unused exports without using searchCode to verify.

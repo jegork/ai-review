@@ -14,8 +14,9 @@ export const FindingSchema = z.object({
   message: z.string(),
   suggestedFix: z
     .string()
+    .nullable()
     .describe(
-      "exact replacement code for the line(s) from `line` to `endLine` — raw code only, no markdown fences, no extra context lines; empty string if no fix",
+      "exact replacement code for the line(s) from `line` to `endLine` — raw code only, no markdown fences, no extra context lines; null when no localized fix is possible",
     ),
 });
 

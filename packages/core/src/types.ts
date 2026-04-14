@@ -19,7 +19,7 @@ export interface Finding {
   severity: Severity;
   category: FocusArea;
   message: string;
-  suggestedFix?: string;
+  suggestedFix: string | null;
   /** number of consensus passes that flagged this finding */
   voteCount?: number;
 }
