@@ -16,7 +16,4 @@ export {
   type RepoConfigWithId,
   type ReviewRecord,
 } from "./storage.js";
-export {
-  validateWebhookSignature,
-  parseWebhookEvent,
-} from "./webhook.js";
+export { validateWebhookSignature, parseWebhookEvent } from "./webhook.js";

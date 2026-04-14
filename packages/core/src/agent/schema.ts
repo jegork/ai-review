@@ -4,14 +4,7 @@ export const FindingSchema = z.object({
   file: z.string(),
   line: z.number(),
   severity: z.enum(["critical", "warning", "suggestion"]),
-  category: z.enum([
-    "security",
-    "performance",
-    "bugs",
-    "style",
-    "tests",
-    "docs",
-  ]),
+  category: z.enum(["security", "performance", "bugs", "style", "tests", "docs"]),
   message: z.string(),
   suggestedFix: z.string().optional(),
 });
@@ -20,14 +13,7 @@ export const ObservationSchema = z.object({
   file: z.string(),
   line: z.number(),
   severity: z.enum(["critical", "warning", "suggestion"]),
-  category: z.enum([
-    "security",
-    "performance",
-    "bugs",
-    "style",
-    "tests",
-    "docs",
-  ]),
+  category: z.enum(["security", "performance", "bugs", "style", "tests", "docs"]),
   message: z.string(),
 });
 
@@ -42,7 +28,5 @@ export const ReviewOutputSchema = z.object({
   observations: z
     .array(ObservationSchema)
     .describe("issues found in referenced but unchanged code"),
-  filesReviewed: z
-    .array(z.string())
-    .describe("list of file paths that were reviewed"),
+  filesReviewed: z.array(z.string()).describe("list of file paths that were reviewed"),
 });

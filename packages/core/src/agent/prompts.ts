@@ -10,14 +10,7 @@ function loadTemplate(relativePath: string): string {
   return readFileSync(resolve(promptsDir, relativePath), "utf-8");
 }
 
-const ALL_FOCUS_AREAS: FocusArea[] = [
-  "security",
-  "performance",
-  "bugs",
-  "style",
-  "tests",
-  "docs",
-];
+const ALL_FOCUS_AREAS: FocusArea[] = ["security", "performance", "bugs", "style", "tests", "docs"];
 
 function buildStyleInstructions(style: ReviewStyle): string {
   return loadTemplate(`styles/${style}.txt`);
