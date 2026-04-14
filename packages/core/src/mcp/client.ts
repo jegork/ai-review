@@ -20,7 +20,7 @@ export async function connectMcpServers(
 ): Promise<{ tools: ToolsInput; disconnect: () => Promise<void> }> {
   const names = Object.keys(servers);
   if (names.length === 0) {
-    return { tools: {}, disconnect: async () => {} };
+    return { tools: {}, disconnect: () => Promise.resolve() };
   }
 
   const allTools: ToolsInput = {};

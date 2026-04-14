@@ -7,14 +7,14 @@ const StdioServerSchema = z
     args: z.array(z.string()).optional(),
     env: z.record(z.string(), z.string()).optional(),
   })
-  .passthrough();
+  .loose();
 
 const HttpServerSchema = z
   .object({
     url: z.string().or(z.instanceof(URL)),
     requestInit: z.record(z.string(), z.unknown()).optional(),
   })
-  .passthrough();
+  .loose();
 
 const ServerEntrySchema = z.union([StdioServerSchema, HttpServerSchema]);
 

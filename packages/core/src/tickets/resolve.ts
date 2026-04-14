@@ -1,25 +1,53 @@
-import type { TicketInfo, TicketProvider, TicketRef } from "../types.js";
+import type { TicketInfo, TicketProvider, TicketRef, TicketResolutionStatus } from "../types.js";
 import { logger } from "../logger.js";
 
 const MAX_TICKETS = 3;
+
+export async function resolveTicketsWithStatus(
+  refs: TicketRef[],
+  providers: Map<string, TicketProvider>,
+): Promise<{ tickets: TicketInfo[]; status: TicketResolutionStatus }> {
+  const results: TicketInfo[] = [];
+  const refsToConsider = refs.slice(0, MAX_TICKETS);
+  let missingProvider = 0;
+  let fetchFailed = 0;
+
+  for (const ref of refsToConsider) {
+    const provider = providers.get(ref.source);
+    if (!provider) {
+      missingProvider++;
+      continue;
+    }
+
+    try {
+      const info = await provider.fetchTicket(ref.id);
+      if (info) {
+        results.push(info);
+      } else {
+        fetchFailed++;
+      }
+    } catch (err) {
+      fetchFailed++;
+      logger.warn({ ticketId: ref.id, source: ref.source, err }, "failed to fetch ticket");
+    }
+  }
+
+  return {
+    tickets: results,
+    status: {
+      refsFound: refs.length,
+      refsConsidered: refsToConsider.length,
+      fetched: results.length,
+      missingProvider,
+      fetchFailed,
+    },
+  };
+}
 
 export async function resolveTickets(
   refs: TicketRef[],
   providers: Map<string, TicketProvider>,
 ): Promise<TicketInfo[]> {
-  const results: TicketInfo[] = [];
-
-  for (const ref of refs.slice(0, MAX_TICKETS)) {
-    const provider = providers.get(ref.source);
-    if (!provider) continue;
-
-    try {
-      const info = await provider.fetchTicket(ref.id);
-      if (info) results.push(info);
-    } catch (err) {
-      logger.warn({ ticketId: ref.id, source: ref.source, err }, "failed to fetch ticket");
-    }
-  }
-
-  return results;
+  const { tickets } = await resolveTicketsWithStatus(refs, providers);
+  return tickets;
 }

@@ -1,29 +1,37 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { countTokens } from "../diff/compress.js";
-import type { FilePatch, ReviewConfig } from "../types.js";
+import type { FilePatch, ReviewConfig, ReviewResult, TicketInfo } from "../types.js";
 
-vi.mock("../agent/review.js", () => ({
-  runReview: vi.fn(async (_config, diff, _prMeta, _tickets, _opts) => ({
+function makeMockReview(diff: string): ReviewResult {
+  return {
     summary: `Reviewed ${countTokens(diff)} tokens`,
     recommendation: "looks_good" as const,
     findings: [
       {
         file: "a.ts",
         line: 1,
+        endLine: 1,
         severity: "warning" as const,
         category: "bugs" as const,
         message: `finding from chunk with ${countTokens(diff)} tokens`,
       },
     ],
     observations: [],
+    ticketCompliance: [],
     filesReviewed: ["a.ts"],
     modelUsed: "test-model",
     tokenCount: countTokens(diff),
-  })),
+  };
+}
+
+vi.mock("../agent/review.js", () => ({
+  runReview: vi.fn(async (_config, diff, _prMeta, _tickets, _opts) => makeMockReview(diff)),
 }));
 
 // import after mock is set up
 const { runMultiCallReview } = await import("../agent/multi-call.js");
+const { runReview } = await import("../agent/review.js");
+const runReviewMock = vi.mocked(runReview);
 
 function makePatch(path: string, contentSize: number): FilePatch {
   const lines = Array.from({ length: contentSize }, (_, i) => `+line ${i}`).join("\n");
@@ -60,7 +68,23 @@ const config: ReviewConfig = {
   ignorePatterns: [],
 };
 
+const tickets: TicketInfo[] = [
+  {
+    id: "AUTH-42",
+    title: "Implement auth",
+    description: "Add JWT auth",
+    acceptanceCriteria: "- Login returns JWT\n- Protected routes validate JWT",
+    labels: [],
+    source: "jira",
+  },
+];
+
 describe("runMultiCallReview", () => {
+  beforeEach(() => {
+    runReviewMock.mockReset();
+    runReviewMock.mockImplementation(async (_config, diff) => makeMockReview(diff));
+  });
+
   it("uses single call when diff fits in budget", async () => {
     const patches = [makePatch("small.ts", 10)];
     const result = await runMultiCallReview(patches, config, prMetadata);
@@ -98,13 +122,151 @@ describe("runMultiCallReview", () => {
     expect(result.summary).toContain("passes");
   });
 
+  it("merges ticket compliance and keeps the strongest status", async () => {
+    runReviewMock
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-1"),
+        summary: "First chunk",
+        ticketCompliance: [
+          {
+            ticketId: "AUTH-42",
+            requirement: "Protected routes validate JWT",
+            status: "unclear",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-2"),
+        summary: "Second chunk",
+        ticketCompliance: [
+          {
+            ticketId: "AUTH-42",
+            requirement: "Protected routes validate JWT",
+            status: "addressed",
+            evidence: "auth-middleware.ts verifies JWT on protected endpoints",
+          },
+        ],
+      });
+
+    const patches = [makePatch("big1.ts", 1000), makePatch("big2.ts", 1000)];
+    const result = await runMultiCallReview(patches, config, prMetadata, tickets, {
+      maxTokens: 3000,
+    });
+
+    expect(result.ticketCompliance).toEqual([
+      {
+        ticketId: "AUTH-42",
+        requirement: "Protected routes validate JWT",
+        status: "addressed",
+        evidence: "auth-middleware.ts verifies JWT on protected endpoints",
+      },
+    ]);
+  });
+
+  it("merges evidence when duplicate compliance items have the same priority", async () => {
+    runReviewMock
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-1"),
+        ticketCompliance: [
+          {
+            ticketId: "AUTH-42",
+            requirement: "Protected routes validate JWT",
+            status: "partially_addressed",
+            evidence: "middleware.ts validates most protected routes",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-2"),
+        ticketCompliance: [
+          {
+            ticketId: "auth-42",
+            requirement: "protected routes validate jwt",
+            status: "partially_addressed",
+            evidence: "admin.ts still has one bypass path",
+          },
+        ],
+      });
+
+    const patches = [makePatch("big1.ts", 1000), makePatch("big2.ts", 1000)];
+    const result = await runMultiCallReview(patches, config, prMetadata, tickets, {
+      maxTokens: 3000,
+    });
+
+    expect(result.ticketCompliance).toEqual([
+      {
+        ticketId: "AUTH-42",
+        requirement: "Protected routes validate JWT",
+        status: "partially_addressed",
+        evidence:
+          "middleware.ts validates most protected routes | admin.ts still has one bypass path",
+      },
+    ]);
+  });
+
+  it("preserves previously accumulated evidence when a later chunk upgrades the status", async () => {
+    runReviewMock
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-1"),
+        ticketCompliance: [
+          {
+            ticketId: "AUTH-42",
+            requirement: "Protected routes validate JWT",
+            status: "unclear",
+            evidence: "middleware.ts is added",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-2"),
+        ticketCompliance: [
+          {
+            ticketId: "AUTH-42",
+            requirement: "Protected routes validate JWT",
+            status: "unclear",
+            evidence: "route-guard.ts is wired into most routes",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-3"),
+        ticketCompliance: [
+          {
+            ticketId: "AUTH-42",
+            requirement: "Protected routes validate JWT",
+            status: "addressed",
+            evidence: "admin-routes.ts now uses the shared auth guard",
+          },
+        ],
+      });
+
+    const patches = [
+      makePatch("big1.ts", 1000),
+      makePatch("big2.ts", 1000),
+      makePatch("big3.ts", 1000),
+    ];
+    const result = await runMultiCallReview(patches, config, prMetadata, tickets, {
+      maxTokens: 3000,
+    });
+
+    expect(result.ticketCompliance).toEqual([
+      {
+        ticketId: "AUTH-42",
+        requirement: "Protected routes validate JWT",
+        status: "addressed",
+        evidence:
+          "middleware.ts is added | route-guard.ts is wired into most routes | admin-routes.ts now uses the shared auth guard",
+      },
+    ]);
+  });
+
   it("handles empty patches", async () => {
-    const { runReview } = await import("../agent/review.js");
-    (runReview as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    runReviewMock.mockResolvedValueOnce({
       summary: "Nothing to review",
       recommendation: "looks_good",
       findings: [],
       observations: [],
+      ticketCompliance: [],
       filesReviewed: [],
       modelUsed: "test",
       tokenCount: 0,

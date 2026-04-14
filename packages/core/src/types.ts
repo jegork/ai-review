@@ -6,6 +6,12 @@ export type Severity = "critical" | "warning" | "suggestion";
 
 export type Recommendation = "looks_good" | "address_before_merge" | "critical_issues";
 
+export type TicketComplianceStatus =
+  | "addressed"
+  | "partially_addressed"
+  | "not_addressed"
+  | "unclear";
+
 export interface Finding {
   file: string;
   line: number;
@@ -29,6 +35,7 @@ export interface ReviewResult {
   recommendation: Recommendation;
   findings: Finding[];
   observations: Observation[];
+  ticketCompliance: TicketComplianceItem[];
   filesReviewed: string[];
   modelUsed: string;
   tokenCount: number;
@@ -74,6 +81,26 @@ export interface TicketInfo {
   acceptanceCriteria?: string;
   labels: string[];
   source: string;
+}
+
+export interface TicketComplianceItem {
+  ticketId?: string | null;
+  requirement: string;
+  status: TicketComplianceStatus;
+  evidence?: string | null;
+}
+
+export interface TicketResolutionStatus {
+  /** Total linked ticket references detected before any cap is applied. */
+  refsFound: number;
+  /** Number of refs actually considered for resolution after caps such as MAX_TICKETS. */
+  refsConsidered: number;
+  /** Number of considered refs that were successfully fetched into TicketInfo objects. */
+  fetched: number;
+  /** Number of considered refs skipped because no provider was configured for their source. */
+  missingProvider: number;
+  /** Number of considered refs that had a provider but still failed to resolve. */
+  fetchFailed: number;
 }
 
 export type TicketSource = "github" | "jira" | "linear" | "azure-devops";

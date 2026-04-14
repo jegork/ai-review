@@ -7,7 +7,7 @@ import {
   expandContext,
   summarizeLanguages,
   extractTicketRefs,
-  resolveTickets,
+  resolveTicketsWithStatus,
   runMultiCallReview,
   formatSummaryComment,
   GitHubTicketProvider,
@@ -88,7 +88,10 @@ export async function orchestrateReview(params: {
 
     const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
     const ticketProviders = await buildTicketProviders(owner, repo);
-    const tickets = await resolveTickets(ticketRefs, ticketProviders);
+    const { tickets, status: ticketResolution } = await resolveTicketsWithStatus(
+      ticketRefs,
+      ticketProviders,
+    );
 
     const languageSummary = summarizeLanguages(reviewable);
     const mcpServers = await loadMcpServerConfigsFromEnv();
@@ -101,7 +104,7 @@ export async function orchestrateReview(params: {
       maxTokens: MAX_DIFF_TOKENS,
     });
 
-    const summary = formatSummaryComment(result);
+    const summary = formatSummaryComment(result, { ticketResolution });
     await provider.postSummaryComment(summary);
 
     const inlineFindings = result.findings.filter((f) => f.line > 0);
