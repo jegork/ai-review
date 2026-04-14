@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { countTokens } from "../diff/compress.js";
-import type { FilePatch, ReviewConfig, ReviewResult, TicketInfo } from "../types.js";
+import type { FilePatch, ReviewConfig, ReviewResult, TicketInfo, Observation } from "../types.js";
 
 function makeMockReview(diff: string): ReviewResult {
   return {
@@ -14,6 +14,7 @@ function makeMockReview(diff: string): ReviewResult {
         severity: "warning" as const,
         category: "bugs" as const,
         message: `finding from chunk with ${countTokens(diff)} tokens`,
+        suggestedFix: null,
       },
     ],
     observations: [],
@@ -28,7 +29,7 @@ vi.mock("../agent/review.js", () => ({
   runReview: vi.fn(async (_config, diff, _prMeta, _tickets, _opts) => makeMockReview(diff)),
 }));
 
-const { runMultiCallReview } = await import("../agent/multi-call.js");
+const { runMultiCallReview, filterObservationsForPrFiles } = await import("../agent/multi-call.js");
 const { runReview } = await import("../agent/review.js");
 const runReviewMock = vi.mocked(runReview);
 
@@ -278,5 +279,142 @@ describe("runMultiCallReview", () => {
     const result = await runMultiCallReview(patches, consensusConfig, prMetadata);
     expect(result.consensusMetadata).toEqual({ passes: 3, threshold: 2 });
     expect(result.findings.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("passes otherPrFiles to each chunk in multi-call review", async () => {
+    const patches = [makePatch("big1.ts", 1000), makePatch("big2.ts", 1000)];
+    await runMultiCallReview(patches, config, prMetadata, undefined, {
+      maxTokens: 3000,
+    });
+
+    expect(runReviewMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    for (const call of runReviewMock.mock.calls) {
+      const opts = call[4];
+      expect(opts?.otherPrFiles).toBeDefined();
+      expect(opts!.otherPrFiles!.length).toBeGreaterThan(0);
+    }
+
+    // first chunk sees big1.ts, so otherPrFiles should contain big2.ts
+    const firstCallOpts = runReviewMock.mock.calls[0][4];
+    const secondCallOpts = runReviewMock.mock.calls[1][4];
+    expect(firstCallOpts?.otherPrFiles).toContain("big2.ts");
+    expect(secondCallOpts?.otherPrFiles).toContain("big1.ts");
+  });
+
+  it("does not pass otherPrFiles in single-call mode", async () => {
+    const patches = [makePatch("small.ts", 10)];
+    await runMultiCallReview(patches, config, prMetadata);
+
+    expect(runReviewMock).toHaveBeenCalledTimes(1);
+    const opts = runReviewMock.mock.calls[0][4];
+    expect(opts?.otherPrFiles).toBeUndefined();
+  });
+
+  it("filters observations that target files changed in the PR", async () => {
+    runReviewMock.mockResolvedValueOnce({
+      ...makeMockReview("chunk"),
+      observations: [
+        {
+          file: "big1.ts",
+          line: 10,
+          severity: "warning" as const,
+          category: "bugs" as const,
+          message: "stale reference found via searchCode",
+        },
+        {
+          file: "unrelated-lib.ts",
+          line: 5,
+          severity: "suggestion" as const,
+          category: "style" as const,
+          message: "genuine observation about unchanged code",
+        },
+      ],
+    });
+
+    const patches = [makePatch("big1.ts", 10)];
+    const result = await runMultiCallReview(patches, config, prMetadata);
+
+    expect(result.observations).toHaveLength(1);
+    expect(result.observations[0].file).toBe("unrelated-lib.ts");
+  });
+});
+
+describe("filterObservationsForPrFiles", () => {
+  function makeObservation(file: string): Observation {
+    return {
+      file,
+      line: 1,
+      severity: "warning",
+      category: "bugs",
+      message: `observation in ${file}`,
+    };
+  }
+
+  it("removes observations whose file is in the PR", () => {
+    const observations = [makeObservation("src/a.ts"), makeObservation("src/b.ts")];
+    const prFiles = new Set(["src/a.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toEqual([makeObservation("src/b.ts")]);
+  });
+
+  it("keeps all observations when none match PR files", () => {
+    const observations = [makeObservation("lib/x.ts"), makeObservation("lib/y.ts")];
+    const prFiles = new Set(["src/a.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(2);
+  });
+
+  it("removes all observations when all match PR files", () => {
+    const observations = [makeObservation("src/a.ts"), makeObservation("src/b.ts")];
+    const prFiles = new Set(["src/a.ts", "src/b.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("returns empty array for empty observations", () => {
+    const filtered = filterObservationsForPrFiles([], new Set(["src/a.ts"]));
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("requires exact path match (no partial matching)", () => {
+    const observations = [makeObservation("src/auth.ts")];
+    const prFiles = new Set(["src/auth.test.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(1);
+  });
+
+  it("matches observation with leading ./ against PR file without it", () => {
+    const observations = [makeObservation("./src/a.ts")];
+    const prFiles = new Set(["src/a.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("matches observation with trailing line number against PR file", () => {
+    const observations = [makeObservation("src/a.ts:42")];
+    const prFiles = new Set(["src/a.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("matches observation with trailing line:col against PR file", () => {
+    const observations = [makeObservation("src/a.ts:42:10")];
+    const prFiles = new Set(["src/a.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("matches observation with backslash separators against PR file", () => {
+    const observations = [makeObservation("src\\utils\\a.ts")];
+    const prFiles = new Set(["src/utils/a.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("handles mixed normalization between observation and PR files", () => {
+    const observations = [makeObservation("./src\\config.ts:15")];
+    const prFiles = new Set(["src/config.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(0);
   });
 });

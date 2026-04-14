@@ -169,6 +169,36 @@ describe("buildUserMessage", () => {
     const msg = buildUserMessage("diff", prMetadata, []);
     expect(msg).not.toContain("Linked Tickets");
   });
+
+  it("includes other PR files section when provided", () => {
+    const msg = buildUserMessage("diff", prMetadata, undefined, undefined, [
+      "src/config.ts",
+      "src/utils.ts",
+    ]);
+    expect(msg).toContain("Other Files Changed in This PR");
+    expect(msg).toContain("`src/config.ts`");
+    expect(msg).toContain("`src/utils.ts`");
+    expect(msg).toContain("Do NOT report observations");
+  });
+
+  it("omits other PR files section when not provided", () => {
+    const msg = buildUserMessage("diff", prMetadata);
+    expect(msg).not.toContain("Other Files Changed");
+  });
+
+  it("omits other PR files section when empty array", () => {
+    const msg = buildUserMessage("diff", prMetadata, undefined, undefined, []);
+    expect(msg).not.toContain("Other Files Changed");
+  });
+
+  it("places other PR files section before the diff", () => {
+    const msg = buildUserMessage("diff content here", prMetadata, undefined, undefined, [
+      "other.ts",
+    ]);
+    const otherFilesIdx = msg.indexOf("Other Files Changed");
+    const diffIdx = msg.indexOf("## Diff");
+    expect(otherFilesIdx).toBeLessThan(diffIdx);
+  });
 });
 
 describe("ReviewOutputSchema", () => {
@@ -220,6 +250,29 @@ describe("ReviewOutputSchema", () => {
       ],
       observations: [],
       filesReviewed: ["src/index.ts"],
+    };
+    const result = ReviewOutputSchema.safeParse(valid);
+    expect(result.success).toBe(true);
+  });
+
+  it("validates finding without suggestedFix (structural issues)", () => {
+    const valid = {
+      summary: "Resource leak found",
+      recommendation: "address_before_merge" as const,
+      findings: [
+        {
+          file: "src/parser.ts",
+          line: 42,
+          endLine: 80,
+          severity: "critical" as const,
+          category: "bugs" as const,
+          message: "WASM objects leaked on early return paths — wrap in try/finally",
+          suggestedFix: null,
+        },
+      ],
+      ticketCompliance: [],
+      observations: [],
+      filesReviewed: ["src/parser.ts"],
     };
     const result = ReviewOutputSchema.safeParse(valid);
     expect(result.success).toBe(true);

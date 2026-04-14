@@ -14,6 +14,8 @@ export interface RunReviewOptions {
   extraTools?: ToolsInput;
   languageSummary?: string;
   tier?: ReviewTier;
+  /** Files changed in the PR but not present in the current review chunk. */
+  otherPrFiles?: string[];
 }
 
 function buildTools(options?: RunReviewOptions): ToolsInput {
@@ -38,7 +40,13 @@ export async function runReview(
 ): Promise<ReviewResult> {
   const tier = options?.tier ?? "deep-review";
   const systemPrompt = buildSystemPrompt(config);
-  const userMessage = buildUserMessage(diff, prMetadata, ticketContext, options?.languageSummary);
+  const userMessage = buildUserMessage(
+    diff,
+    prMetadata,
+    ticketContext,
+    options?.languageSummary,
+    options?.otherPrFiles,
+  );
   const modelConfig = resolveModelConfig();
   const model = resolveModel(modelConfig);
   const modelName = getModelDisplayName(modelConfig);
@@ -65,7 +73,10 @@ export async function runReview(
   return {
     summary: parsed.summary,
     recommendation: parsed.recommendation,
-    findings: parsed.findings,
+    findings: parsed.findings.map((f) => ({
+      ...f,
+      suggestedFix: ((f as Record<string, unknown>).suggestedFix as string | null) ?? null,
+    })),
     observations: parsed.observations,
     ticketCompliance:
       "ticketCompliance" in parsed

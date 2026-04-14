@@ -25,6 +25,7 @@ function makeFinding(overrides: Partial<Finding> = {}): Finding {
     severity: "warning",
     category: "bugs",
     message: "Possible null dereference",
+    suggestedFix: null,
     ...overrides,
   };
 }

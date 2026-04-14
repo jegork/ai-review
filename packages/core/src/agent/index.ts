@@ -2,7 +2,12 @@ export { ReviewOutputSchema, SkimReviewOutputSchema } from "./schema.js";
 export { buildSystemPrompt, buildUserMessage } from "./prompts.js";
 export { runReview } from "./review.js";
 export type { RunReviewOptions, ReviewTier } from "./review.js";
-export { runMultiCallReview, runCascadeReview, mergeResults } from "./multi-call.js";
+export {
+  runMultiCallReview,
+  runCascadeReview,
+  mergeResults,
+  filterObservationsForPrFiles,
+} from "./multi-call.js";
 export type { MultiCallReviewOptions } from "./multi-call.js";
 export { runConsensusReview } from "./consensus.js";
 export {

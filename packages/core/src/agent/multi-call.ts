@@ -74,6 +74,21 @@ function estimateTicketContextTokens(ticketContext?: TicketInfo[]): number {
   return countTokens(serialized);
 }
 
+function normalizePath(file: string): string {
+  return file
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/:\d+(?::\d+)?$/, "");
+}
+
+export function filterObservationsForPrFiles(
+  observations: Observation[],
+  prFiles: Set<string>,
+): Observation[] {
+  const normalizedPrFiles = new Set(Array.from(prFiles, normalizePath));
+  return observations.filter((o) => !normalizedPrFiles.has(normalizePath(o.file)));
+}
+
 export function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult {
   const allFindings: Finding[] = [];
   const allObservations: Observation[] = [];
@@ -294,8 +309,12 @@ export async function runMultiCallReview(
         );
       }
 
+      const allPaths = patches.map((p) => p.path);
+
       const results: ReviewResult[] = [];
       for (const group of groups) {
+        const groupPaths = new Set(group.map((p) => p.path));
+        const otherPrFiles = allPaths.filter((f) => !groupPaths.has(f));
         const groupCompressed = compressDiff(group, maxTokens).compressed;
         const groupResult = await runConsensusReview(
           group,
@@ -303,12 +322,23 @@ export async function runMultiCallReview(
           prMetadata,
           groupCompressed,
           ticketContext,
-          resolvedOptions,
+          { ...resolvedOptions, otherPrFiles },
         );
         results.push(groupResult);
       }
 
       result = mergeResults(results, results[0]?.modelUsed ?? "unknown");
+    }
+
+    const prFileSet = new Set(patches.map((p) => p.path));
+    const beforeCount = result.observations.length;
+    result.observations = filterObservationsForPrFiles(result.observations, prFileSet);
+    const droppedCount = beforeCount - result.observations.length;
+    if (droppedCount > 0) {
+      logger.info(
+        { dropped: droppedCount, total: beforeCount },
+        "filtered observations that targeted files changed in this PR",
+      );
     }
 
     const judgeConfig = resolveJudgeConfig();
