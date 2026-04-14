@@ -11,6 +11,7 @@ import type {
 import { runReview, type RunReviewOptions } from "./review.js";
 import type { McpServerConfig } from "../mcp/types.js";
 import { connectMcpServers } from "../mcp/client.js";
+import { logger } from "../logger.js";
 
 export interface MultiCallReviewOptions extends RunReviewOptions {
   /** MCP servers to connect to for additional tools. */
@@ -143,7 +144,7 @@ export async function runMultiCallReview(
       try {
         await mcpDisconnect();
       } catch (err) {
-        console.warn("[mcp] error during disconnect:", err);
+        logger.warn({ err }, "MCP disconnect error");
       }
     }
   }
