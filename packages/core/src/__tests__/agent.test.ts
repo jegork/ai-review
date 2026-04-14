@@ -153,7 +153,11 @@ describe("buildUserMessage", () => {
     expect(msg).toContain("Implement JWT authentication");
     expect(msg).toContain("Acceptance Criteria");
     expect(msg).toContain("feature, auth");
-    expect(msg).toContain("verify that the PR changes address the requirements");
+    expect(msg).toContain("structured ticketCompliance output");
+    expect(msg).toContain(
+      "use `not_addressed` only when the visible changes clearly do not satisfy the requirement",
+    );
+    expect(msg).toContain("use `unclear`");
   });
 
   it("omits ticket section when no tickets provided", () => {
@@ -183,6 +187,7 @@ describe("ReviewOutputSchema", () => {
           suggestedFix: "",
         },
       ],
+      ticketCompliance: [],
       observations: [],
       filesReviewed: ["src/auth.ts"],
     };
@@ -205,6 +210,14 @@ describe("ReviewOutputSchema", () => {
           suggestedFix: "Change < to <=",
         },
       ],
+      ticketCompliance: [
+        {
+          ticketId: "BUG-1",
+          requirement: "Handle the inclusive upper bound correctly",
+          status: "addressed" as const,
+          evidence: "Comparison now uses <=",
+        },
+      ],
       observations: [],
       filesReviewed: ["src/index.ts"],
     };
@@ -217,6 +230,7 @@ describe("ReviewOutputSchema", () => {
       summary: "ok",
       recommendation: "maybe",
       findings: [],
+      ticketCompliance: [],
       observations: [],
       filesReviewed: [],
     };
@@ -237,6 +251,7 @@ describe("ReviewOutputSchema", () => {
           message: "something",
         },
       ],
+      ticketCompliance: [],
       observations: [],
       filesReviewed: [],
     };
@@ -257,6 +272,7 @@ describe("ReviewOutputSchema", () => {
           message: "something",
         },
       ],
+      ticketCompliance: [],
       observations: [],
       filesReviewed: [],
     };
@@ -274,10 +290,29 @@ describe("ReviewOutputSchema", () => {
       summary: "Looks great!",
       recommendation: "looks_good" as const,
       findings: [],
+      ticketCompliance: [],
       observations: [],
       filesReviewed: ["src/index.ts"],
     };
     const result = ReviewOutputSchema.safeParse(valid);
     expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid ticket compliance status", () => {
+    const invalid = {
+      summary: "ok",
+      recommendation: "looks_good",
+      findings: [],
+      ticketCompliance: [
+        {
+          requirement: "Do the thing",
+          status: "done",
+        },
+      ],
+      observations: [],
+      filesReviewed: [],
+    };
+    const result = ReviewOutputSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
   });
 });

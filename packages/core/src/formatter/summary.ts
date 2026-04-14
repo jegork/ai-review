@@ -1,4 +1,11 @@
-import type { ReviewResult, Severity, Finding, Observation } from "../types.js";
+import type {
+  ReviewResult,
+  Severity,
+  Finding,
+  Observation,
+  TicketComplianceStatus,
+  TicketResolutionStatus,
+} from "../types.js";
 
 const SEVERITY_ORDER: Severity[] = ["critical", "warning", "suggestion"];
 
@@ -13,6 +20,17 @@ const RECOMMENDATION_TEXT: Record<ReviewResult["recommendation"], string> = {
   address_before_merge: "Address before merge",
   critical_issues: "Critical issues found",
 };
+
+const TICKET_COMPLIANCE_LABEL: Record<TicketComplianceStatus, string> = {
+  addressed: "Addressed",
+  partially_addressed: "Partially addressed",
+  not_addressed: "Not addressed",
+  unclear: "Unclear",
+};
+
+function sanitizeTableCell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/\n+/g, "<br/>");
+}
 
 function buildIssueTable(items: (Finding | Observation)[]): string {
   const rows = items.map((item) => `| \`${item.file}\` | ${item.line} | ${item.message} |`);
@@ -31,7 +49,42 @@ function countBySeverity(findings: Finding[]): Record<Severity, number> {
   return counts;
 }
 
-export function formatSummaryComment(review: ReviewResult): string {
+function buildTicketFetchMessage(status: TicketResolutionStatus): string {
+  if (status.refsFound === 0) {
+    return "No linked ticket references detected.";
+  }
+
+  const consideredSuffix =
+    status.refsFound > status.refsConsidered ? ` (reviewed first ${status.refsConsidered})` : "";
+
+  const detailParts: string[] = [];
+  if (status.missingProvider > 0) {
+    detailParts.push(`${status.missingProvider} skipped due to missing provider`);
+  }
+  if (status.fetchFailed > 0) {
+    detailParts.push(`${status.fetchFailed} failed to fetch`);
+  }
+
+  if (status.fetched > 0) {
+    const detailSuffix = detailParts.length > 0 ? ` ${detailParts.join(", ")}.` : "";
+    return `Fetched ${status.fetched} of ${status.refsConsidered} linked ticket(s)${consideredSuffix}.${detailSuffix}`;
+  }
+
+  if (status.missingProvider > 0 && status.fetchFailed === 0) {
+    return `Found ${status.refsConsidered} linked ticket reference(s)${consideredSuffix}, but no matching ticket provider was configured.`;
+  }
+
+  if (status.fetchFailed > 0 && status.missingProvider === 0) {
+    return `Found ${status.refsConsidered} linked ticket reference(s)${consideredSuffix}, but ${status.fetchFailed} fetch${status.fetchFailed === 1 ? " failed" : "es failed"}.`;
+  }
+
+  return `Found ${status.refsConsidered} linked ticket reference(s)${consideredSuffix}, but could not fetch ticket details. ${detailParts.join(", ")}.`;
+}
+
+export function formatSummaryComment(
+  review: ReviewResult,
+  options?: { ticketResolution?: TicketResolutionStatus },
+): string {
   const counts = countBySeverity(review.findings);
   const totalIssues = review.findings.length;
 
@@ -77,6 +130,13 @@ export function formatSummaryComment(review: ReviewResult): string {
   lines.push("</details>");
   lines.push("");
 
+  if (options?.ticketResolution && options.ticketResolution.refsFound > 0) {
+    lines.push("## Ticket Fetch");
+    lines.push("");
+    lines.push(buildTicketFetchMessage(options.ticketResolution));
+    lines.push("");
+  }
+
   if (review.observations.length > 0) {
     lines.push("<details>");
     lines.push("<summary>Other Observations (not in diff)</summary>");
@@ -84,6 +144,24 @@ export function formatSummaryComment(review: ReviewResult): string {
     lines.push("Issues found in unchanged code that cannot receive inline comments:");
     lines.push("");
     lines.push(buildIssueTable(review.observations));
+    lines.push("");
+    lines.push("</details>");
+    lines.push("");
+  }
+
+  if (review.ticketCompliance.length > 0) {
+    lines.push("<details>");
+    lines.push(
+      `<summary>Ticket Compliance (${review.ticketCompliance.length} requirements)</summary>`,
+    );
+    lines.push("");
+    lines.push("| Ticket | Requirement | Status | Evidence |");
+    lines.push("|--------|-------------|--------|----------|");
+    for (const item of review.ticketCompliance) {
+      lines.push(
+        `| ${sanitizeTableCell(item.ticketId ?? "—")} | ${sanitizeTableCell(item.requirement)} | ${TICKET_COMPLIANCE_LABEL[item.status]} | ${sanitizeTableCell(item.evidence ?? "—")} |`,
+      );
+    }
     lines.push("");
     lines.push("</details>");
     lines.push("");
@@ -116,10 +194,10 @@ export function formatSummaryComment(review: ReviewResult): string {
   lines.push("---");
   lines.push("");
   const parts = [`Reviewed by ${review.modelUsed} · ${review.tokenCount} tokens (review)`];
-  if (review.judgeTokenCount != null) {
+  if (review.judgeTokenCount !== undefined) {
     parts.push(`${review.judgeTokenCount} tokens (judge)`);
   }
-  if (review.filteredCount != null) {
+  if (review.filteredCount !== undefined) {
     parts.push(`${review.filteredCount} low-confidence findings filtered`);
   }
   lines.push(parts.join(" · "));

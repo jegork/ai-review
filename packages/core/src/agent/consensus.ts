@@ -103,6 +103,7 @@ export async function runConsensusReview(
     recommendation: deriveRecommendation(survivingFindings),
     findings: survivingFindings,
     observations: survivingObservations,
+    ticketCompliance: results[0]?.ticketCompliance ?? [],
     filesReviewed: [...allFiles],
     modelUsed: results[0]?.modelUsed ?? "unknown",
     tokenCount: totalTokens,

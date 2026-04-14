@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { extractTicketRefs } from "../tickets/extract.js";
-import { resolveTickets } from "../tickets/resolve.js";
+import { resolveTickets, resolveTicketsWithStatus } from "../tickets/resolve.js";
 import { logger } from "../logger.js";
 import { GitHubTicketProvider } from "../tickets/providers/github.js";
 import { JiraTicketProvider, extractAdfText } from "../tickets/providers/jira.js";
@@ -256,6 +256,38 @@ describe("resolveTickets", () => {
 
     const result = await resolveTickets(refs, providers);
     expect(result).toHaveLength(0);
+  });
+
+  it("returns fetch status metadata alongside resolved tickets", async () => {
+    const mockProvider: TicketProvider = {
+      fetchTicket: vi
+        .fn()
+        .mockResolvedValueOnce({
+          id: "1",
+          title: "ok",
+          description: "",
+          labels: [],
+          source: "github",
+        })
+        .mockResolvedValueOnce(null),
+    };
+    const providers = new Map([["github", mockProvider]]);
+    const refs: TicketRef[] = [
+      { id: "1", source: "github" },
+      { id: "2", source: "github" },
+      { id: "3", source: "jira" },
+    ];
+
+    const result = await resolveTicketsWithStatus(refs, providers);
+
+    expect(result.tickets).toHaveLength(1);
+    expect(result.status).toEqual({
+      refsFound: 3,
+      refsConsidered: 3,
+      fetched: 1,
+      missingProvider: 1,
+      fetchFailed: 1,
+    });
   });
 });
 

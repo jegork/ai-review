@@ -20,6 +20,7 @@ function makeResult(overrides: Partial<ReviewResult> = {}): ReviewResult {
     recommendation: "looks_good",
     findings: [],
     observations: [],
+    ticketCompliance: [],
     filesReviewed: ["src/index.ts"],
     modelUsed: "test-model",
     tokenCount: 100,

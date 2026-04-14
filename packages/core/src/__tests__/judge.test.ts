@@ -38,6 +38,7 @@ function makeReviewResult(findings: Finding[]): ReviewResult {
     recommendation: "address_before_merge",
     findings,
     observations: [],
+    ticketCompliance: [],
     filesReviewed: ["src/app.ts"],
     modelUsed: "test-model",
     tokenCount: 100,
@@ -76,6 +77,11 @@ describe("resolveJudgeConfig", () => {
   it("parses RUSTY_JUDGE_MODEL", () => {
     process.env.RUSTY_JUDGE_MODEL = "anthropic/claude-haiku";
     expect(resolveJudgeConfig().model).toBe("anthropic/claude-haiku");
+  });
+
+  it("falls back to default threshold on non-numeric value", () => {
+    process.env.RUSTY_JUDGE_THRESHOLD = "abc";
+    expect(resolveJudgeConfig().threshold).toBe(6);
   });
 
   it("treats empty RUSTY_JUDGE_MODEL as undefined", () => {

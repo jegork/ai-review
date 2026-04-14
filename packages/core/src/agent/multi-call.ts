@@ -7,6 +7,8 @@ import type {
   ReviewResult,
   Finding,
   Observation,
+  TicketComplianceItem,
+  TicketComplianceStatus,
 } from "../types.js";
 import { type RunReviewOptions } from "./review.js";
 import { runConsensusReview } from "./consensus.js";
@@ -22,6 +24,12 @@ export interface MultiCallReviewOptions extends RunReviewOptions {
 }
 
 const DEFAULT_MAX_TOKENS = 60_000;
+const TICKET_COMPLIANCE_PRIORITY: Record<TicketComplianceStatus, number> = {
+  addressed: 3,
+  partially_addressed: 2,
+  unclear: 1,
+  not_addressed: 0,
+};
 
 function splitIntoGroups(patches: FilePatch[], maxTokensPerGroup: number): FilePatch[][] {
   const groups: FilePatch[][] = [];
@@ -47,6 +55,24 @@ function splitIntoGroups(patches: FilePatch[], maxTokensPerGroup: number): FileP
   }
 
   return groups;
+}
+
+function estimateTicketContextTokens(ticketContext?: TicketInfo[]): number {
+  if (!ticketContext || ticketContext.length === 0) return 0;
+
+  const serialized = ticketContext
+    .map((ticket) =>
+      [
+        ticket.id,
+        ticket.title,
+        ticket.description,
+        ticket.acceptanceCriteria ?? "",
+        ticket.labels.join(","),
+      ].join("\n"),
+    )
+    .join("\n\n");
+
+  return countTokens(serialized);
 }
 
 function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult {
@@ -91,11 +117,64 @@ function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult 
     recommendation,
     findings: dedupedFindings,
     observations: allObservations,
+    ticketCompliance: mergeTicketCompliance(results),
     filesReviewed: [...allFiles],
     modelUsed,
     tokenCount: totalTokens,
     ...(consensusMetadata && { consensusMetadata }),
   };
+}
+
+function normalizeEvidence(evidence?: string | null): string | undefined {
+  const trimmed = evidence?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeComplianceKeyPart(value?: string | null): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+interface TicketComplianceAccumulator extends TicketComplianceItem {
+  evidenceParts: string[];
+}
+
+function mergeTicketCompliance(results: ReviewResult[]): TicketComplianceItem[] {
+  const merged = new Map<string, TicketComplianceAccumulator>();
+
+  for (const result of results) {
+    for (const item of result.ticketCompliance) {
+      const key = `${normalizeComplianceKeyPart(item.ticketId)}:${normalizeComplianceKeyPart(item.requirement)}`;
+      const evidence = normalizeEvidence(item.evidence);
+      const existing = merged.get(key);
+
+      if (!existing) {
+        merged.set(key, {
+          ...item,
+          evidence,
+          evidenceParts: evidence ? [evidence] : [],
+        });
+        continue;
+      }
+
+      if (evidence && !existing.evidenceParts.includes(evidence)) {
+        existing.evidenceParts.push(evidence);
+      }
+
+      const existingPriority = TICKET_COMPLIANCE_PRIORITY[existing.status];
+      const nextPriority = TICKET_COMPLIANCE_PRIORITY[item.status];
+
+      if (nextPriority > existingPriority) {
+        existing.ticketId = item.ticketId;
+        existing.requirement = item.requirement;
+        existing.status = item.status;
+      }
+    }
+  }
+
+  return [...merged.values()].map(({ evidenceParts, ...item }) => ({
+    ...item,
+    evidence: evidenceParts.length > 0 ? evidenceParts.join(" | ") : undefined,
+  }));
 }
 
 async function reviewChunk(
@@ -137,7 +216,7 @@ export async function runMultiCallReview(
   }
 
   try {
-    const { skippedFiles } = compressDiff(patches, maxTokens);
+    const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
 
     let result: ReviewResult;
 
@@ -153,15 +232,26 @@ export async function runMultiCallReview(
     } else {
       const groups = splitIntoGroups(patches, maxTokens);
 
+      if (ticketContext && ticketContext.length > 0 && groups.length > 1) {
+        const ticketContextTokens = estimateTicketContextTokens(ticketContext);
+        logger.info(
+          {
+            chunks: groups.length,
+            linkedTickets: ticketContext.length,
+            estimatedRepeatedTicketTokens: ticketContextTokens * Math.max(groups.length - 1, 0),
+          },
+          "multi-call review is reusing ticket context across chunks to accumulate compliance evidence",
+        );
+      }
+
       const results: ReviewResult[] = [];
-      for (let i = 0; i < groups.length; i++) {
-        const groupTickets = i === 0 ? ticketContext : undefined;
+      for (const group of groups) {
         const groupResult = await reviewChunk(
-          groups[i],
+          group,
           config,
           prMetadata,
           maxTokens,
-          groupTickets,
+          ticketContext,
           resolvedOptions,
         );
         results.push(groupResult);
@@ -171,8 +261,9 @@ export async function runMultiCallReview(
     }
 
     const judgeConfig = resolveJudgeConfig();
-    const fullDiff = compressDiff(patches, Infinity).compressed;
-    return await judgeReviewResult(result, fullDiff, judgeConfig);
+    const judgeDiff =
+      skippedFiles.length === 0 ? compressed : compressDiff(patches, Infinity).compressed;
+    return await judgeReviewResult(result, judgeDiff, judgeConfig);
   } finally {
     if (mcpDisconnect) {
       try {
