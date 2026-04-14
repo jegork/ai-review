@@ -40,6 +40,7 @@ export function buildUserMessage(
   prMetadata: PRMetadata,
   ticketContext?: TicketInfo[],
   languageSummary?: string,
+  otherPrFiles?: string[],
 ): string {
   const parts: string[] = [];
 
@@ -79,6 +80,17 @@ export function buildUserMessage(
         "only when the visible changes clearly do not satisfy the requirement, and use `unclear` " +
         "when the visible changes are insufficient to decide.",
     );
+  }
+
+  if (otherPrFiles && otherPrFiles.length > 0) {
+    parts.push("\n## Other Files Changed in This PR");
+    parts.push(
+      "The following files are also being modified in this PR but are not included in this review chunk. " +
+        'Do NOT report observations about these files as issues in "unchanged code" — they are actively changed in this PR ' +
+        "and will be reviewed in a separate chunk. If searchCode returns results in these files, " +
+        "note that the search results may be stale (pre-merge content).\n",
+    );
+    parts.push(otherPrFiles.map((f) => `- \`${f}\``).join("\n"));
   }
 
   parts.push("\n## Diff\n");
