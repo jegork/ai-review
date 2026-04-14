@@ -1,4 +1,5 @@
 import type { TicketInfo, TicketProvider } from "../../types.js";
+import { GitHubIssueSchema } from "../schemas.js";
 
 const MAX_DESC_LENGTH = 10_000;
 
@@ -28,15 +29,15 @@ export class GitHubTicketProvider implements TicketProvider {
 
     if (!res.ok) return null;
 
-    const data = (await res.json()) as Record<string, unknown>;
+    const parsed = GitHubIssueSchema.safeParse(await res.json());
+    if (!parsed.success) return null;
 
+    const data = parsed.data;
     return {
       id: String(data.number),
-      title: (data.title as string) ?? "",
-      description: ((data.body as string) ?? "").slice(0, MAX_DESC_LENGTH),
-      labels: ((data.labels as Array<{ name?: string }>) ?? []).map(
-        (l) => l.name ?? "",
-      ),
+      title: data.title,
+      description: (data.body ?? "").slice(0, MAX_DESC_LENGTH),
+      labels: data.labels.map((l) => l.name ?? ""),
       source: "github",
     };
   }

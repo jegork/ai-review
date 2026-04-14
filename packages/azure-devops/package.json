@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@rusty-bot/core": "workspace:*",
-    "azure-devops-node-api": "^14.1.0"
+    "azure-devops-node-api": "^14.1.0",
+    "zod": "^4.3.6"
   }
 }

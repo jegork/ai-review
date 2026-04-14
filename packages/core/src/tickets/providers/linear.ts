@@ -1,4 +1,5 @@
 import type { TicketInfo, TicketProvider } from "../../types.js";
+import { LinearResponseSchema } from "../schemas.js";
 
 const MAX_DESC_LENGTH = 10_000;
 const LINEAR_API = "https://api.linear.app/graphql";
@@ -15,7 +16,6 @@ export class LinearTicketProvider implements TicketProvider {
   }
 
   async fetchTicket(ref: string): Promise<TicketInfo | null> {
-    // if ref looks like TEAM-123, use issueByIdentifier; otherwise use issue(id:)
     const isIdentifier = /^[A-Z]{2,10}-\d+$/.test(ref);
 
     const query = isIdentifier
@@ -33,21 +33,18 @@ export class LinearTicketProvider implements TicketProvider {
 
     if (!res.ok) return null;
 
-    const json = (await res.json()) as Record<string, Record<string, unknown>>;
-    const issue = isIdentifier
-      ? json.data?.issueByIdentifier
-      : json.data?.issue;
+    const parsed = LinearResponseSchema.safeParse(await res.json());
+    if (!parsed.success) return null;
 
-    if (!issue || typeof issue !== "object") return null;
+    const issue = isIdentifier ? parsed.data.data?.issueByIdentifier : parsed.data.data?.issue;
 
-    const data = issue as Record<string, unknown>;
-    const labels = data.labels as { nodes?: Array<{ name?: string }> } | undefined;
+    if (!issue) return null;
 
     return {
-      id: (data.identifier as string) ?? ref,
-      title: (data.title as string) ?? "",
-      description: ((data.description as string) ?? "").slice(0, MAX_DESC_LENGTH),
-      labels: (labels?.nodes ?? []).map((l) => l.name ?? ""),
+      id: issue.identifier ?? ref,
+      title: issue.title ?? "",
+      description: (issue.description ?? "").slice(0, MAX_DESC_LENGTH),
+      labels: (issue.labels?.nodes ?? []).map((l) => l.name ?? ""),
       source: "linear",
     };
   }

@@ -1,4 +1,5 @@
 import type { TicketInfo, TicketProvider } from "../../types.js";
+import { JiraIssueSchema } from "../schemas.js";
 
 const MAX_DESC_LENGTH = 10_000;
 
@@ -8,8 +9,7 @@ interface JiraTicketProviderConfig {
   apiToken: string;
 }
 
-// adf (atlassian document format) can be deeply nested; extract plain text recursively
-function extractAdfText(node: unknown): string {
+export function extractAdfText(node: unknown): string {
   if (typeof node === "string") return node;
   if (!node || typeof node !== "object") return "";
 
@@ -43,8 +43,10 @@ export class JiraTicketProvider implements TicketProvider {
 
     if (!res.ok) return null;
 
-    const data = (await res.json()) as Record<string, unknown>;
-    const fields = (data.fields as Record<string, unknown>) ?? {};
+    const parsed = JiraIssueSchema.safeParse(await res.json());
+    if (!parsed.success) return null;
+
+    const { key, fields } = parsed.data;
 
     let description = "";
     if (typeof fields.description === "string") {
@@ -54,13 +56,11 @@ export class JiraTicketProvider implements TicketProvider {
     }
 
     return {
-      id: (data.key as string) ?? ref,
-      title: (fields.summary as string) ?? "",
+      id: key,
+      title: fields.summary ?? "",
       description: description.slice(0, MAX_DESC_LENGTH),
-      labels: Array.isArray(fields.labels) ? fields.labels : [],
+      labels: fields.labels ?? [],
       source: "jira",
     };
   }
 }
-
-export { extractAdfText };

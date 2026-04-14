@@ -7,6 +7,14 @@ import type {
   CodeSearchResult,
 } from "@rusty-bot/core";
 import { formatInlineComment } from "@rusty-bot/core";
+import type { z } from "zod";
+import {
+  AdoPullRequestSchema,
+  AdoIterationsSchema,
+  AdoChangesSchema,
+  AdoThreadsSchema,
+  AdoSearchResultSchema,
+} from "./schemas.js";
 
 const BOT_MARKER = "<!-- rusty-bot-review -->";
 const API_VERSION = "api-version=7.0";
@@ -17,24 +25,6 @@ interface AzureDevOpsProviderConfig {
   repoName: string;
   pullRequestId: number;
   accessToken: string;
-}
-
-interface AdoThread {
-  id: number;
-  comments: Array<{ id: number; content: string }>;
-  status: number;
-}
-
-interface AdoIteration {
-  id: number;
-}
-
-interface AdoChangeEntry {
-  changeType: string;
-  item: {
-    path: string;
-    gitObjectType?: string;
-  };
 }
 
 function parseHunkHeader(line: string): {
@@ -138,7 +128,7 @@ export class AzureDevOpsProvider implements GitProvider {
     return `${this.orgUrl}/${this.project}/_apis/git/repositories/${this.repoName}`;
   }
 
-  private async request<T>(url: string, options?: RequestInit): Promise<T> {
+  private async fetchApi(url: string, options?: RequestInit): Promise<Response> {
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -155,27 +145,39 @@ export class AzureDevOpsProvider implements GitProvider {
       );
     }
 
-    return response.json() as Promise<T>;
+    return response;
+  }
+
+  private async request<T extends z.ZodType>(
+    url: string,
+    schema: T,
+    options?: RequestInit,
+  ): Promise<z.infer<T>> {
+    const response = await this.fetchApi(url, options);
+    const json = await response.json();
+    return schema.parse(json);
   }
 
   async getDiff(): Promise<FilePatch[]> {
-    const pr = await this.request<{
-      sourceRefName: string;
-      targetRefName: string;
-    }>(`${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`);
+    const pr = await this.request(
+      `${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`,
+      AdoPullRequestSchema,
+    );
 
     const sourceRef = pr.sourceRefName.replace("refs/heads/", "");
     const targetRef = pr.targetRefName.replace("refs/heads/", "");
 
-    const iterations = await this.request<{ value: AdoIteration[] }>(
+    const iterations = await this.request(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/iterations?${API_VERSION}`,
+      AdoIterationsSchema,
     );
 
     const lastIteration = iterations.value[iterations.value.length - 1];
     if (!lastIteration) return [];
 
-    const changes = await this.request<{ changeEntries: AdoChangeEntry[] }>(
+    const changes = await this.request(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/iterations/${lastIteration.id}/changes?${API_VERSION}`,
+      AdoChangesSchema,
     );
 
     const patches: FilePatch[] = [];
@@ -231,16 +233,10 @@ export class AzureDevOpsProvider implements GitProvider {
   }
 
   async getPRMetadata(): Promise<PRMetadata> {
-    const data = await this.request<{
-      pullRequestId: number;
-      title: string;
-      description: string;
-      createdBy: { displayName: string; uniqueName: string };
-      sourceRefName: string;
-      targetRefName: string;
-      url: string;
-      repository: { webUrl: string };
-    }>(`${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`);
+    const data = await this.request(
+      `${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`,
+      AdoPullRequestSchema,
+    );
 
     return {
       id: String(data.pullRequestId),
@@ -291,16 +287,10 @@ export class AzureDevOpsProvider implements GitProvider {
         }),
       });
       if (!response.ok) return [];
-      const data = (await response.json()) as {
-        results?: Array<{
-          fileName: string;
-          path: string;
-          matches?: Record<string, Array<{ charOffset: number; length: number }>>;
-          contentId?: string;
-        }>;
-      };
-      return (data.results ?? []).map((r) => ({
-        file: r.path?.replace(/^\//, "") ?? r.fileName,
+      const parsed = AdoSearchResultSchema.safeParse(await response.json());
+      if (!parsed.success) return [];
+      return (parsed.data.results ?? []).map((r) => ({
+        file: r.path?.replace(/^\//, "") ?? r.fileName ?? "",
         line: 0,
         content: "",
       }));
@@ -310,7 +300,7 @@ export class AzureDevOpsProvider implements GitProvider {
   }
 
   async postSummaryComment(markdown: string): Promise<void> {
-    await this.request(
+    await this.fetchApi(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads?${API_VERSION}`,
       {
         method: "POST",
@@ -334,7 +324,7 @@ export class AzureDevOpsProvider implements GitProvider {
     for (const finding of findings) {
       const content = `${BOT_MARKER}\n${formatInlineComment(finding)}`;
 
-      await this.request(
+      await this.fetchApi(
         `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads?${API_VERSION}`,
         {
           method: "POST",
@@ -359,8 +349,9 @@ export class AzureDevOpsProvider implements GitProvider {
   }
 
   async deleteExistingBotComments(): Promise<void> {
-    const threads = await this.request<{ value: AdoThread[] }>(
+    const threads = await this.request(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads?${API_VERSION}`,
+      AdoThreadsSchema,
     );
 
     const botThreads = threads.value.filter((thread) =>
@@ -368,7 +359,7 @@ export class AzureDevOpsProvider implements GitProvider {
     );
 
     for (const thread of botThreads) {
-      await this.request(
+      await this.fetchApi(
         `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads/${thread.id}?${API_VERSION}`,
         {
           method: "PATCH",
