@@ -7,3 +7,5 @@ export type { MultiCallReviewOptions } from "./multi-call.js";
 export { resolveModelConfig, resolveModel, getModelDisplayName } from "./model.js";
 export type { ModelConfig } from "./model.js";
 export { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
+export { judgeFindings, judgeReviewResult, resolveJudgeConfig } from "./judge.js";
+export type { JudgeConfig, JudgeResult } from "./judge.js";

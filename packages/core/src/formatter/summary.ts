@@ -193,7 +193,14 @@ export function formatSummaryComment(
   lines.push("");
   lines.push("---");
   lines.push("");
-  lines.push(`Reviewed by ${review.modelUsed} · ${review.tokenCount} tokens`);
+  const parts = [`Reviewed by ${review.modelUsed} · ${review.tokenCount} tokens (review)`];
+  if (review.judgeTokenCount !== undefined) {
+    parts.push(`${review.judgeTokenCount} tokens (judge)`);
+  }
+  if (review.filteredCount !== undefined) {
+    parts.push(`${review.filteredCount} low-confidence findings filtered`);
+  }
+  lines.push(parts.join(" · "));
   lines.push("");
 
   return lines.join("\n");
