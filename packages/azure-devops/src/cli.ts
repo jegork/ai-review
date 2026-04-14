@@ -3,6 +3,7 @@ import {
   filterFiles,
   stripDeletionOnlyHunks,
   expandContext,
+  summarizeLanguages,
   compressDiff,
   extractTicketRefs,
   resolveTickets,
@@ -110,14 +111,14 @@ async function main(): Promise<void> {
 
   const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
-  // parseDiff expects a raw unified diff string; compressed is already
-  // the formatted diff text from compressDiff, so pass it to the agent directly
+  const languageSummary = summarizeLanguages(expanded);
+
   const review = await runReview(
     config,
     compressed,
     metadata,
     tickets.length > 0 ? tickets : undefined,
-    { provider, sourceRef: metadata.sourceBranch },
+    { provider, sourceRef: metadata.sourceBranch, languageSummary },
   );
 
   const criticalCount = review.findings.filter((f) => f.severity === "critical").length;

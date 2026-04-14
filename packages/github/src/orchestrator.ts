@@ -5,6 +5,7 @@ import {
   filterFiles,
   stripDeletionOnlyHunks,
   expandContext,
+  summarizeLanguages,
   compressDiff,
   extractTicketRefs,
   resolveTickets,
@@ -88,9 +89,12 @@ export async function orchestrateReview(params: {
     const ticketProviders = await buildTicketProviders(owner, repo);
     const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
+    const languageSummary = summarizeLanguages(reviewable);
+
     const result = await runReview(config, compressed, metadata, tickets, {
       provider,
       sourceRef: metadata.sourceBranch,
+      languageSummary,
     });
 
     const summary = formatSummaryComment(result);
