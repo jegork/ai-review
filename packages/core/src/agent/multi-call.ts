@@ -104,12 +104,12 @@ function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult 
   };
 }
 
-function normalizeEvidence(evidence?: string): string | undefined {
+function normalizeEvidence(evidence?: string | null): string | undefined {
   const trimmed = evidence?.trim();
   return trimmed ? trimmed : undefined;
 }
 
-function normalizeComplianceKeyPart(value?: string): string {
+function normalizeComplianceKeyPart(value?: string | null): string {
   return value?.trim().toLowerCase() ?? "";
 }
 

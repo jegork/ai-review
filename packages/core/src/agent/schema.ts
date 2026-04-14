@@ -28,15 +28,18 @@ export const ObservationSchema = z.object({
 });
 
 export const TicketComplianceSchema = z.object({
-  ticketId: z.string().optional().describe("linked ticket identifier when available"),
+  ticketId: z
+    .string()
+    .nullable()
+    .describe("linked ticket identifier when available, otherwise null"),
   requirement: z.string().describe("single ticket requirement or acceptance criterion"),
   status: z
     .enum(["addressed", "partially_addressed", "not_addressed", "unclear"])
     .describe("whether the diff addresses the requirement"),
   evidence: z
     .string()
-    .optional()
-    .describe("brief evidence from the diff supporting the compliance status"),
+    .nullable()
+    .describe("brief evidence from the diff supporting the compliance status, otherwise null"),
 });
 
 export const ReviewOutputSchema = z.object({

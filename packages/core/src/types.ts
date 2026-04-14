@@ -84,10 +84,10 @@ export interface TicketInfo {
 }
 
 export interface TicketComplianceItem {
-  ticketId?: string;
+  ticketId?: string | null;
   requirement: string;
   status: TicketComplianceStatus;
-  evidence?: string;
+  evidence?: string | null;
 }
 
 export interface TicketResolutionStatus {
