@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { countTokens } from "../diff/compress.js";
-import type { FilePatch, ReviewConfig, TicketInfo } from "../types.js";
+import type { FilePatch, ReviewConfig, ReviewResult, TicketInfo } from "../types.js";
 
-function makeMockReview(diff: string) {
+function makeMockReview(diff: string): ReviewResult {
   return {
     summary: `Reviewed ${countTokens(diff)} tokens`,
     recommendation: "looks_good" as const,
@@ -10,6 +10,7 @@ function makeMockReview(diff: string) {
       {
         file: "a.ts",
         line: 1,
+        endLine: 1,
         severity: "warning" as const,
         category: "bugs" as const,
         message: `finding from chunk with ${countTokens(diff)} tokens`,
