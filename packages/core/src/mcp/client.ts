@@ -18,10 +18,6 @@ export async function connectMcpServers(
 
   const tools = await mcp.listTools();
 
-  console.log(
-    `[mcp] connected: ${Object.keys(tools).length} tool(s) from ${Object.keys(servers).join(", ")}`,
-  );
-
   return {
     tools,
     disconnect: () => mcp.disconnect(),

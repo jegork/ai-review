@@ -9,6 +9,7 @@ import type {
   Observation,
 } from "../types.js";
 import { runReview, type RunReviewOptions } from "./review.js";
+import { connectMcpServers } from "../mcp/client.js";
 
 const DEFAULT_MAX_TOKENS = 60_000;
 
@@ -95,24 +96,45 @@ export async function runMultiCallReview(
 ): Promise<ReviewResult> {
   const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS;
 
-  const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
+  // connect to MCP servers once for the entire review
+  let mcpDisconnect: (() => Promise<void>) | undefined;
+  let resolvedOptions = options;
 
-  // if everything fits in one call, use the simple path
-  if (skippedFiles.length === 0) {
-    return runReview(config, compressed, prMetadata, ticketContext, options);
+  if (options?.mcpServers && Object.keys(options.mcpServers).length > 0) {
+    const mcp = await connectMcpServers(options.mcpServers);
+    mcpDisconnect = mcp.disconnect;
+    // pass pre-resolved tools instead of server configs so runReview doesn't reconnect
+    resolvedOptions = { ...options, mcpServers: undefined, mcpTools: mcp.tools };
   }
 
-  // split into groups that each fit within the token budget
-  const groups = splitIntoGroups(patches, maxTokens);
+  try {
+    const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
 
-  // first group gets ticket context, subsequent ones don't (avoid redundant compliance checks)
-  const results: ReviewResult[] = [];
-  for (let i = 0; i < groups.length; i++) {
-    const { compressed: groupDiff } = compressDiff(groups[i], maxTokens);
-    const groupTickets = i === 0 ? ticketContext : undefined;
-    const result = await runReview(config, groupDiff, prMetadata, groupTickets, options);
-    results.push(result);
+    // if everything fits in one call, use the simple path
+    if (skippedFiles.length === 0) {
+      return await runReview(config, compressed, prMetadata, ticketContext, resolvedOptions);
+    }
+
+    // split into groups that each fit within the token budget
+    const groups = splitIntoGroups(patches, maxTokens);
+
+    // first group gets ticket context, subsequent ones don't (avoid redundant compliance checks)
+    const results: ReviewResult[] = [];
+    for (let i = 0; i < groups.length; i++) {
+      const { compressed: groupDiff } = compressDiff(groups[i], maxTokens);
+      const groupTickets = i === 0 ? ticketContext : undefined;
+      const result = await runReview(config, groupDiff, prMetadata, groupTickets, resolvedOptions);
+      results.push(result);
+    }
+
+    return mergeResults(results, results[0]?.modelUsed ?? "unknown");
+  } finally {
+    if (mcpDisconnect) {
+      try {
+        await mcpDisconnect();
+      } catch (err) {
+        console.warn("[mcp] error during disconnect:", err);
+      }
+    }
   }
-
-  return mergeResults(results, results[0]?.modelUsed ?? "unknown");
 }

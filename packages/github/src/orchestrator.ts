@@ -22,8 +22,6 @@ import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./stor
 const MAX_DIFF_TOKENS = 60_000;
 const ALL_FOCUS_AREAS: FocusArea[] = ["security", "performance", "bugs", "style", "tests", "docs"];
 
-const MCP_CONFIG_PATH = process.env.RUSTY_MCP_CONFIG ?? join(process.cwd(), "mcp-servers.json");
-
 async function buildTicketProviders(
   owner: string,
   repo: string,
@@ -92,7 +90,8 @@ export async function orchestrateReview(params: {
     const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
     const languageSummary = summarizeLanguages(reviewable);
-    const mcpServers = await loadMcpServerConfigs(MCP_CONFIG_PATH);
+    const mcpConfigPath = process.env.RUSTY_MCP_CONFIG ?? join(process.cwd(), "mcp-servers.json");
+    const mcpServers = await loadMcpServerConfigs(mcpConfigPath);
 
     const result = await runMultiCallReview(expanded, config, metadata, tickets, {
       provider,

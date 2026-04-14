@@ -6,13 +6,14 @@ import { resolveModelConfig, resolveModel, getModelDisplayName } from "./model.j
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
 import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
 import type { McpServerConfig } from "../mcp/types.js";
-import { connectMcpServers } from "../mcp/client.js";
 
 export interface RunReviewOptions {
   provider?: GitProvider;
   sourceRef?: string;
   /** MCP servers to connect to for additional tools. */
   mcpServers?: McpServerConfig;
+  /** Pre-resolved MCP tools (used internally by runMultiCallReview to avoid reconnecting per group). */
+  mcpTools?: ToolsInput;
   languageSummary?: string;
 }
 
@@ -41,45 +42,31 @@ export async function runReview(
   const modelName = getModelDisplayName(modelConfig);
 
   const builtInTools = buildTools(options);
+  const extraTools = options?.mcpTools ?? {};
 
-  let mcpTools: ToolsInput = {};
-  let disconnectMcp: (() => Promise<void>) | undefined;
+  const agent = new Agent({
+    id: "review-agent",
+    name: "Rusty Bot Reviewer",
+    instructions: systemPrompt,
+    model,
+    tools: { ...builtInTools, ...extraTools },
+  });
 
-  if (options?.mcpServers && Object.keys(options.mcpServers).length > 0) {
-    const mcp = await connectMcpServers(options.mcpServers);
-    mcpTools = mcp.tools;
-    disconnectMcp = mcp.disconnect;
-  }
+  const response = await agent.generate(userMessage, {
+    structuredOutput: {
+      schema: ReviewOutputSchema,
+    },
+  });
 
-  try {
-    const agent = new Agent({
-      id: "review-agent",
-      name: "Rusty Bot Reviewer",
-      instructions: systemPrompt,
-      model,
-      tools: { ...builtInTools, ...mcpTools },
-    });
+  const parsed = response.object;
 
-    const response = await agent.generate(userMessage, {
-      structuredOutput: {
-        schema: ReviewOutputSchema,
-      },
-    });
-
-    const parsed = response.object;
-
-    return {
-      summary: parsed.summary,
-      recommendation: parsed.recommendation,
-      findings: parsed.findings,
-      observations: parsed.observations,
-      filesReviewed: parsed.filesReviewed,
-      modelUsed: modelName,
-      tokenCount: response.usage?.totalTokens ?? 0,
-    };
-  } finally {
-    if (disconnectMcp) {
-      await disconnectMcp();
-    }
-  }
+  return {
+    summary: parsed.summary,
+    recommendation: parsed.recommendation,
+    findings: parsed.findings,
+    observations: parsed.observations,
+    filesReviewed: parsed.filesReviewed,
+    modelUsed: modelName,
+    tokenCount: response.usage?.totalTokens ?? 0,
+  };
 }
