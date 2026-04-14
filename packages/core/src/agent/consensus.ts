@@ -96,7 +96,7 @@ export async function runConsensusReview(
   const summary =
     summaries.length === 1
       ? summaries[0]
-      : `Consensus review (${passes} passes, threshold ${threshold}).\n\n${summaries[0]}`;
+      : `Consensus review (${passes} passes, threshold ${threshold}).\n\n${summaries.join("\n\n")}`;
 
   return {
     summary,

@@ -116,10 +116,10 @@ export function formatSummaryComment(review: ReviewResult): string {
   lines.push("---");
   lines.push("");
   const parts = [`Reviewed by ${review.modelUsed} · ${review.tokenCount} tokens (review)`];
-  if (review.judgeTokenCount) {
+  if (review.judgeTokenCount != null) {
     parts.push(`${review.judgeTokenCount} tokens (judge)`);
   }
-  if (review.filteredCount) {
+  if (review.filteredCount != null) {
     parts.push(`${review.filteredCount} low-confidence findings filtered`);
   }
   lines.push(parts.join(" · "));
