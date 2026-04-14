@@ -21,7 +21,6 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
         style: "balanced",
         focusAreas: [],
         ignorePatterns: [],
-        customInstructions: "",
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["repos"] });

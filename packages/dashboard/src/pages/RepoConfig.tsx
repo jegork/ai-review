@@ -49,14 +49,12 @@ export function RepoConfig() {
   const [style, setStyle] = useState<RepoConfig["style"]>("balanced");
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [ignorePatterns, setIgnorePatterns] = useState("");
-  const [customInstructions, setCustomInstructions] = useState("");
 
   useEffect(() => {
     if (data) {
       setStyle(data.style);
       setFocusAreas(data.focusAreas);
       setIgnorePatterns(data.ignorePatterns.join("\n"));
-      setCustomInstructions(data.customInstructions);
     }
   }, [data]);
 
@@ -69,7 +67,6 @@ export function RepoConfig() {
           .split("\n")
           .map((s) => s.trim())
           .filter(Boolean),
-        customInstructions,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["repo", owner, repo] });
@@ -170,19 +167,6 @@ export function RepoConfig() {
           className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-400 font-mono resize-y"
         />
         <p className="text-xs text-slate-500 mt-1">one pattern per line</p>
-      </section>
-
-      <section className="mb-8">
-        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-3">
-          Custom Instructions
-        </h2>
-        <textarea
-          rows={5}
-          value={customInstructions}
-          onChange={(e) => setCustomInstructions(e.target.value)}
-          placeholder="Any additional context or instructions for the reviewer…"
-          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-400 resize-y"
-        />
       </section>
 
       {mutation.isSuccess && <p className="text-green-400 text-sm mb-3">Saved successfully.</p>}

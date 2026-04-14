@@ -7,10 +7,11 @@ import {
   expandContext,
   summarizeLanguages,
   extractTicketRefs,
-  resolveTickets,
+  resolveTicketsWithStatus,
   runMultiCallReview,
   runCascadeReview,
   formatSummaryComment,
+  fetchConventionFile,
   GitHubTicketProvider,
   JiraTicketProvider,
   LinearTicketProvider,
@@ -67,12 +68,6 @@ export async function orchestrateReview(params: {
 
   try {
     const repoConfig = await getRepoConfig(owner, repo);
-    const config = {
-      style: repoConfig?.style ?? ("balanced" as const),
-      focusAreas: repoConfig?.focusAreas ?? ALL_FOCUS_AREAS,
-      ignorePatterns: repoConfig?.ignorePatterns ?? [],
-      customInstructions: repoConfig?.customInstructions,
-    };
 
     const provider = new GitHubProvider({ octokit, owner, repo, pullNumber });
 
@@ -83,13 +78,28 @@ export async function orchestrateReview(params: {
       provider.getRawDiff(),
     ]);
 
+    const conventionFile = await fetchConventionFile(
+      (path, ref) => provider.getFileContent(path, ref),
+      metadata.targetBranch,
+    );
+
+    const config = {
+      style: repoConfig?.style ?? ("balanced" as const),
+      focusAreas: repoConfig?.focusAreas ?? ALL_FOCUS_AREAS,
+      ignorePatterns: repoConfig?.ignorePatterns ?? [],
+      ...(conventionFile ? { conventionFile } : {}),
+    };
+
     const patches = parseDiff(rawDiff);
     const filtered = filterFiles(patches, config.ignorePatterns);
     const reviewable = stripDeletionOnlyHunks(filtered);
 
     const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
     const ticketProviders = await buildTicketProviders(owner, repo);
-    const tickets = await resolveTickets(ticketRefs, ticketProviders);
+    const { tickets, status: ticketResolution } = await resolveTicketsWithStatus(
+      ticketRefs,
+      ticketProviders,
+    );
 
     const languageSummary = summarizeLanguages(reviewable);
     const mcpServers = await loadMcpServerConfigsFromEnv();
@@ -151,7 +161,7 @@ export async function orchestrateReview(params: {
       });
     }
 
-    const summary = formatSummaryComment(result);
+    const summary = formatSummaryComment(result, { ticketResolution });
     await provider.postSummaryComment(summary);
 
     const inlineFindings = result.findings.filter((f) => f.line > 0);

@@ -49,7 +49,7 @@ podman compose up --build
 packages/
 ├── core/           # shared review engine
 │   ├── src/
-│   │   ├── agent/      # Mastra review agent, prompt templates, Zod output schema
+│   │   ├── agent/      # Mastra review agent, judge/filter pass, prompt templates, Zod output schema
 │   │   ├── diff/       # unified diff parser, file filter, token-aware compression
 │   │   ├── formatter/  # summary comment + inline comment markdown renderers
 │   │   ├── tickets/    # ticket ref extraction, providers (GitHub/Jira/Linear/ADO)
@@ -146,6 +146,9 @@ The task exits with code 1 when critical issues are found (configurable via `RUS
 | `RUSTY_AZURE_DEPLOYMENT` | Azure OpenAI deployment (managed identity mode) | — |
 | `RUSTY_LLM_BASE_URL` | OpenAI-compatible endpoint URL (e.g. LiteLLM) | — |
 | `RUSTY_LLM_API_KEY` | API key for custom endpoint | — |
+| `RUSTY_JUDGE_ENABLED` | enable post-generation judge/filter pass | `false` |
+| `RUSTY_JUDGE_THRESHOLD` | minimum confidence score (0–10) to keep a finding | `6` |
+| `RUSTY_JUDGE_MODEL` | model for the judge (can be cheaper than reviewer) | same as `RUSTY_LLM_MODEL` |
 
 ### LLM Provider Configuration
 
@@ -194,9 +197,30 @@ curl -X PUT http://localhost:3000/api/config/repos/owner/repo \
   -d '{
     "style": "roast",
     "focusAreas": ["security", "bugs", "performance"],
-    "ignorePatterns": ["*.generated.ts", "vendor/**"],
-    "customInstructions": "This repo uses Effect-TS, review accordingly"
+    "ignorePatterns": ["*.generated.ts", "vendor/**"]
   }'
+```
+
+### Convention Files
+
+Check in a markdown file to your repo root to provide review instructions:
+
+| File | Priority |
+|------|----------|
+| `.rusty-bot.md` | Highest |
+| `REVIEW-BOT.md` | Medium |
+| `AGENTS.md` | Lowest |
+
+The bot picks up the first file found (winner-takes-all) and injects its content into the system prompt. The file is fetched from the **target branch** so PR authors cannot tamper with review rules.
+
+Example `.rusty-bot.md`:
+
+```markdown
+- We use Effect-TS, don't flag `.pipe()` chains as complexity issues
+- All API endpoints must have Zod validation — flag missing schemas as warnings
+- Ignore `generated/` and `__snapshots__/` directories
+- Security findings in `scripts/` are low priority, it's internal tooling
+- Be lenient on style, strict on security
 ```
 
 ### Review Styles
@@ -207,6 +231,70 @@ curl -X PUT http://localhost:3000/api/config/repos/owner/repo \
 | **Balanced** | Focuses on confidence, balances thoroughness with practicality |
 | **Lenient** | Only critical bugs and security issues, encouraging tone |
 | **Roast** | Technically accurate feedback wrapped in sharp, witty commentary |
+
+### Judge / Filter Pass
+
+By default every finding the LLM produces gets posted directly. The judge pass adds a self-reflection stage: after generating findings, a second agent scores each one for confidence (0–10) and drops anything below a configurable threshold. This catches hallucinated findings, speculative claims, and low-value noise before they reach developers.
+
+Enable it with:
+
+```bash
+RUSTY_JUDGE_ENABLED=true
+RUSTY_JUDGE_THRESHOLD=6          # 0–10, findings below this are dropped
+RUSTY_JUDGE_MODEL=anthropic/claude-3-5-haiku-20241022  # optional, cheaper model
+```
+
+**How it works:**
+
+1. The reviewer generates findings as normal
+2. The judge agent receives the diff + all findings and scores each one 0–10
+3. Findings below the threshold are filtered out and logged at `debug` level
+4. The merge recommendation is recalculated based on surviving findings
+5. The summary footer shows token usage for review and judge separately, plus how many findings were filtered
+
+**Tuning the threshold:**
+
+| Threshold | Behavior |
+|-----------|----------|
+| 3–4 | Permissive — only drops clearly hallucinated findings |
+| 5–6 | Balanced — removes speculative and low-confidence noise |
+| 7–8 | Strict — only high-confidence, evidence-backed findings survive |
+| 9–10 | Very strict — likely over-filters, use for low-noise environments |
+
+**Cost:** The judge uses a single LLM call with structured output (no tools). Using a cheap model like Haiku adds ~1–3% to total cost. Using the same model as the reviewer adds ~30–50%.
+
+When the judge is disabled (default), the pipeline behaves exactly as before with zero overhead.
+
+
+### Consensus Voting
+
+By default, each review runs 3 independent passes with shuffled diff ordering (file and hunk order randomized per pass). Findings are clustered across passes using file match, line proximity (±5 lines), and message similarity (Jaccard ≥ 0.3). Only findings that appear in a majority of passes survive — the rest are dropped as likely false positives.
+
+Configure via per-repo config:
+
+```json
+{
+  "consensusPasses": 5,
+  "consensusThreshold": 3
+}
+```
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `consensusPasses` | Number of independent review passes (1 = disabled) | `3` |
+| `consensusThreshold` | Minimum votes to keep a finding (`null` = simple majority) | `ceil(passes/2)` |
+
+**How it works:**
+
+1. The diff is shuffled N times (seeded PRNG for reproducibility) to produce N different orderings
+2. Each ordering is reviewed independently in parallel
+3. Findings from all passes are clustered by file + line proximity + message similarity
+4. Clusters with votes below the threshold are dropped
+5. Surviving findings include a `voteCount` showing how many passes flagged them
+
+**Cost:** With the default 3 passes, LLM cost per review triples. Combine with the judge pass (using a cheaper model) to offset costs.
+
+Set `consensusPasses` to `1` to disable consensus voting and get the original single-pass behavior with zero overhead.
 
 ### Ticket Integration
 
@@ -229,7 +317,7 @@ pnpm install
 # build all packages
 pnpm -r build
 
-# run tests (164 tests)
+# run tests (292 tests)
 pnpm test
 
 # start dev server
@@ -238,6 +326,22 @@ pnpm --filter @rusty-bot/github start
 # start dashboard dev server (with hot reload)
 pnpm --filter @rusty-bot/dashboard dev
 ```
+
+## Claude Code skills
+
+This repo publishes agent skills under `skills/`. They're indexed by [skills.sh](https://skills.sh) and installable with the `skills` CLI:
+
+```bash
+# install every skill in this repo
+npx skills add jegork/ai-review
+
+# or just one
+npx skills add jegork/ai-review/pr-comment-monitor
+```
+
+Available skills:
+
+- **pr-comment-monitor** — detects the remote git provider (GitHub / Azure DevOps / GitLab / Bitbucket), finds the current branch's open PR, handles each new review comment (code edit + push, or reply) and resolves the thread. Runs as a one-shot sweep, as an iterative live-watch loop, or on a schedule via the built-in `loop` skill.
 
 ## License
 

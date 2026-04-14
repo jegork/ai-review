@@ -8,7 +8,8 @@ export interface RepoConfig {
   style: ReviewStyle;
   focusAreas: FocusArea[];
   ignorePatterns: string[];
-  customInstructions?: string;
+  consensusPasses?: number;
+  consensusThreshold?: number | null;
 }
 
 export interface RepoConfigWithId extends RepoConfig {

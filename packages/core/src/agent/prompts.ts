@@ -25,14 +25,14 @@ export function buildSystemPrompt(config: ReviewConfig): string {
   const base = loadTemplate("base.txt");
   const styleInstructions = buildStyleInstructions(config.style);
   const focusInstructions = buildFocusInstructions(config.focusAreas);
-  const customInstructions = config.customInstructions
-    ? `\n\nAdditional instructions from the repository maintainer:\n${config.customInstructions}`
+  const conventionInstructions = config.conventionFile
+    ? `\n\nAdditional instructions from the repository maintainer:\n${config.conventionFile}`
     : "";
 
   return base
     .replace("{{style_instructions}}", styleInstructions)
     .replace("{{focus_instructions}}", focusInstructions)
-    .replace("{{custom_instructions}}", customInstructions);
+    .replace("{{convention_instructions}}", conventionInstructions);
 }
 
 export function buildUserMessage(
@@ -71,8 +71,13 @@ export function buildUserMessage(
       }
     }
     parts.push(
-      "\nPlease verify that the PR changes address the requirements described in the linked tickets. " +
-        "Note which requirements appear addressed and which may be missing in your summary.",
+      "\nPlease extract the concrete requirements or acceptance criteria from each linked ticket " +
+        "into the structured ticketCompliance output. Evaluate each requirement individually, " +
+        "keep requirement wording stable across equivalent checks so later passes can merge into the same checklist, " +
+        "and prefer adding evidence to an existing requirement rather than restating it with different phrasing. " +
+        "set ticketId when you can, cite diff evidence when available, use `not_addressed` " +
+        "only when the visible changes clearly do not satisfy the requirement, and use `unclear` " +
+        "when the visible changes are insufficient to decide.",
     );
   }
 

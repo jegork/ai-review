@@ -17,7 +17,6 @@ export interface RunReviewOptions {
 }
 
 function buildTools(options?: RunReviewOptions): ToolsInput {
-  // skim tier gets no tools — only diff context, no file exploration
   if (options?.tier === "skim") return {};
 
   const tools: ToolsInput = {};
@@ -45,7 +44,6 @@ export async function runReview(
   const modelName = getModelDisplayName(modelConfig);
 
   const builtInTools = buildTools(options);
-  // skim tier ignores extra tools (MCP) as well
   const extraTools = tier === "skim" ? {} : (options?.extraTools ?? {});
 
   const agent = new Agent({
@@ -69,6 +67,10 @@ export async function runReview(
     recommendation: parsed.recommendation,
     findings: parsed.findings,
     observations: parsed.observations,
+    ticketCompliance:
+      "ticketCompliance" in parsed
+        ? ((parsed as Record<string, unknown>).ticketCompliance as ReviewResult["ticketCompliance"])
+        : [],
     filesReviewed: parsed.filesReviewed,
     modelUsed: modelName,
     tokenCount: response.usage.totalTokens ?? 0,

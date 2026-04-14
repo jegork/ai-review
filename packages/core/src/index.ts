@@ -15,6 +15,9 @@ export type {
   Hunk,
   FilePatch,
   TicketInfo,
+  TicketComplianceItem,
+  TicketComplianceStatus,
+  TicketResolutionStatus,
   TicketSource,
   TicketRef,
   CodeSearchResult,
@@ -30,3 +33,4 @@ export * from "./diff/index.js";
 export * from "./agent/index.js";
 export * from "./mcp/index.js";
 export * from "./triage/index.js";
+export { fetchConventionFile } from "./convention-file.js";
