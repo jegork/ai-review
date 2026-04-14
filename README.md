@@ -289,7 +289,7 @@ npx skills add jegork/ai-review/pr-comment-monitor
 
 Available skills:
 
-- **pr-comment-monitor** — detects the remote git provider (GitHub / Azure DevOps / GitLab / Bitbucket), watches the current branch's open PR for new review comments, handles each one (code edit + push, or reply), and resolves the thread.
+- **pr-comment-monitor** — detects the remote git provider (GitHub / Azure DevOps / GitLab / Bitbucket), finds the current branch's open PR, handles each new review comment (code edit + push, or reply) and resolves the thread. Runs as a one-shot sweep, as an iterative live-watch loop, or on a schedule via the built-in `loop` skill.
 
 ## License
 

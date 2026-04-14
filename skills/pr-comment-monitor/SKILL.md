@@ -1,11 +1,25 @@
 ---
 name: pr-comment-monitor
-description: Watch an open pull/merge request for new review comments, act on each one, and resolve the thread. Use when the user says things like "watch this PR", "monitor the PR for comments", "wait for review comments and fix them", "keep an eye on the PR", or "poll my PR and resolve comments". Automatically detects whether the remote is GitHub, Azure DevOps, GitLab, or Bitbucket from `git remote`.
+description: Watch an open pull/merge request for new review comments, act on each one, and resolve the thread. Supports one-shot sweeps, an iterative live-watch loop, or scheduled re-runs via the `loop` skill. Use when the user says things like "watch this PR", "monitor the PR for comments", "wait for review comments and fix them", "keep an eye on the PR", "poll my PR and resolve comments", or "check the PR every few minutes". Automatically detects whether the remote is GitHub, Azure DevOps, GitLab, or Bitbucket from `git remote`.
 ---
 
 # PR comment monitoring
 
 Goal: detect the remote git provider for the current repo, locate the open PR for the current branch, then watch for incoming review comments. For each new comment, understand what the reviewer is asking, do the work (edit code / reply / push a commit as appropriate), and resolve the thread before moving on.
+
+## 0. Pick a run mode
+
+Before doing anything else, decide how the user wants the skill to run. Infer from their phrasing; if it's unclear, ask with `AskUserQuestion`.
+
+| Mode        | When to use                                                                 | Loop behavior                                                                                                                                              |
+| ----------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `one-shot`  | "check the PR", "sweep comments once", "are there any new comments?"        | Run steps 1–4 a single time. Exit after the current batch of comments is processed (even if zero).                                                         |
+| `iterative` | "watch the PR", "keep monitoring", "wait for comments and fix them"         | After processing a batch, wait for the next batch (see §3) and repeat. Keep going until a stop condition in §5 fires.                                      |
+| `scheduled` | "check every 5 minutes", "poll hourly until merged"                         | Instead of holding the session open, hand off to the built-in `loop` skill — e.g. `/loop 5m pr-comment-monitor` — so the harness re-invokes on a schedule. |
+
+Default to `iterative` when the user says "watch" / "monitor" / "keep an eye on", and to `one-shot` when they say "check" / "sweep" / "any new". Confirm the choice in your first message so the user can correct it.
+
+Remember the mode for the whole run. It determines whether §3 blocks waiting for more events or returns immediately after one pass.
 
 ## 1. Detect the remote provider
 
@@ -33,10 +47,16 @@ If there's more than one match, confirm with the user. If there is none, stop an
 
 ## 3. Watch for new comments
 
+Behaviour depends on the run mode chosen in §0:
+
+- In **one-shot** mode: do a single fetch of the current comment/thread state, process anything new or unresolved (§4), then skip straight to §5.
+- In **iterative** mode: process the current batch, then block until the next one arrives, then process again — repeating until a stop condition fires.
+- In **scheduled** mode: process one batch and return. Persist the last-seen marker (see below) to `.claude/pr-comment-monitor.state.json` or similar so the next scheduled run resumes where this one left off.
+
 Prefer a push-style subscription over polling when it's available:
 
-- **GitHub**: call `mcp__github__subscribe_pr_activity` with the PR number. Comment/review events then arrive as `<github-webhook-activity>` messages — no polling needed. Handle each event as it arrives.
-- **Other providers**: poll. Track the last-seen comment id (or `updated_at`) between iterations. Between polls, use `Bash` with `run_in_background: true` to start `sleep 30 && date` (or similar) and then read its output when it finishes — this avoids the 2 s inline-sleep limit and lets the user interrupt. For longer watches, suggest the user invoke this skill via the built-in `loop` skill (e.g. `/loop 2m pr-comment-monitor`) so the harness drives the schedule instead of a sleeping shell.
+- **GitHub**: call `mcp__github__subscribe_pr_activity` with the PR number. Comment/review events then arrive as `<github-webhook-activity>` messages — no polling needed. In iterative mode, wait for the next event; in one-shot mode, drain what's already pending (or fall back to a single REST fetch) and return.
+- **Other providers**: poll. Track the last-seen comment id (or `updated_at`) between iterations. In iterative mode, between polls use `Bash` with `run_in_background: true` to start something like `sleep 30 && date` and read its output when it finishes — this avoids the 2 s inline-sleep limit and lets the user interrupt. Use a sensible interval (default 30 s, but let the user override). For long-running watches, prefer scheduled mode (`/loop 2m pr-comment-monitor`) over an open-ended iterative session so the harness drives the cadence instead of a sleeping shell.
 
 Endpoints for polling:
 
@@ -69,10 +89,11 @@ Exit the watch loop when any of these is true:
 
 - The user says to stop, or cancels the session.
 - The PR is merged or closed (`state != open`).
-- All open threads are resolved and the user asked for a one-shot sweep rather than continuous watching.
+- The run is in `one-shot` or `scheduled` mode and the current batch is done.
+- Iterative mode has been idle (no new events) for longer than the user-configured max-idle window, if they set one.
 - A handler raised an error that needs human attention — surface it and stop rather than looping on the same failure.
 
-Always leave a short summary at the end: how many comments were processed, which were resolved vs. replied-only, and any commits pushed.
+Always leave a short summary at the end: mode used, how many iterations ran, how many comments were processed, which were resolved vs. replied-only, and any commits pushed.
 
 ## Authentication notes
 
