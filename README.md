@@ -253,8 +253,8 @@ Configure via per-repo config:
 
 ```json
 {
-  "consensusPasses": 3,
-  "consensusThreshold": 2
+  "consensusPasses": 5,
+  "consensusThreshold": 3
 }
 ```
 
