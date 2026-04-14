@@ -26,10 +26,13 @@ export const AdoIterationsSchema = z.object({
 
 export const AdoChangeEntrySchema = z.object({
   changeType: z.string(),
-  item: z.object({
-    path: z.string().nullable(),
-    gitObjectType: z.string().optional(),
-  }),
+  item: z
+    .object({
+      path: z.string().nullable(),
+      gitObjectType: z.string().optional(),
+    })
+    .nullable(),
+  originalPath: z.string().nullable().optional(),
 });
 
 export const AdoChangesSchema = z.object({
@@ -44,7 +47,7 @@ export const AdoThreadSchema = z.object({
       content: z.string().optional(),
     }),
   ),
-  status: z.union([z.number(), z.string()]),
+  status: z.union([z.number(), z.string()]).optional(),
 });
 
 export const AdoThreadsSchema = z.object({
