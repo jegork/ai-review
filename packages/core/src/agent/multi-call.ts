@@ -126,9 +126,11 @@ function mergeTicketCompliance(results: ReviewResult[]): TicketComplianceItem[] 
       const nextPriority = TICKET_COMPLIANCE_PRIORITY[item.status];
 
       if (nextPriority > existingPriority) {
+        // Preserve any evidence already accumulated on the existing item when a
+        // later chunk upgrades the compliance status.
         merged.set(key, {
           ...item,
-          evidence: mergeEvidence(item.evidence, existing.evidence),
+          evidence: mergeEvidence(existing.evidence, item.evidence),
         });
         continue;
       }
@@ -164,8 +166,8 @@ export async function runMultiCallReview(
   // Each chunk needs the same ticket context so compliance evidence can be gathered
   // across the full PR, then merged into one checklist.
   const results: ReviewResult[] = [];
-  for (let i = 0; i < groups.length; i++) {
-    const { compressed: groupDiff } = compressDiff(groups[i], maxTokens);
+  for (const group of groups) {
+    const { compressed: groupDiff } = compressDiff(group, maxTokens);
     const result = await runReview(config, groupDiff, prMetadata, ticketContext, options);
     results.push(result);
   }

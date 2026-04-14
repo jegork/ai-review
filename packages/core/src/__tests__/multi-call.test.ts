@@ -203,6 +203,62 @@ describe("runMultiCallReview", () => {
     ]);
   });
 
+  it("preserves previously accumulated evidence when a later chunk upgrades the status", async () => {
+    runReviewMock
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-1"),
+        ticketCompliance: [
+          {
+            ticketId: "AUTH-42",
+            requirement: "Protected routes validate JWT",
+            status: "unclear",
+            evidence: "middleware.ts is added",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-2"),
+        ticketCompliance: [
+          {
+            ticketId: "AUTH-42",
+            requirement: "Protected routes validate JWT",
+            status: "unclear",
+            evidence: "route-guard.ts is wired into most routes",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-3"),
+        ticketCompliance: [
+          {
+            ticketId: "AUTH-42",
+            requirement: "Protected routes validate JWT",
+            status: "addressed",
+            evidence: "admin-routes.ts now uses the shared auth guard",
+          },
+        ],
+      });
+
+    const patches = [
+      makePatch("big1.ts", 1000),
+      makePatch("big2.ts", 1000),
+      makePatch("big3.ts", 1000),
+    ];
+    const result = await runMultiCallReview(patches, config, prMetadata, tickets, {
+      maxTokens: 3000,
+    });
+
+    expect(result.ticketCompliance).toEqual([
+      {
+        ticketId: "AUTH-42",
+        requirement: "Protected routes validate JWT",
+        status: "addressed",
+        evidence:
+          "middleware.ts is added | route-guard.ts is wired into most routes | admin-routes.ts now uses the shared auth guard",
+      },
+    ]);
+  });
+
   it("handles empty patches", async () => {
     runReviewMock.mockResolvedValueOnce({
       summary: "Nothing to review",
