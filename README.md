@@ -244,6 +244,37 @@ RUSTY_JUDGE_MODEL=anthropic/claude-3-5-haiku-20241022  # optional, cheaper model
 
 When the judge is disabled (default), the pipeline behaves exactly as before with zero overhead.
 
+
+### Consensus Voting
+
+By default, each review runs 3 independent passes with shuffled diff ordering (file and hunk order randomized per pass). Findings are clustered across passes using file match, line proximity (±5 lines), and message similarity (Jaccard ≥ 0.3). Only findings that appear in a majority of passes survive — the rest are dropped as likely false positives.
+
+Configure via per-repo config:
+
+```json
+{
+  "consensusPasses": 5,
+  "consensusThreshold": 3
+}
+```
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `consensusPasses` | Number of independent review passes (1 = disabled) | `3` |
+| `consensusThreshold` | Minimum votes to keep a finding (`null` = simple majority) | `ceil(passes/2)` |
+
+**How it works:**
+
+1. The diff is shuffled N times (seeded PRNG for reproducibility) to produce N different orderings
+2. Each ordering is reviewed independently in parallel
+3. Findings from all passes are clustered by file + line proximity + message similarity
+4. Clusters with votes below the threshold are dropped
+5. Surviving findings include a `voteCount` showing how many passes flagged them
+
+**Cost:** With the default 3 passes, LLM cost per review triples. Combine with the judge pass (using a cheaper model) to offset costs.
+
+Set `consensusPasses` to `1` to disable consensus voting and get the original single-pass behavior with zero overhead.
+
 ### Ticket Integration
 
 Rusty Bot automatically extracts ticket references from PR descriptions and branch names:
@@ -265,7 +296,7 @@ pnpm install
 # build all packages
 pnpm -r build
 
-# run tests (237 tests)
+# run tests (292 tests)
 pnpm test
 
 # start dev server
