@@ -46,8 +46,8 @@ function deriveRecommendation(
   const nonGoodCount = passRecommendations.filter((r) => RECOMMENDATION_SEVERITY[r] > 0).length;
 
   if (nonGoodCount >= threshold) {
-    const hasCriticalRec = passRecommendations.filter((r) => r === "critical_issues").length;
-    if (hasCriticalRec >= threshold) return "critical_issues";
+    const criticalCount = passRecommendations.filter((r) => r === "critical_issues").length;
+    if (criticalCount >= threshold) return "critical_issues";
     return "address_before_merge";
   }
 

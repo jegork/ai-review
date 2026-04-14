@@ -151,4 +151,27 @@ describe("runConsensusReview", () => {
     // 1/3 passes flagged → below threshold=2 → looks_good
     expect(result.recommendation).toBe("looks_good");
   });
+
+  it("elevates to critical_issues when majority of passes flag critical", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ recommendation: "critical_issues", findings: [] }))
+      .mockResolvedValueOnce(makeResult({ recommendation: "critical_issues", findings: [] }))
+      .mockResolvedValueOnce(makeResult({ recommendation: "looks_good", findings: [] }));
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    expect(result.recommendation).toBe("critical_issues");
+  });
+
+  it("downgrades to address_before_merge when critical is minority but issues are majority", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ recommendation: "critical_issues", findings: [] }))
+      .mockResolvedValueOnce(makeResult({ recommendation: "address_before_merge", findings: [] }))
+      .mockResolvedValueOnce(makeResult({ recommendation: "looks_good", findings: [] }));
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    // 2/3 flag issues (meets threshold) but only 1/3 flag critical (below threshold)
+    expect(result.recommendation).toBe("address_before_merge");
+  });
 });
