@@ -82,7 +82,7 @@ GITHUB_WEBHOOK_SECRET=your-secret
 
 ## Azure DevOps Pipeline Setup
 
-Rusty Bot runs as a container task in Azure Pipelines. Add this to your `azure-pipelines.yml`:
+Rusty Bot runs inside a container in Azure Pipelines. The pipeline env vars (`SYSTEM_PULLREQUEST_*`, etc.) are automatically available inside the container.
 
 ```yaml
 trigger: none
@@ -95,25 +95,24 @@ pr:
 pool:
   vmImage: ubuntu-latest
 
+container:
+  image: ghcr.io/jegork/ai-review:latest
+  env:
+    RUSTY_MODE: pipeline
+
 steps:
-  - script: |
-      podman run --rm \
-        -e RUSTY_MODE=pipeline \
-        -e SYSTEM_PULLREQUEST_PULLREQUESTID=$(System.PullRequest.PullRequestId) \
-        -e SYSTEM_TEAMFOUNDATIONCOLLECTIONURI=$(System.TeamFoundationCollectionUri) \
-        -e SYSTEM_TEAMPROJECT=$(System.TeamProject) \
-        -e BUILD_REPOSITORY_NAME=$(Build.Repository.Name) \
-        -e SYSTEM_ACCESSTOKEN=$(System.AccessToken) \
-        -e RUSTY_LLM_MODEL=$(RUSTY_LLM_MODEL) \
-        -e ANTHROPIC_API_KEY=$(ANTHROPIC_API_KEY) \
-        -e RUSTY_REVIEW_STYLE=$(RUSTY_REVIEW_STYLE) \
-        -e RUSTY_FOCUS_AREAS=$(RUSTY_FOCUS_AREAS) \
-        -e RUSTY_FAIL_ON_CRITICAL=true \
-        ghcr.io/your-org/rusty-bot:latest
+  - script: node /app/packages/azure-devops/dist/cli.js
     displayName: Rusty Bot PR Review
+    env:
+      SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+      RUSTY_LLM_MODEL: $(RUSTY_LLM_MODEL)
+      ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
+      RUSTY_REVIEW_STYLE: $(RUSTY_REVIEW_STYLE)
+      RUSTY_FOCUS_AREAS: $(RUSTY_FOCUS_AREAS)
+      RUSTY_FAIL_ON_CRITICAL: "true"
 ```
 
-Set `RUSTY_LLM_MODEL`, `ANTHROPIC_API_KEY`, and other variables as pipeline variables in Azure DevOps.
+Set `RUSTY_LLM_MODEL`, `ANTHROPIC_API_KEY`, and other variables as pipeline variables in Azure DevOps. For Azure OpenAI with managed identity, replace the API key vars with `RUSTY_AZURE_RESOURCE_NAME` and `RUSTY_AZURE_DEPLOYMENT`.
 
 The task exits with code 1 when critical issues are found (configurable via `RUSTY_FAIL_ON_CRITICAL`), which can gate PR merges.
 
