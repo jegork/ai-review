@@ -24,6 +24,13 @@
     "picomatch": "^4.0.4",
     "pino": "^10.3.1",
     "tiktoken": "^1.0.0",
+    "tree-sitter-go": "^0.25.0",
+    "tree-sitter-java": "^0.23.5",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-python": "^0.25.0",
+    "tree-sitter-rust": "^0.24.0",
+    "tree-sitter-typescript": "^0.23.2",
+    "web-tree-sitter": "^0.26.8",
     "zod": "^4.3.6"
   },
   "devDependencies": {
