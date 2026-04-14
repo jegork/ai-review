@@ -8,6 +8,7 @@ Built on [Mastra](https://mastra.ai/) (TypeScript).
 
 - **4 review styles** — Strict, Balanced, Lenient, Roast
 - **6 focus areas** — Security, Performance, Bugs, Code Style, Test Coverage, Documentation
+- **Tree-sitter context expansion** — hunks expand to enclosing function/class boundaries instead of fixed line counts (TS, JS, Python, Go, Java, Rust)
 - **Structured summary comments** — severity table, collapsible issue details, files reviewed
 - **Inline code comments** — findings posted directly on PR diff lines
 - **Ticket compliance** — extracts linked tickets from PR description/branch name, checks if requirements are addressed
@@ -50,7 +51,7 @@ packages/
 ├── core/           # shared review engine
 │   ├── src/
 │   │   ├── agent/      # Mastra review agent, judge/filter pass, prompt templates, Zod output schema
-│   │   ├── diff/       # unified diff parser, file filter, token-aware compression
+│   │   ├── diff/       # unified diff parser, tree-sitter context expansion, file filter, token-aware compression
 │   │   ├── formatter/  # summary comment + inline comment markdown renderers
 │   │   ├── tickets/    # ticket ref extraction, providers (GitHub/Jira/Linear/ADO)
 │   │   └── types.ts    # shared type definitions
@@ -275,6 +276,23 @@ Configure via per-repo config:
 
 Set `consensusPasses` to `1` to disable consensus voting and get the original single-pass behavior with zero overhead.
 
+
+### Tree-sitter Context Expansion
+
+By default, when the LLM reviews a diff hunk, the surrounding context is expanded to the enclosing function, method, or class boundary using [tree-sitter](https://tree-sitter.github.io/tree-sitter/) AST parsing. This means the model sees complete semantic units — full functions instead of fragments cut mid-logic — which improves review accuracy and eliminates wasted tokens on unrelated adjacent code.
+
+**Supported languages:** TypeScript, TSX, JavaScript, Python, Go, Java, Rust
+
+**How it works:**
+
+1. Each changed file is parsed with a WASM-based tree-sitter grammar (no native compilation needed)
+2. For each changed line range, the smallest enclosing scope (function, method, class) is found in the AST
+3. The hunk expands to include the full enclosing scope
+4. Collapsed signatures of sibling functions/methods are prepended for orientation (e.g. `// ... export function otherFn()`)
+5. If the enclosing scope exceeds 200 lines, or if the language is unsupported, it falls back to the previous ±10 fixed-line expansion
+
+The feature is automatic and requires no configuration. Unsupported languages (CSS, JSON, YAML, etc.) gracefully fall back to fixed-line expansion with zero overhead.
+
 ### Ticket Integration
 
 Rusty Bot automatically extracts ticket references from PR descriptions and branch names:
@@ -296,7 +314,7 @@ pnpm install
 # build all packages
 pnpm -r build
 
-# run tests (292 tests)
+# run tests (325 tests)
 pnpm test
 
 # start dev server
