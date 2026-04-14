@@ -5,6 +5,7 @@ import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile, stat } from "node:fs/promises";
 import type { FocusArea, ReviewStyle } from "@rusty-bot/core";
+import { logger } from "@rusty-bot/core";
 import { validateWebhookSignature, parseWebhookEvent } from "./webhook.js";
 import { createAppOctokit } from "./auth.js";
 import { orchestrateReview } from "./orchestrator.js";
@@ -18,6 +19,8 @@ import {
   setSetting,
   type RepoConfig,
 } from "./storage.js";
+
+const log = logger.child({ package: "github" });
 
 export const app = new Hono();
 
@@ -92,7 +95,7 @@ app.post("/api/webhooks/github", async (c) => {
   // dispatch review async so we return 200 immediately
   createAppOctokit(appId, privateKey, installationId)
     .then((octokit) => orchestrateReview({ octokit, owner, repo, pullNumber, installationId }))
-    .catch((err: unknown) => console.error("failed to dispatch review:", err));
+    .catch((err: unknown) => log.error({ err }, "failed to dispatch review"));
 
   return c.json({ ok: true });
 });
@@ -210,5 +213,5 @@ if (dashboardEnabled) {
 if (process.env.NODE_ENV !== "test") {
   const port = Number(process.env.PORT ?? 3000);
   serve({ fetch: app.fetch, port });
-  console.log(`server listening on port ${port}`);
+  log.info({ port }, "server listening");
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { extractTicketRefs } from "../tickets/extract.js";
 import { resolveTickets } from "../tickets/resolve.js";
+import { logger } from "../logger.js";
 import { GitHubTicketProvider } from "../tickets/providers/github.js";
 import { JiraTicketProvider, extractAdfText } from "../tickets/providers/jira.js";
 import { LinearTicketProvider } from "../tickets/providers/linear.js";
@@ -223,7 +224,7 @@ describe("resolveTickets", () => {
   });
 
   it("catches errors and continues", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(vi.fn());
+    const warn = vi.spyOn(logger, "warn").mockImplementation(vi.fn());
     const mockProvider: TicketProvider = {
       fetchTicket: vi.fn().mockRejectedValueOnce(new Error("fail")).mockResolvedValueOnce({
         id: "2",

@@ -9,14 +9,12 @@ import {
   AzureDevOpsTicketProvider,
   runMultiCallReview,
   formatSummaryComment,
+  logger,
+  flushLogger,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
-const LOG_PREFIX = "[rusty-bot]";
-
-function log(message: string): void {
-  console.log(`${LOG_PREFIX} ${message}`);
-}
+const log = logger.child({ package: "azure-devops" });
 
 const VALID_STYLES = new Set(["strict", "balanced", "lenient", "roast"]);
 const MAX_TOKENS = 120_000;
@@ -77,7 +75,10 @@ async function main(): Promise<void> {
   const { provider, config, failOnCritical, env } = parseConfig();
 
   const metadata = await provider.getPRMetadata();
-  log(`Reviewing PR #${metadata.id} in ${metadata.sourceBranch} → ${metadata.targetBranch}`);
+  log.info(
+    { prId: metadata.id, source: metadata.sourceBranch, target: metadata.targetBranch },
+    "reviewing PR",
+  );
 
   await provider.deleteExistingBotComments();
 
@@ -88,7 +89,10 @@ async function main(): Promise<void> {
     provider.getFileContent(path, metadata.sourceBranch),
   );
   const skippedCount = rawPatches.length - expanded.length;
-  log(`Files changed: ${rawPatches.length} (${expanded.length} reviewed, ${skippedCount} skipped)`);
+  log.info(
+    { total: rawPatches.length, reviewed: expanded.length, skipped: skippedCount },
+    "files changed",
+  );
 
   const ticketRefs = extractTicketRefs(metadata.title, metadata.description);
   const ticketProviders = new Map<string, AzureDevOpsTicketProvider>();
@@ -118,19 +122,24 @@ async function main(): Promise<void> {
 
   const criticalCount = review.findings.filter((f) => f.severity === "critical").length;
   const warningCount = review.findings.filter((f) => f.severity === "warning").length;
-  log(
-    `Review complete: ${review.findings.length} findings (${criticalCount} critical, ${warningCount} warning)`,
+  log.info(
+    {
+      findings: review.findings.length,
+      critical: criticalCount,
+      warnings: warningCount,
+      recommendation: review.recommendation,
+    },
+    "review complete",
   );
-  log(`Recommendation: ${review.recommendation}`);
 
   const summaryMarkdown = formatSummaryComment(review);
   await provider.postSummaryComment(summaryMarkdown);
   await provider.postInlineComments(review.findings);
 
-  log(`Posted summary comment and ${review.findings.length} inline comments`);
+  log.info({ inlineComments: review.findings.length }, "posted summary and inline comments");
 
   if (failOnCritical && criticalCount > 0) {
-    log(`Failing pipeline: ${criticalCount} critical issue(s) found`);
+    log.warn({ criticalCount }, "failing pipeline due to critical issues");
     process.exit(1);
   }
 }
@@ -140,7 +149,7 @@ const isDirectRun = process.argv[1] && import.meta.url === `file://${process.arg
 
 if (isDirectRun) {
   main().catch((err: unknown) => {
-    console.error(`${LOG_PREFIX} Fatal error:`, err);
-    process.exit(2);
+    log.fatal({ err }, "fatal error");
+    flushLogger(() => process.exit(2));
   });
 }
