@@ -113,44 +113,47 @@ function normalizeComplianceKeyPart(value?: string): string {
   return value?.trim().toLowerCase() ?? "";
 }
 
-function mergeEvidence(left?: string, right?: string): string | undefined {
-  const merged = [...new Set([normalizeEvidence(left), normalizeEvidence(right)].filter(Boolean))];
-  return merged.length > 0 ? merged.join(" | ") : undefined;
+interface TicketComplianceAccumulator extends TicketComplianceItem {
+  evidenceParts: string[];
 }
 
 function mergeTicketCompliance(results: ReviewResult[]): TicketComplianceItem[] {
-  const merged = new Map<string, TicketComplianceItem>();
+  const merged = new Map<string, TicketComplianceAccumulator>();
 
   for (const result of results) {
     for (const item of result.ticketCompliance) {
       const key = `${normalizeComplianceKeyPart(item.ticketId)}:${normalizeComplianceKeyPart(item.requirement)}`;
+      const evidence = normalizeEvidence(item.evidence);
       const existing = merged.get(key);
 
       if (!existing) {
-        merged.set(key, { ...item, evidence: normalizeEvidence(item.evidence) });
+        merged.set(key, {
+          ...item,
+          evidence,
+          evidenceParts: evidence ? [evidence] : [],
+        });
         continue;
+      }
+
+      if (evidence && !existing.evidenceParts.includes(evidence)) {
+        existing.evidenceParts.push(evidence);
       }
 
       const existingPriority = TICKET_COMPLIANCE_PRIORITY[existing.status];
       const nextPriority = TICKET_COMPLIANCE_PRIORITY[item.status];
 
       if (nextPriority > existingPriority) {
-        // Preserve any evidence already accumulated on the existing item when a
-        // later chunk upgrades the compliance status.
-        merged.set(key, {
-          ...item,
-          evidence: mergeEvidence(existing.evidence, item.evidence),
-        });
-        continue;
-      }
-
-      if (nextPriority === existingPriority) {
-        existing.evidence = mergeEvidence(existing.evidence, item.evidence);
+        existing.ticketId = item.ticketId;
+        existing.requirement = item.requirement;
+        existing.status = item.status;
       }
     }
   }
 
-  return [...merged.values()];
+  return [...merged.values()].map(({ evidenceParts, ...item }) => ({
+    ...item,
+    evidence: evidenceParts.length > 0 ? evidenceParts.join(" | ") : undefined,
+  }));
 }
 
 export async function runMultiCallReview(
