@@ -7,10 +7,18 @@ import type {
   ReviewResult,
   Finding,
   Observation,
+  TicketComplianceItem,
+  TicketComplianceStatus,
 } from "../types.js";
 import { runReview, type RunReviewOptions } from "./review.js";
 
 const DEFAULT_MAX_TOKENS = 60_000;
+const TICKET_COMPLIANCE_PRIORITY: Record<TicketComplianceStatus, number> = {
+  addressed: 3,
+  partially_addressed: 2,
+  unclear: 1,
+  not_addressed: 0,
+};
 
 function splitIntoGroups(patches: FilePatch[], maxTokensPerGroup: number): FilePatch[][] {
   const groups: FilePatch[][] = [];
@@ -80,10 +88,58 @@ function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult 
     recommendation,
     findings: dedupedFindings,
     observations: allObservations,
+    ticketCompliance: mergeTicketCompliance(results),
     filesReviewed: [...allFiles],
     modelUsed,
     tokenCount: totalTokens,
   };
+}
+
+function normalizeEvidence(evidence?: string): string | undefined {
+  const trimmed = evidence?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeComplianceKeyPart(value?: string): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function mergeEvidence(left?: string, right?: string): string | undefined {
+  const merged = [...new Set([normalizeEvidence(left), normalizeEvidence(right)].filter(Boolean))];
+  return merged.length > 0 ? merged.join(" | ") : undefined;
+}
+
+function mergeTicketCompliance(results: ReviewResult[]): TicketComplianceItem[] {
+  const merged = new Map<string, TicketComplianceItem>();
+
+  for (const result of results) {
+    for (const item of result.ticketCompliance) {
+      const key = `${normalizeComplianceKeyPart(item.ticketId)}:${normalizeComplianceKeyPart(item.requirement)}`;
+      const existing = merged.get(key);
+
+      if (!existing) {
+        merged.set(key, { ...item, evidence: normalizeEvidence(item.evidence) });
+        continue;
+      }
+
+      const existingPriority = TICKET_COMPLIANCE_PRIORITY[existing.status];
+      const nextPriority = TICKET_COMPLIANCE_PRIORITY[item.status];
+
+      if (nextPriority > existingPriority) {
+        merged.set(key, {
+          ...item,
+          evidence: mergeEvidence(item.evidence, existing.evidence),
+        });
+        continue;
+      }
+
+      if (nextPriority === existingPriority) {
+        existing.evidence = mergeEvidence(existing.evidence, item.evidence);
+      }
+    }
+  }
+
+  return [...merged.values()];
 }
 
 export async function runMultiCallReview(
@@ -105,12 +161,12 @@ export async function runMultiCallReview(
   // split into groups that each fit within the token budget
   const groups = splitIntoGroups(patches, maxTokens);
 
-  // first group gets ticket context, subsequent ones don't (avoid redundant compliance checks)
+  // Each chunk needs the same ticket context so compliance evidence can be gathered
+  // across the full PR, then merged into one checklist.
   const results: ReviewResult[] = [];
   for (let i = 0; i < groups.length; i++) {
     const { compressed: groupDiff } = compressDiff(groups[i], maxTokens);
-    const groupTickets = i === 0 ? ticketContext : undefined;
-    const result = await runReview(config, groupDiff, prMetadata, groupTickets, options);
+    const result = await runReview(config, groupDiff, prMetadata, ticketContext, options);
     results.push(result);
   }
 

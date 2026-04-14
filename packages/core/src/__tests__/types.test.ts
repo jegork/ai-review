@@ -1,17 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type {
-  ReviewStyle,
-  FocusArea,
-  Severity,
-  Finding,
-  ReviewResult,
-  ReviewConfig,
-  PRMetadata,
-  FilePatch,
-  TicketInfo,
-  GitProvider,
-  TicketProvider,
-} from "../types.js";
+import type { Finding, ReviewResult, ReviewConfig, TicketComplianceItem } from "../types.js";
 
 describe("types", () => {
   it("ReviewConfig accepts valid config", () => {
@@ -41,11 +29,22 @@ describe("types", () => {
       recommendation: "address_before_merge",
       findings: [],
       observations: [],
+      ticketCompliance: [],
       filesReviewed: ["src/index.ts"],
       modelUsed: "anthropic/claude-sonnet-4-20250514",
       tokenCount: 1500,
     };
     expect(result.findings).toHaveLength(0);
     expect(result.filesReviewed).toHaveLength(1);
+  });
+
+  it("TicketComplianceItem supports structured checklist entries", () => {
+    const item: TicketComplianceItem = {
+      ticketId: "AUTH-42",
+      requirement: "Login returns JWT",
+      status: "addressed",
+      evidence: "login.ts signs a token before responding",
+    };
+    expect(item.status).toBe("addressed");
   });
 });

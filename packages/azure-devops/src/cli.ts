@@ -5,7 +5,7 @@ import {
   expandContext,
   summarizeLanguages,
   extractTicketRefs,
-  resolveTickets,
+  resolveTicketsWithStatus,
   AzureDevOpsTicketProvider,
   runMultiCallReview,
   formatSummaryComment,
@@ -103,7 +103,10 @@ async function main(): Promise<void> {
     );
   }
 
-  const tickets = await resolveTickets(ticketRefs, ticketProviders);
+  const { tickets, status: ticketResolution } = await resolveTicketsWithStatus(
+    ticketRefs,
+    ticketProviders,
+  );
 
   const languageSummary = summarizeLanguages(expanded);
 
@@ -122,7 +125,7 @@ async function main(): Promise<void> {
   );
   log(`Recommendation: ${review.recommendation}`);
 
-  const summaryMarkdown = formatSummaryComment(review);
+  const summaryMarkdown = formatSummaryComment(review, { ticketResolution });
   await provider.postSummaryComment(summaryMarkdown);
   await provider.postInlineComments(review.findings);
 

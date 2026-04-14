@@ -71,8 +71,11 @@ export function buildUserMessage(
       }
     }
     parts.push(
-      "\nPlease verify that the PR changes address the requirements described in the linked tickets. " +
-        "Note which requirements appear addressed and which may be missing in your summary.",
+      "\nPlease extract the concrete requirements or acceptance criteria from each linked ticket " +
+        "into the structured ticketCompliance output. Evaluate each requirement individually, " +
+        "set ticketId when you can, cite diff evidence when available, use `not_addressed` " +
+        "only when the visible changes clearly do not satisfy the requirement, and use `unclear` " +
+        "when the visible changes are insufficient to decide.",
     );
   }
 

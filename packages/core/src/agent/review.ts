@@ -57,6 +57,7 @@ export async function runReview(
     recommendation: parsed.recommendation,
     findings: parsed.findings,
     observations: parsed.observations,
+    ticketCompliance: parsed.ticketCompliance,
     filesReviewed: parsed.filesReviewed,
     modelUsed: modelName,
     tokenCount: response.usage?.totalTokens ?? 0,

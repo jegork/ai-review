@@ -9,6 +9,7 @@ function makeReview(overrides: Partial<ReviewResult> = {}): ReviewResult {
     recommendation: "address_before_merge",
     findings: [],
     observations: [],
+    ticketCompliance: [],
     filesReviewed: [],
     modelUsed: "gpt-4o",
     tokenCount: 12345,
@@ -153,6 +154,73 @@ describe("formatSummaryComment", () => {
     const review = makeReview({ observations: [] });
     const result = formatSummaryComment(review);
     expect(result).not.toContain("Other Observations");
+  });
+
+  it("renders ticket compliance as a structured checklist", () => {
+    const review = makeReview({
+      ticketCompliance: [
+        {
+          ticketId: "AUTH-42",
+          requirement: "Login endpoint returns a JWT",
+          status: "addressed",
+          evidence: "auth.ts adds token signing in the login handler",
+        },
+        {
+          ticketId: "AUTH-42",
+          requirement: "Protected routes validate the JWT",
+          status: "partially_addressed",
+          evidence: "Middleware verifies tokens, but one admin route is still bypassed",
+        },
+      ],
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).toContain("Ticket Compliance (2 requirements)");
+    expect(result).toContain("| Ticket | Requirement | Status | Evidence |");
+    expect(result).toContain("| AUTH-42 | Login endpoint returns a JWT | Addressed |");
+    expect(result).toContain(
+      "| AUTH-42 | Protected routes validate the JWT | Partially addressed |",
+    );
+  });
+
+  it("omits ticket compliance section when there are no linked ticket checks", () => {
+    const review = makeReview({ ticketCompliance: [] });
+    const result = formatSummaryComment(review);
+    expect(result).not.toContain("Ticket Compliance");
+  });
+
+  it("renders ticket fetch status when linked tickets were detected", () => {
+    const review = makeReview();
+    const result = formatSummaryComment(review, {
+      ticketResolution: {
+        refsFound: 2,
+        refsConsidered: 2,
+        fetched: 1,
+        missingProvider: 0,
+        fetchFailed: 1,
+      },
+    });
+
+    expect(result).toContain("## Ticket Fetch");
+    expect(result).toContain("Fetched 1 of 2 linked ticket(s).");
+  });
+
+  it("explains when ticket refs were found but could not be fetched", () => {
+    const review = makeReview();
+    const result = formatSummaryComment(review, {
+      ticketResolution: {
+        refsFound: 1,
+        refsConsidered: 1,
+        fetched: 0,
+        missingProvider: 1,
+        fetchFailed: 0,
+      },
+    });
+
+    expect(result).toContain(
+      "Found 1 linked ticket reference(s), but no matching ticket provider was configured.",
+    );
   });
 
   it("handles a single file reviewed", () => {

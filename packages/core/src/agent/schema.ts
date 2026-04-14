@@ -17,6 +17,18 @@ export const ObservationSchema = z.object({
   message: z.string(),
 });
 
+export const TicketComplianceSchema = z.object({
+  ticketId: z.string().optional().describe("linked ticket identifier when available"),
+  requirement: z.string().describe("single ticket requirement or acceptance criterion"),
+  status: z
+    .enum(["addressed", "partially_addressed", "not_addressed", "unclear"])
+    .describe("whether the diff addresses the requirement"),
+  evidence: z
+    .string()
+    .optional()
+    .describe("brief evidence from the diff supporting the compliance status"),
+});
+
 export const ReviewOutputSchema = z.object({
   summary: z.string().describe("concise summary of the PR and overall assessment"),
   recommendation: z
@@ -28,5 +40,10 @@ export const ReviewOutputSchema = z.object({
   observations: z
     .array(ObservationSchema)
     .describe("issues found in referenced but unchanged code"),
+  ticketCompliance: z
+    .array(TicketComplianceSchema)
+    .describe(
+      "requirement-by-requirement compliance checklist for linked tickets; empty when no linked tickets are available",
+    ),
   filesReviewed: z.array(z.string()).describe("list of file paths that were reviewed"),
 });
