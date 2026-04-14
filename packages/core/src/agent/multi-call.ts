@@ -11,6 +11,7 @@ import type {
   TicketComplianceStatus,
 } from "../types.js";
 import { runReview, type RunReviewOptions } from "./review.js";
+import { judgeReviewResult, resolveJudgeConfig } from "./judge.js";
 import type { McpServerConfig } from "../mcp/types.js";
 import { connectMcpServers } from "../mcp/client.js";
 import { logger } from "../logger.js";
@@ -204,36 +205,49 @@ export async function runMultiCallReview(
   try {
     const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
 
+    let result: ReviewResult;
+
     // if everything fits in one call, use the simple path
     if (skippedFiles.length === 0) {
-      return await runReview(config, compressed, prMetadata, ticketContext, resolvedOptions);
+      result = await runReview(config, compressed, prMetadata, ticketContext, resolvedOptions);
+    } else {
+      // split into groups that each fit within the token budget
+      const groups = splitIntoGroups(patches, maxTokens);
+
+      if (ticketContext && ticketContext.length > 0 && groups.length > 1) {
+        const ticketContextTokens = estimateTicketContextTokens(ticketContext);
+        logger.info(
+          {
+            chunks: groups.length,
+            linkedTickets: ticketContext.length,
+            estimatedRepeatedTicketTokens: ticketContextTokens * Math.max(groups.length - 1, 0),
+          },
+          "multi-call review is reusing ticket context across chunks to accumulate compliance evidence",
+        );
+      }
+
+      // each chunk needs the same ticket context so compliance evidence can be
+      // gathered across the full PR, then merged into one checklist
+      const results: ReviewResult[] = [];
+      for (const group of groups) {
+        const { compressed: groupDiff } = compressDiff(group, maxTokens);
+        const groupResult = await runReview(
+          config,
+          groupDiff,
+          prMetadata,
+          ticketContext,
+          resolvedOptions,
+        );
+        results.push(groupResult);
+      }
+
+      result = mergeResults(results, results[0]?.modelUsed ?? "unknown");
     }
 
-    // split into groups that each fit within the token budget
-    const groups = splitIntoGroups(patches, maxTokens);
-
-    if (ticketContext && ticketContext.length > 0 && groups.length > 1) {
-      const ticketContextTokens = estimateTicketContextTokens(ticketContext);
-      logger.info(
-        {
-          chunks: groups.length,
-          linkedTickets: ticketContext.length,
-          estimatedRepeatedTicketTokens: ticketContextTokens * Math.max(groups.length - 1, 0),
-        },
-        "multi-call review is reusing ticket context across chunks to accumulate compliance evidence",
-      );
-    }
-
-    // Each chunk needs the same ticket context so compliance evidence can be
-    // gathered across the full PR, then merged into one checklist.
-    const results: ReviewResult[] = [];
-    for (const group of groups) {
-      const { compressed: groupDiff } = compressDiff(group, maxTokens);
-      const result = await runReview(config, groupDiff, prMetadata, ticketContext, resolvedOptions);
-      results.push(result);
-    }
-
-    return mergeResults(results, results[0]?.modelUsed ?? "unknown");
+    // run judge/filter pass on merged findings
+    const judgeConfig = resolveJudgeConfig();
+    const fullDiff = compressDiff(patches, Infinity).compressed;
+    return await judgeReviewResult(result, fullDiff, judgeConfig);
   } finally {
     if (mcpDisconnect) {
       try {
