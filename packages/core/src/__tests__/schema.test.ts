@@ -67,10 +67,10 @@ describe("SkimReviewOutputSchema strict mode compatibility", () => {
     expect(violations, violations.join("\n")).toEqual([]);
   });
 
-  it("does not include suggestedFix in findings", () => {
+  it("includes suggestedFix in findings", () => {
     const jsonSchema = z.toJSONSchema(SkimReviewOutputSchema) as JsonSchemaObject;
     const findingsItems = jsonSchema.properties?.findings?.items;
-    expect(findingsItems?.properties).not.toHaveProperty("suggestedFix");
+    expect(findingsItems?.properties).toHaveProperty("suggestedFix");
   });
 });
 
