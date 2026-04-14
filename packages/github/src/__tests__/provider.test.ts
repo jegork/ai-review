@@ -166,6 +166,7 @@ describe("GitHubProvider", () => {
         {
           file: "src/index.ts",
           line: 10,
+          endLine: null,
           severity: "critical",
           category: "security",
           message: "SQL injection risk",
@@ -174,6 +175,7 @@ describe("GitHubProvider", () => {
         {
           file: "src/utils.ts",
           line: 25,
+          endLine: null,
           severity: "suggestion",
           category: "style",
           message: "prefer const",

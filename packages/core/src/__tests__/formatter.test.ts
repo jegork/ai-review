@@ -21,6 +21,7 @@ function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {
     file: "src/index.ts",
     line: 10,
+    endLine: null,
     severity: "warning",
     category: "bugs",
     message: "Possible null dereference",

@@ -182,6 +182,7 @@ describe("AzureDevOpsProvider", () => {
         {
           file: "src/index.ts",
           line: 10,
+          endLine: null,
           severity: "critical",
           category: "security",
           message: "SQL injection risk",
@@ -190,6 +191,7 @@ describe("AzureDevOpsProvider", () => {
         {
           file: "src/utils.ts",
           line: 25,
+          endLine: null,
           severity: "suggestion",
           category: "style",
           message: "prefer const",
@@ -226,6 +228,7 @@ describe("AzureDevOpsProvider", () => {
         {
           file: "deep/nested/file.ts",
           line: 1,
+          endLine: null,
           severity: "warning",
           category: "bugs",
           message: "bug",

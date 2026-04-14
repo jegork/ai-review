@@ -15,7 +15,7 @@ export type TicketComplianceStatus =
 export interface Finding {
   file: string;
   line: number;
-  endLine?: number;
+  endLine: number | null;
   severity: Severity;
   category: FocusArea;
   message: string;
