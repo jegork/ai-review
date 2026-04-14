@@ -1,40 +1,19 @@
+export type {
+  Severity,
+  FocusArea,
+  Recommendation,
+  TicketComplianceStatus,
+  Finding,
+  Observation,
+  TicketComplianceItem,
+  ReviewOutput,
+} from "./agent/schema.js";
+
+import type { Finding, Observation, FocusArea, ReviewOutput } from "./agent/schema.js";
+
 export type ReviewStyle = "strict" | "balanced" | "lenient" | "roast";
 
-export type FocusArea = "security" | "performance" | "bugs" | "style" | "tests" | "docs";
-
-export type Severity = "critical" | "warning" | "suggestion";
-
-export type Recommendation = "looks_good" | "address_before_merge" | "critical_issues";
-
 export type TriageClassification = "skip" | "skim" | "deep-review";
-
-export type TicketComplianceStatus =
-  | "addressed"
-  | "partially_addressed"
-  | "not_addressed"
-  | "unclear";
-
-export interface Finding {
-  file: string;
-  line: number;
-  endLine: number | null;
-  severity: Severity;
-  category: FocusArea;
-  message: string;
-  suggestedFix: string | null;
-  /** number of consensus passes that flagged this finding */
-  voteCount?: number;
-}
-
-export interface Observation {
-  file: string;
-  line: number;
-  severity: Severity;
-  category: FocusArea;
-  message: string;
-  /** number of consensus passes that flagged this observation */
-  voteCount?: number;
-}
 
 export interface TriageFileResult {
   path: string;
@@ -56,13 +35,9 @@ export interface TriageStats {
   triageTokenCount: number;
 }
 
-export interface ReviewResult {
-  summary: string;
-  recommendation: Recommendation;
+export interface ReviewResult extends ReviewOutput {
   findings: Finding[];
   observations: Observation[];
-  ticketCompliance: TicketComplianceItem[];
-  filesReviewed: string[];
   modelUsed: string;
   tokenCount: number;
   triageStats?: TriageStats;
@@ -115,13 +90,6 @@ export interface TicketInfo {
   acceptanceCriteria?: string;
   labels: string[];
   source: string;
-}
-
-export interface TicketComplianceItem {
-  ticketId?: string | null;
-  requirement: string;
-  status: TicketComplianceStatus;
-  evidence?: string | null;
 }
 
 export interface TicketResolutionStatus {

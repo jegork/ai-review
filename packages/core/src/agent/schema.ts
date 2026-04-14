@@ -1,5 +1,33 @@
 import { z } from "zod";
 
+export const SeveritySchema = z.enum(["critical", "warning", "suggestion"]);
+export type Severity = z.infer<typeof SeveritySchema>;
+
+export const FocusAreaSchema = z.enum([
+  "security",
+  "performance",
+  "bugs",
+  "style",
+  "tests",
+  "docs",
+]);
+export type FocusArea = z.infer<typeof FocusAreaSchema>;
+
+export const RecommendationSchema = z.enum([
+  "looks_good",
+  "address_before_merge",
+  "critical_issues",
+]);
+export type Recommendation = z.infer<typeof RecommendationSchema>;
+
+export const TicketComplianceStatusSchema = z.enum([
+  "addressed",
+  "partially_addressed",
+  "not_addressed",
+  "unclear",
+]);
+export type TicketComplianceStatus = z.infer<typeof TicketComplianceStatusSchema>;
+
 export const FindingSchema = z.object({
   file: z.string(),
   line: z.number(),
@@ -9,8 +37,8 @@ export const FindingSchema = z.object({
     .describe(
       "last line of the range when the fix spans multiple lines; null for single-line fixes",
     ),
-  severity: z.enum(["critical", "warning", "suggestion"]),
-  category: z.enum(["security", "performance", "bugs", "style", "tests", "docs"]),
+  severity: SeveritySchema,
+  category: FocusAreaSchema,
   message: z.string(),
   suggestedFix: z
     .string()
@@ -19,6 +47,11 @@ export const FindingSchema = z.object({
       "exact replacement code for the line(s) from `line` to `endLine` — raw code only, no markdown fences, no extra context lines; null when no localized fix is possible",
     ),
 });
+
+// extends LLM output with consensus pipeline metadata
+export type Finding = z.infer<typeof FindingSchema> & {
+  voteCount?: number;
+};
 
 export const SkimFindingSchema = z.object({
   file: z.string(),
@@ -29,18 +62,23 @@ export const SkimFindingSchema = z.object({
     .describe(
       "last line of the range when the issue spans multiple lines; null for single-line issues",
     ),
-  severity: z.enum(["critical", "warning", "suggestion"]),
-  category: z.enum(["security", "performance", "bugs", "style", "tests", "docs"]),
+  severity: SeveritySchema,
+  category: FocusAreaSchema,
   message: z.string(),
 });
 
 export const ObservationSchema = z.object({
   file: z.string(),
   line: z.number(),
-  severity: z.enum(["critical", "warning", "suggestion"]),
-  category: z.enum(["security", "performance", "bugs", "style", "tests", "docs"]),
+  severity: SeveritySchema,
+  category: FocusAreaSchema,
   message: z.string(),
 });
+
+// extends LLM output with consensus pipeline metadata
+export type Observation = z.infer<typeof ObservationSchema> & {
+  voteCount?: number;
+};
 
 export const TicketComplianceSchema = z.object({
   ticketId: z
@@ -48,20 +86,18 @@ export const TicketComplianceSchema = z.object({
     .nullable()
     .describe("linked ticket identifier when available, otherwise null"),
   requirement: z.string().describe("single ticket requirement or acceptance criterion"),
-  status: z
-    .enum(["addressed", "partially_addressed", "not_addressed", "unclear"])
-    .describe("whether the diff addresses the requirement"),
+  status: TicketComplianceStatusSchema.describe("whether the diff addresses the requirement"),
   evidence: z
     .string()
     .nullable()
     .describe("brief evidence from the diff supporting the compliance status, otherwise null"),
 });
 
+export type TicketComplianceItem = z.infer<typeof TicketComplianceSchema>;
+
 export const ReviewOutputSchema = z.object({
   summary: z.string().describe("concise summary of the PR and overall assessment"),
-  recommendation: z
-    .enum(["looks_good", "address_before_merge", "critical_issues"])
-    .describe("merge recommendation based on findings"),
+  recommendation: RecommendationSchema.describe("merge recommendation based on findings"),
   findings: z
     .array(FindingSchema)
     .describe("issues found in the changed code, tied to specific lines in the diff"),
@@ -76,11 +112,11 @@ export const ReviewOutputSchema = z.object({
   filesReviewed: z.array(z.string()).describe("list of file paths that were reviewed"),
 });
 
+export type ReviewOutput = z.infer<typeof ReviewOutputSchema>;
+
 export const SkimReviewOutputSchema = z.object({
   summary: z.string().describe("concise summary of the PR and overall assessment"),
-  recommendation: z
-    .enum(["looks_good", "address_before_merge", "critical_issues"])
-    .describe("merge recommendation based on findings"),
+  recommendation: RecommendationSchema.describe("merge recommendation based on findings"),
   findings: z
     .array(SkimFindingSchema)
     .describe("issues found in the changed code, tied to specific lines in the diff"),
