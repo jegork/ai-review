@@ -9,7 +9,14 @@ import type {
   Observation,
 } from "../types.js";
 import { runReview, type RunReviewOptions } from "./review.js";
+import type { McpServerConfig } from "../mcp/types.js";
 import { connectMcpServers } from "../mcp/client.js";
+
+export interface MultiCallReviewOptions extends RunReviewOptions {
+  /** MCP servers to connect to for additional tools. */
+  mcpServers?: McpServerConfig;
+  maxTokens?: number;
+}
 
 const DEFAULT_MAX_TOKENS = 60_000;
 
@@ -92,19 +99,22 @@ export async function runMultiCallReview(
   config: ReviewConfig,
   prMetadata: PRMetadata,
   ticketContext?: TicketInfo[],
-  options?: RunReviewOptions & { maxTokens?: number },
+  options?: MultiCallReviewOptions,
 ): Promise<ReviewResult> {
-  const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS;
+  const { mcpServers, maxTokens: maxTokensOpt, ...reviewOptions } = options ?? {};
+  const maxTokens = maxTokensOpt ?? DEFAULT_MAX_TOKENS;
 
   // connect to MCP servers once for the entire review
   let mcpDisconnect: (() => Promise<void>) | undefined;
-  let resolvedOptions = options;
+  let resolvedOptions: RunReviewOptions = reviewOptions;
 
-  if (options?.mcpServers && Object.keys(options.mcpServers).length > 0) {
-    const mcp = await connectMcpServers(options.mcpServers);
+  if (mcpServers && Object.keys(mcpServers).length > 0) {
+    const mcp = await connectMcpServers(mcpServers);
     mcpDisconnect = mcp.disconnect;
-    // pass pre-resolved tools instead of server configs so runReview doesn't reconnect
-    resolvedOptions = { ...options, mcpServers: undefined, mcpTools: mcp.tools };
+    resolvedOptions = {
+      ...reviewOptions,
+      extraTools: { ...reviewOptions.extraTools, ...mcp.tools },
+    };
   }
 
   try {

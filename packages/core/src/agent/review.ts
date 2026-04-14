@@ -5,15 +5,12 @@ import { buildSystemPrompt, buildUserMessage } from "./prompts.js";
 import { resolveModelConfig, resolveModel, getModelDisplayName } from "./model.js";
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
 import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
-import type { McpServerConfig } from "../mcp/types.js";
 
 export interface RunReviewOptions {
   provider?: GitProvider;
   sourceRef?: string;
-  /** MCP servers to connect to for additional tools. */
-  mcpServers?: McpServerConfig;
-  /** Pre-resolved MCP tools (used internally by runMultiCallReview to avoid reconnecting per group). */
-  mcpTools?: ToolsInput;
+  /** Additional tools to provide to the review agent (e.g. from MCP servers). */
+  extraTools?: ToolsInput;
   languageSummary?: string;
 }
 
@@ -42,7 +39,7 @@ export async function runReview(
   const modelName = getModelDisplayName(modelConfig);
 
   const builtInTools = buildTools(options);
-  const extraTools = options?.mcpTools ?? {};
+  const extraTools = options?.extraTools ?? {};
 
   const agent = new Agent({
     id: "review-agent",
