@@ -32,6 +32,10 @@ export interface ReviewResult {
   filesReviewed: string[];
   modelUsed: string;
   tokenCount: number;
+  /** number of findings removed by the judge pass */
+  filteredCount?: number;
+  /** tokens consumed by the judge pass */
+  judgeTokenCount?: number;
 }
 
 export interface ReviewConfig {
