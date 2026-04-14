@@ -381,4 +381,39 @@ describe("filterObservationsForPrFiles", () => {
     const filtered = filterObservationsForPrFiles(observations, prFiles);
     expect(filtered).toHaveLength(1);
   });
+
+  it("matches observation with leading ./ against PR file without it", () => {
+    const observations = [makeObservation("./src/a.ts")];
+    const prFiles = new Set(["src/a.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("matches observation with trailing line number against PR file", () => {
+    const observations = [makeObservation("src/a.ts:42")];
+    const prFiles = new Set(["src/a.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("matches observation with trailing line:col against PR file", () => {
+    const observations = [makeObservation("src/a.ts:42:10")];
+    const prFiles = new Set(["src/a.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("matches observation with backslash separators against PR file", () => {
+    const observations = [makeObservation("src\\utils\\a.ts")];
+    const prFiles = new Set(["src/utils/a.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(0);
+  });
+
+  it("handles mixed normalization between observation and PR files", () => {
+    const observations = [makeObservation("./src\\config.ts:15")];
+    const prFiles = new Set(["src/config.ts"]);
+    const filtered = filterObservationsForPrFiles(observations, prFiles);
+    expect(filtered).toHaveLength(0);
+  });
 });

@@ -75,11 +75,19 @@ function estimateTicketContextTokens(ticketContext?: TicketInfo[]): number {
   return countTokens(serialized);
 }
 
+function normalizePath(file: string): string {
+  return file
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/:\d+(?::\d+)?$/, "");
+}
+
 export function filterObservationsForPrFiles(
   observations: Observation[],
   prFiles: Set<string>,
 ): Observation[] {
-  return observations.filter((o) => !prFiles.has(o.file));
+  const normalizedPrFiles = new Set(Array.from(prFiles, normalizePath));
+  return observations.filter((o) => !normalizedPrFiles.has(normalizePath(o.file)));
 }
 
 function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult {
