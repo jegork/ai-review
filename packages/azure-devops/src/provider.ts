@@ -165,22 +165,24 @@ export class AzureDevOpsProvider implements GitProvider {
     const patches: FilePatch[] = [];
 
     for (const entry of changes.changeEntries) {
-      if (entry.item.path === null) continue;
+      if (!entry.item?.path) continue;
       if (entry.item.gitObjectType === "tree") continue;
 
       const filePath = entry.item.path.replace(/^\//, "");
 
-      if (entry.changeType === "delete") {
-        continue;
-      }
+      const isDelete = entry.changeType.includes("delete");
+      const isSourceRename = entry.changeType.includes("sourceRename");
+      if (isDelete || isSourceRename) continue;
+
+      const isAdd = entry.changeType.includes("add");
+      const isRename = entry.changeType.includes("rename");
+      const oldPath =
+        isRename && entry.originalPath ? entry.originalPath.replace(/^\//, "") : filePath;
 
       try {
-        // fetch both versions of the file and build a diff
         const [newContent, oldContent] = await Promise.all([
           this.getFileContentByVersion(filePath, sourceRef),
-          entry.changeType === "add"
-            ? Promise.resolve(null)
-            : this.getFileContentByVersion(filePath, targetRef),
+          isAdd ? Promise.resolve(null) : this.getFileContentByVersion(oldPath, targetRef),
         ]);
 
         if (newContent !== null) {

@@ -1,0 +1,17 @@
+{
+  "docs": {
+    "command": "npx",
+    "args": ["-y", "@my/mcp-docs-server"]
+  },
+  "sentry": {
+    "url": "https://mcp.sentry.io/sse",
+    "requestInit": {
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN"
+      }
+    }
+  },
+  "internal-api": {
+    "url": "https://mcp.internal.example.com/mcp"
+  }
+}

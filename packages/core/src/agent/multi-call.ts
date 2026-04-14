@@ -11,6 +11,15 @@ import type {
   TicketComplianceStatus,
 } from "../types.js";
 import { runReview, type RunReviewOptions } from "./review.js";
+import type { McpServerConfig } from "../mcp/types.js";
+import { connectMcpServers } from "../mcp/client.js";
+import { logger } from "../logger.js";
+
+export interface MultiCallReviewOptions extends RunReviewOptions {
+  /** MCP servers to connect to for additional tools. */
+  mcpServers?: McpServerConfig;
+  maxTokens?: number;
+}
 
 const DEFAULT_MAX_TOKENS = 60_000;
 const TICKET_COMPLIANCE_PRIORITY: Record<TicketComplianceStatus, number> = {
@@ -149,28 +158,56 @@ export async function runMultiCallReview(
   config: ReviewConfig,
   prMetadata: PRMetadata,
   ticketContext?: TicketInfo[],
-  options?: RunReviewOptions & { maxTokens?: number },
+  options?: MultiCallReviewOptions,
 ): Promise<ReviewResult> {
-  const maxTokens = options?.maxTokens ?? DEFAULT_MAX_TOKENS;
+  const { mcpServers, maxTokens: maxTokensOpt, ...reviewOptions } = options ?? {};
+  const maxTokens = maxTokensOpt ?? DEFAULT_MAX_TOKENS;
 
-  const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
+  // connect to MCP servers once for the entire review
+  let mcpDisconnect: (() => Promise<void>) | undefined;
+  let resolvedOptions: RunReviewOptions = reviewOptions;
 
-  // if everything fits in one call, use the simple path
-  if (skippedFiles.length === 0) {
-    return runReview(config, compressed, prMetadata, ticketContext, options);
+  if (mcpServers && Object.keys(mcpServers).length > 0) {
+    try {
+      const mcp = await connectMcpServers(mcpServers);
+      mcpDisconnect = mcp.disconnect;
+      resolvedOptions = {
+        ...reviewOptions,
+        extraTools: { ...reviewOptions.extraTools, ...mcp.tools },
+      };
+    } catch (err) {
+      logger.warn({ err }, "failed to connect MCP servers; continuing without MCP tools");
+    }
   }
 
-  // split into groups that each fit within the token budget
-  const groups = splitIntoGroups(patches, maxTokens);
+  try {
+    const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
 
-  // Each chunk needs the same ticket context so compliance evidence can be gathered
-  // across the full PR, then merged into one checklist.
-  const results: ReviewResult[] = [];
-  for (const group of groups) {
-    const { compressed: groupDiff } = compressDiff(group, maxTokens);
-    const result = await runReview(config, groupDiff, prMetadata, ticketContext, options);
-    results.push(result);
+    // if everything fits in one call, use the simple path
+    if (skippedFiles.length === 0) {
+      return await runReview(config, compressed, prMetadata, ticketContext, resolvedOptions);
+    }
+
+    // split into groups that each fit within the token budget
+    const groups = splitIntoGroups(patches, maxTokens);
+
+    // Each chunk needs the same ticket context so compliance evidence can be
+    // gathered across the full PR, then merged into one checklist.
+    const results: ReviewResult[] = [];
+    for (const group of groups) {
+      const { compressed: groupDiff } = compressDiff(group, maxTokens);
+      const result = await runReview(config, groupDiff, prMetadata, ticketContext, resolvedOptions);
+      results.push(result);
+    }
+
+    return mergeResults(results, results[0]?.modelUsed ?? "unknown");
+  } finally {
+    if (mcpDisconnect) {
+      try {
+        await mcpDisconnect();
+      } catch (err) {
+        logger.warn({ err }, "MCP disconnect error");
+      }
+    }
   }
-
-  return mergeResults(results, results[0]?.modelUsed ?? "unknown");
 }

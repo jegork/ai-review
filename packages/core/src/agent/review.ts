@@ -9,6 +9,8 @@ import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
 export interface RunReviewOptions {
   provider?: GitProvider;
   sourceRef?: string;
+  /** Additional tools to provide to the review agent (e.g. from MCP servers). */
+  extraTools?: ToolsInput;
   languageSummary?: string;
 }
 
@@ -36,12 +38,17 @@ export async function runReview(
   const model = resolveModel(modelConfig);
   const modelName = getModelDisplayName(modelConfig);
 
+  const builtInTools = buildTools(options);
+  const extraTools = options?.extraTools ?? {};
+
   const agent = new Agent({
     id: "review-agent",
     name: "Rusty Bot Reviewer",
     instructions: systemPrompt,
     model,
-    tools: buildTools(options),
+    // MCPClient.listTools() namespaces tools as serverName_toolName,
+    // so collisions with built-in tool names are unlikely in practice.
+    tools: { ...builtInTools, ...extraTools },
   });
 
   const response = await agent.generate(userMessage, {

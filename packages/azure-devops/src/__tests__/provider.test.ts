@@ -321,6 +321,30 @@ describe("AzureDevOpsProvider", () => {
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     });
+
+    it("handles threads with missing status field", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          value: [
+            {
+              id: 1,
+              comments: [{ id: 1, content: "<!-- rusty-bot-review -->\nold" }],
+            },
+            { id: 2, comments: [{ id: 2, content: "system thread" }] },
+          ],
+        }),
+      );
+
+      fetchSpy.mockResolvedValue(mockFetchResponse({}));
+
+      await provider.deleteExistingBotComments();
+
+      const patchCalls = fetchSpy.mock.calls.filter(
+        (args: unknown[]) => (args[1] as RequestInit)?.method === "PATCH",
+      );
+      expect(patchCalls).toHaveLength(1);
+      expect(patchCalls[0][0]).toContain("/threads/1?");
+    });
   });
 
   describe("getDiff", () => {
@@ -376,6 +400,77 @@ describe("AzureDevOpsProvider", () => {
 
       const patches = await provider.getDiff();
       expect(patches).toEqual([]);
+    });
+
+    it("skips entries where item itself is null", async () => {
+      mockPRAndIterations();
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            { changeType: "sourceRename", item: null },
+            { changeType: "edit", item: { path: "/src/valid.ts", gitObjectType: "blob" } },
+          ],
+        }),
+      );
+
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse("new", true));
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse("old", true));
+
+      const patches = await provider.getDiff();
+      expect(patches).toHaveLength(1);
+      expect(patches[0].path).toBe("src/valid.ts");
+    });
+
+    it("skips sourceRename entries", async () => {
+      mockPRAndIterations();
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            { changeType: "sourceRename", item: { path: "/old/name.ts", gitObjectType: "blob" } },
+            {
+              changeType: "rename",
+              item: { path: "/new/name.ts", gitObjectType: "blob" },
+              originalPath: "/old/name.ts",
+            },
+          ],
+        }),
+      );
+
+      // rename entry fetches: new content at new path, old content at original path
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse("renamed content", true));
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse("original content", true));
+
+      const patches = await provider.getDiff();
+      expect(patches).toHaveLength(1);
+      expect(patches[0].path).toBe("new/name.ts");
+    });
+
+    it("fetches old content from originalPath for renames", async () => {
+      mockPRAndIterations();
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            {
+              changeType: "rename, edit",
+              item: { path: "/src/renamed.ts", gitObjectType: "blob" },
+              originalPath: "/src/original.ts",
+            },
+          ],
+        }),
+      );
+
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse("new code", true));
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse("old code", true));
+
+      await provider.getDiff();
+
+      // 3rd fetch = changes, 4th = new content at new path, 5th = old content at original path
+      const oldContentUrl = decodeURIComponent(fetchSpy.mock.calls[4][0] as string);
+      expect(oldContentUrl).toContain("src/original.ts");
+      expect(oldContentUrl).not.toContain("src/renamed.ts");
     });
   });
 
