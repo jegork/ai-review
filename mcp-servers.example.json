@@ -1,0 +1,21 @@
+[
+  {
+    "name": "docs",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@my/mcp-docs-server"]
+  },
+  {
+    "name": "sentry",
+    "transport": "sse",
+    "url": "https://mcp.sentry.io/sse",
+    "headers": {
+      "Authorization": "Bearer YOUR_TOKEN"
+    }
+  },
+  {
+    "name": "internal-api",
+    "transport": "streamable-http",
+    "url": "https://mcp.internal.example.com/mcp"
+  }
+]

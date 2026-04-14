@@ -1,4 +1,5 @@
-import type { FocusArea, ReviewConfig, ReviewStyle, McpServerConfig } from "@rusty-bot/core";
+import { join } from "node:path";
+import type { FocusArea, ReviewConfig, ReviewStyle } from "@rusty-bot/core";
 import {
   filterFiles,
   stripDeletionOnlyHunks,
@@ -9,7 +10,7 @@ import {
   AzureDevOpsTicketProvider,
   runReview,
   formatSummaryComment,
-  parseMcpServersEnv,
+  loadMcpServerConfigs,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
@@ -111,14 +112,8 @@ async function main(): Promise<void> {
 
   const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
-  let mcpServers: McpServerConfig[] = [];
-  if (process.env.RUSTY_MCP_SERVERS) {
-    try {
-      mcpServers = parseMcpServersEnv(process.env.RUSTY_MCP_SERVERS);
-    } catch (err) {
-      log(`Warning: failed to parse RUSTY_MCP_SERVERS: ${err}`);
-    }
-  }
+  const mcpConfigPath = process.env.RUSTY_MCP_CONFIG ?? join(process.cwd(), "mcp-servers.json");
+  const mcpServers = await loadMcpServerConfigs(mcpConfigPath);
 
   // parseDiff expects a raw unified diff string; compressed is already
   // the formatted diff text from compressDiff, so pass it to the agent directly

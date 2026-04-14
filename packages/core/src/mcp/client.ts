@@ -4,6 +4,7 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { readFile } from "node:fs/promises";
 import type { ToolsInput } from "@mastra/core/agent";
 import type { McpServerConfig } from "./types.js";
 
@@ -166,22 +167,9 @@ export async function connectMcpServers(
   return { tools, disconnect };
 }
 
-/**
- * Parses MCP server configurations from a JSON string.
- * Expected format: array of McpServerConfig objects.
- *
- * @example
- * ```json
- * [
- *   { "name": "docs", "transport": "stdio", "command": "npx", "args": ["-y", "@my/mcp-docs-server"] },
- *   { "name": "sentry", "transport": "sse", "url": "https://mcp.sentry.io/sse" }
- * ]
- * ```
- */
-export function parseMcpServersEnv(json: string): McpServerConfig[] {
-  const parsed = JSON.parse(json);
+function validateConfigs(parsed: unknown): McpServerConfig[] {
   if (!Array.isArray(parsed)) {
-    throw new Error("RUSTY_MCP_SERVERS must be a JSON array");
+    throw new Error("MCP servers config must be a JSON array");
   }
 
   for (const entry of parsed) {
@@ -202,4 +190,30 @@ export function parseMcpServersEnv(json: string): McpServerConfig[] {
   }
 
   return parsed as McpServerConfig[];
+}
+
+/**
+ * Loads MCP server configurations from a JSON file.
+ * Returns an empty array if the file does not exist.
+ *
+ * The file should contain a JSON array of server configs:
+ * ```json
+ * [
+ *   { "name": "docs", "transport": "stdio", "command": "npx", "args": ["-y", "@my/mcp-docs-server"] },
+ *   { "name": "sentry", "transport": "sse", "url": "https://mcp.sentry.io/sse" }
+ * ]
+ * ```
+ */
+export async function loadMcpServerConfigs(filePath: string): Promise<McpServerConfig[]> {
+  let raw: string;
+  try {
+    raw = await readFile(filePath, "utf-8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw err;
+  }
+
+  return validateConfigs(JSON.parse(raw));
 }

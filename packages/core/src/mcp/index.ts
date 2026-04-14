@@ -4,4 +4,4 @@ export type {
   McpSseServerConfig,
   McpStreamableHttpServerConfig,
 } from "./types.js";
-export { connectMcpServers, parseMcpServersEnv } from "./client.js";
+export { connectMcpServers, loadMcpServerConfigs } from "./client.js";

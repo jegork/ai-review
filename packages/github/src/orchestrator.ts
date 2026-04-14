@@ -1,5 +1,6 @@
+import { join } from "node:path";
 import type { Octokit } from "octokit";
-import type { FocusArea, TicketProvider, McpServerConfig } from "@rusty-bot/core";
+import type { FocusArea, TicketProvider } from "@rusty-bot/core";
 import {
   parseDiff,
   filterFiles,
@@ -13,7 +14,7 @@ import {
   GitHubTicketProvider,
   JiraTicketProvider,
   LinearTicketProvider,
-  parseMcpServersEnv,
+  loadMcpServerConfigs,
 } from "@rusty-bot/core";
 import { GitHubProvider } from "./provider.js";
 import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./storage.js";
@@ -21,30 +22,7 @@ import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./stor
 const MAX_DIFF_TOKENS = 60_000;
 const ALL_FOCUS_AREAS: FocusArea[] = ["security", "performance", "bugs", "style", "tests", "docs"];
 
-async function loadMcpServers(): Promise<McpServerConfig[]> {
-  // Environment variable takes priority, then fall back to stored setting
-  const envJson = process.env.RUSTY_MCP_SERVERS;
-  if (envJson) {
-    try {
-      return parseMcpServersEnv(envJson);
-    } catch (err) {
-      console.error("[mcp] failed to parse RUSTY_MCP_SERVERS env:", err);
-      return [];
-    }
-  }
-
-  const settingJson = await getSetting("mcp_servers");
-  if (settingJson) {
-    try {
-      return parseMcpServersEnv(settingJson);
-    } catch (err) {
-      console.error("[mcp] failed to parse mcp_servers setting:", err);
-      return [];
-    }
-  }
-
-  return [];
-}
+const MCP_CONFIG_PATH = process.env.RUSTY_MCP_CONFIG ?? join(process.cwd(), "mcp-servers.json");
 
 async function buildTicketProviders(
   owner: string,
@@ -114,7 +92,7 @@ export async function orchestrateReview(params: {
     const ticketProviders = await buildTicketProviders(owner, repo);
     const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
-    const mcpServers = await loadMcpServers();
+    const mcpServers = await loadMcpServerConfigs(MCP_CONFIG_PATH);
 
     const result = await runReview(config, compressed, metadata, tickets, {
       provider,
