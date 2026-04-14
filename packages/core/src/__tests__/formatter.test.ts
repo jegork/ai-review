@@ -211,8 +211,7 @@ describe("formatInlineComment", () => {
 
     expect(result).toContain("**CRITICAL** (security)");
     expect(result).toContain("Unsanitized user input");
-    expect(result).toContain("**Suggested fix:**");
-    expect(result).toContain("const safe = sanitize(input);");
+    expect(result).toContain("```suggestion\nconst safe = sanitize(input);\n```");
   });
 
   it("renders an inline comment without suggested fix", () => {
@@ -226,7 +225,7 @@ describe("formatInlineComment", () => {
 
     expect(result).toContain("**SUGGESTION** (style)");
     expect(result).toContain("Consider using const instead of let");
-    expect(result).not.toContain("**Suggested fix:**");
+    expect(result).not.toContain("```suggestion");
   });
 
   it("renders warning severity correctly", () => {
@@ -249,7 +248,29 @@ describe("formatInlineComment", () => {
 
     const result = formatInlineComment(finding);
 
+    expect(result).toContain("```suggestion\nconst a = 1;\nconst b = 2;\nreturn a + b;\n```");
+  });
+
+  it("falls back to plain code block when suggestedFix contains prose", () => {
+    const finding = makeFinding({
+      suggestedFix:
+        "Derive the query-data type from the actual query. For example: setQueriesData<FolderContents>({...}) where FolderContents matches the real cache shape.",
+    });
+
+    const result = formatInlineComment(finding);
+
+    expect(result).not.toContain("```suggestion");
     expect(result).toContain("**Suggested fix:**");
-    expect(result).toContain("const a = 1;\nconst b = 2;\nreturn a + b;");
+    expect(result).toContain("```\nDerive the query-data type");
+  });
+
+  it("uses suggestion block for code even with short comments in it", () => {
+    const finding = makeFinding({
+      suggestedFix: "// use parameterized queries\nconst result = db.query(sql, [param]);",
+    });
+
+    const result = formatInlineComment(finding);
+
+    expect(result).toContain("```suggestion");
   });
 });

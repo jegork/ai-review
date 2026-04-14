@@ -190,12 +190,19 @@ export class GitHubProvider implements GitProvider {
   async postInlineComments(findings: Finding[]): Promise<void> {
     if (findings.length === 0) return;
 
-    const comments = findings.map((finding) => ({
-      path: finding.file,
-      line: finding.line,
-      side: "RIGHT" as const,
-      body: formatInlineComment(finding),
-    }));
+    const comments = findings.map((finding) => {
+      const isMultiLine = finding.endLine && finding.endLine !== finding.line;
+      return {
+        path: finding.file,
+        line: finding.endLine ?? finding.line,
+        side: "RIGHT" as const,
+        body: formatInlineComment(finding),
+        ...(isMultiLine && {
+          start_line: finding.line,
+          start_side: "RIGHT" as const,
+        }),
+      };
+    });
 
     await this.octokit.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews", {
       owner: this.owner,

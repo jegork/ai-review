@@ -9,6 +9,7 @@ export type Recommendation = "looks_good" | "address_before_merge" | "critical_i
 export interface Finding {
   file: string;
   line: number;
+  endLine?: number;
   severity: Severity;
   category: FocusArea;
   message: string;
