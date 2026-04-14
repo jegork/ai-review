@@ -32,7 +32,6 @@ export const TicketComplianceSchema = z.object({
   ticketId: z
     .string()
     .nullable()
-    .nullable()
     .describe("linked ticket identifier when available, otherwise null"),
   requirement: z.string().describe("single ticket requirement or acceptance criterion"),
   status: z
@@ -40,7 +39,6 @@ export const TicketComplianceSchema = z.object({
     .describe("whether the diff addresses the requirement"),
   evidence: z
     .string()
-    .nullable()
     .nullable()
     .describe("brief evidence from the diff supporting the compliance status, otherwise null"),
 });
