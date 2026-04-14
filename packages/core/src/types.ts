@@ -6,6 +6,8 @@ export type Severity = "critical" | "warning" | "suggestion";
 
 export type Recommendation = "looks_good" | "address_before_merge" | "critical_issues";
 
+export type TriageClassification = "skip" | "skim" | "deep-review";
+
 export interface Finding {
   file: string;
   line: number;
@@ -24,6 +26,26 @@ export interface Observation {
   message: string;
 }
 
+export interface TriageFileResult {
+  path: string;
+  classification: TriageClassification;
+  reason: string;
+}
+
+export interface TriageResult {
+  files: TriageFileResult[];
+  modelUsed: string;
+  tokenCount: number;
+}
+
+export interface TriageStats {
+  filesSkipped: number;
+  filesSkimmed: number;
+  filesDeepReviewed: number;
+  triageModelUsed: string;
+  triageTokenCount: number;
+}
+
 export interface ReviewResult {
   summary: string;
   recommendation: Recommendation;
@@ -32,6 +54,7 @@ export interface ReviewResult {
   filesReviewed: string[];
   modelUsed: string;
   tokenCount: number;
+  triageStats?: TriageStats;
 }
 
 export interface ReviewConfig {

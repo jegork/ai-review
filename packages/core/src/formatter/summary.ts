@@ -1,4 +1,4 @@
-import type { ReviewResult, Severity, Finding, Observation } from "../types.js";
+import type { ReviewResult, Severity, Finding, Observation, TriageStats } from "../types.js";
 
 const SEVERITY_ORDER: Severity[] = ["critical", "warning", "suggestion"];
 
@@ -31,6 +31,24 @@ function countBySeverity(findings: Finding[]): Record<Severity, number> {
   return counts;
 }
 
+function buildTriageSection(stats: TriageStats): string {
+  const lines: string[] = [];
+  lines.push("<details>");
+  lines.push("<summary>Triage Summary</summary>");
+  lines.push("");
+  lines.push("| Classification | Files |");
+  lines.push("|----------------|-------|");
+  lines.push(`| Skipped | ${stats.filesSkipped} |`);
+  lines.push(`| Skimmed | ${stats.filesSkimmed} |`);
+  lines.push(`| Deep Reviewed | ${stats.filesDeepReviewed} |`);
+  lines.push("");
+  lines.push(`Triage model: \`${stats.triageModelUsed}\` · ${stats.triageTokenCount} tokens`);
+  lines.push("");
+  lines.push("</details>");
+  lines.push("");
+  return lines.join("\n");
+}
+
 export function formatSummaryComment(review: ReviewResult): string {
   const counts = countBySeverity(review.findings);
   const totalIssues = review.findings.length;
@@ -45,6 +63,10 @@ export function formatSummaryComment(review: ReviewResult): string {
     `**Status:** ${totalIssues} Issues Found | **Recommendation:** ${RECOMMENDATION_TEXT[review.recommendation]}`,
   );
   lines.push("");
+
+  if (review.triageStats) {
+    lines.push(buildTriageSection(review.triageStats));
+  }
 
   lines.push("## Overview");
   lines.push("");

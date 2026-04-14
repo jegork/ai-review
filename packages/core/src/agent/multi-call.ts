@@ -8,13 +8,12 @@ import type {
   Finding,
   Observation,
 } from "../types.js";
-import { runReview, type RunReviewOptions } from "./review.js";
+import { runReview, type RunReviewOptions, type ReviewTier } from "./review.js";
 import type { McpServerConfig } from "../mcp/types.js";
 import { connectMcpServers } from "../mcp/client.js";
 import { logger } from "../logger.js";
 
 export interface MultiCallReviewOptions extends RunReviewOptions {
-  /** MCP servers to connect to for additional tools. */
   mcpServers?: McpServerConfig;
   maxTokens?: number;
 }
@@ -47,7 +46,7 @@ function splitIntoGroups(patches: FilePatch[], maxTokensPerGroup: number): FileP
   return groups;
 }
 
-function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult {
+export function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult {
   const allFindings: Finding[] = [];
   const allObservations: Observation[] = [];
   const allFiles = new Set<string>();
@@ -84,6 +83,9 @@ function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult 
       ? summaries[0]
       : `Reviewed in ${results.length} passes.\n\n${summaries.join("\n\n")}`;
 
+  // preserve triageStats from any result that has it
+  const triageStats = results.find((r) => r.triageStats)?.triageStats;
+
   return {
     summary,
     recommendation,
@@ -92,7 +94,39 @@ function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult 
     filesReviewed: [...allFiles],
     modelUsed,
     tokenCount: totalTokens,
+    ...(triageStats ? { triageStats } : {}),
   };
+}
+
+async function runTieredReview(
+  patches: FilePatch[],
+  config: ReviewConfig,
+  prMetadata: PRMetadata,
+  ticketContext: TicketInfo[] | undefined,
+  resolvedOptions: RunReviewOptions,
+  maxTokens: number,
+  tier: ReviewTier,
+): Promise<ReviewResult[]> {
+  if (patches.length === 0) return [];
+
+  const tierOptions: RunReviewOptions = { ...resolvedOptions, tier };
+  const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
+
+  if (skippedFiles.length === 0) {
+    const result = await runReview(config, compressed, prMetadata, ticketContext, tierOptions);
+    return [result];
+  }
+
+  const groups = splitIntoGroups(patches, maxTokens);
+  const results: ReviewResult[] = [];
+  for (let i = 0; i < groups.length; i++) {
+    const { compressed: groupDiff } = compressDiff(groups[i], maxTokens);
+    const groupTickets = i === 0 ? ticketContext : undefined;
+    const result = await runReview(config, groupDiff, prMetadata, groupTickets, tierOptions);
+    results.push(result);
+  }
+
+  return results;
 }
 
 export async function runMultiCallReview(
@@ -143,6 +177,84 @@ export async function runMultiCallReview(
     }
 
     return mergeResults(results, results[0]?.modelUsed ?? "unknown");
+  } finally {
+    if (mcpDisconnect) {
+      try {
+        await mcpDisconnect();
+      } catch (err) {
+        logger.warn({ err }, "MCP disconnect error");
+      }
+    }
+  }
+}
+
+export async function runCascadeReview(
+  skimPatches: FilePatch[],
+  deepPatches: FilePatch[],
+  config: ReviewConfig,
+  prMetadata: PRMetadata,
+  ticketContext: TicketInfo[] | undefined,
+  options?: MultiCallReviewOptions,
+): Promise<ReviewResult> {
+  const { mcpServers, maxTokens: maxTokensOpt, ...reviewOptions } = options ?? {};
+  const maxTokens = maxTokensOpt ?? DEFAULT_MAX_TOKENS;
+
+  let mcpDisconnect: (() => Promise<void>) | undefined;
+  let resolvedOptions: RunReviewOptions = reviewOptions;
+
+  if (mcpServers && Object.keys(mcpServers).length > 0) {
+    try {
+      const mcp = await connectMcpServers(mcpServers);
+      mcpDisconnect = mcp.disconnect;
+      resolvedOptions = {
+        ...reviewOptions,
+        extraTools: { ...reviewOptions.extraTools, ...mcp.tools },
+      };
+    } catch (err) {
+      logger.warn({ err }, "failed to connect MCP servers; continuing without MCP tools");
+    }
+  }
+
+  try {
+    const allResults: ReviewResult[] = [];
+
+    // skim pass: diff-only context, no tools
+    const skimResults = await runTieredReview(
+      skimPatches,
+      config,
+      prMetadata,
+      undefined,
+      resolvedOptions,
+      maxTokens,
+      "skim",
+    );
+    allResults.push(...skimResults);
+
+    // deep-review pass: full context + tools, gets ticket context
+    const deepResults = await runTieredReview(
+      deepPatches,
+      config,
+      prMetadata,
+      ticketContext,
+      resolvedOptions,
+      maxTokens,
+      "deep-review",
+    );
+    allResults.push(...deepResults);
+
+    if (allResults.length === 0) {
+      return {
+        summary: "No files required review after triage.",
+        recommendation: "looks_good",
+        findings: [],
+        observations: [],
+        filesReviewed: [],
+        modelUsed: "unknown",
+        tokenCount: 0,
+      };
+    }
+
+    return mergeResults(allResults, allResults[0]?.modelUsed ?? "unknown");
   } finally {
     if (mcpDisconnect) {
       try {

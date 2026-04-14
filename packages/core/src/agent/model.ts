@@ -44,6 +44,23 @@ export function resolveModelConfig(): ModelConfig {
   return { type: "router", model };
 }
 
+export function resolveTriageModelConfig(): ModelConfig | null {
+  const triageModel = process.env.RUSTY_LLM_TRIAGE_MODEL;
+  if (!triageModel) return null;
+  // triage model uses the same provider resolution logic but with its own model string
+  const saved = process.env.RUSTY_LLM_MODEL;
+  process.env.RUSTY_LLM_MODEL = triageModel;
+  try {
+    return resolveModelConfig();
+  } finally {
+    if (saved !== undefined) {
+      process.env.RUSTY_LLM_MODEL = saved;
+    } else {
+      delete process.env.RUSTY_LLM_MODEL;
+    }
+  }
+}
+
 export function resolveModel(
   config: ModelConfig,
 ): string | ReturnType<ReturnType<typeof createAzure>> {

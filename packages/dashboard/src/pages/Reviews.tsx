@@ -16,6 +16,36 @@ const recommendationLabel: Record<string, string> = {
   address_before_merge: "Address before merge",
 };
 
+function TriageBadge({
+  review,
+}: {
+  review: { filesSkipped?: number; filesSkimmed?: number; filesDeepReviewed?: number };
+}) {
+  if (
+    review.filesSkipped == null &&
+    review.filesSkimmed == null &&
+    review.filesDeepReviewed == null
+  ) {
+    return <span className="text-slate-600 text-xs">—</span>;
+  }
+
+  return (
+    <span className="inline-flex gap-1.5 text-xs">
+      <span className="text-slate-500" title="Skipped">
+        {review.filesSkipped ?? 0}s
+      </span>
+      <span className="text-slate-500">/</span>
+      <span className="text-amber-400" title="Skimmed">
+        {review.filesSkimmed ?? 0}k
+      </span>
+      <span className="text-slate-500">/</span>
+      <span className="text-emerald-400" title="Deep reviewed">
+        {review.filesDeepReviewed ?? 0}d
+      </span>
+    </span>
+  );
+}
+
 export function Reviews() {
   const [page, setPage] = useState(0);
   const offset = page * PAGE_SIZE;
@@ -43,6 +73,12 @@ export function Reviews() {
               <th className="text-left px-4 py-3 text-slate-400 font-medium">Timestamp</th>
               <th className="text-right px-4 py-3 text-slate-400 font-medium">C / W / S</th>
               <th className="text-left px-4 py-3 text-slate-400 font-medium">Recommendation</th>
+              <th
+                className="text-center px-4 py-3 text-slate-400 font-medium"
+                title="Triage: Skipped / Skimmed / Deep"
+              >
+                Triage
+              </th>
               <th className="text-left px-4 py-3 text-slate-400 font-medium">Model</th>
             </tr>
           </thead>
@@ -86,12 +122,15 @@ export function Reviews() {
                     {recommendationLabel[review.recommendation] ?? review.recommendation}
                   </span>
                 </td>
+                <td className="px-4 py-3 text-center">
+                  <TriageBadge review={review} />
+                </td>
                 <td className="px-4 py-3 text-slate-500 font-mono text-xs">{review.modelUsed}</td>
               </tr>
             ))}
             {data?.items.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                   No reviews yet.
                 </td>
               </tr>

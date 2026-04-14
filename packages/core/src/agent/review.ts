@@ -1,20 +1,25 @@
 import { Agent } from "@mastra/core/agent";
 import type { ToolsInput } from "@mastra/core/agent";
-import { ReviewOutputSchema } from "./schema.js";
+import { ReviewOutputSchema, SkimReviewOutputSchema } from "./schema.js";
 import { buildSystemPrompt, buildUserMessage } from "./prompts.js";
 import { resolveModelConfig, resolveModel, getModelDisplayName } from "./model.js";
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
 import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
 
+export type ReviewTier = "skim" | "deep-review";
+
 export interface RunReviewOptions {
   provider?: GitProvider;
   sourceRef?: string;
-  /** Additional tools to provide to the review agent (e.g. from MCP servers). */
   extraTools?: ToolsInput;
   languageSummary?: string;
+  tier?: ReviewTier;
 }
 
 function buildTools(options?: RunReviewOptions): ToolsInput {
+  // skim tier gets no tools — only diff context, no file exploration
+  if (options?.tier === "skim") return {};
+
   const tools: ToolsInput = {};
   if (options?.provider) {
     tools.searchCode = createSearchCodeTool(options.provider);
@@ -32,6 +37,7 @@ export async function runReview(
   ticketContext?: TicketInfo[],
   options?: RunReviewOptions,
 ): Promise<ReviewResult> {
+  const tier = options?.tier ?? "deep-review";
   const systemPrompt = buildSystemPrompt(config);
   const userMessage = buildUserMessage(diff, prMetadata, ticketContext, options?.languageSummary);
   const modelConfig = resolveModelConfig();
@@ -39,22 +45,21 @@ export async function runReview(
   const modelName = getModelDisplayName(modelConfig);
 
   const builtInTools = buildTools(options);
-  const extraTools = options?.extraTools ?? {};
+  // skim tier ignores extra tools (MCP) as well
+  const extraTools = tier === "skim" ? {} : (options?.extraTools ?? {});
 
   const agent = new Agent({
     id: "review-agent",
     name: "Rusty Bot Reviewer",
     instructions: systemPrompt,
     model,
-    // MCPClient.listTools() namespaces tools as serverName_toolName,
-    // so collisions with built-in tool names are unlikely in practice.
     tools: { ...builtInTools, ...extraTools },
   });
 
+  const schema = tier === "skim" ? SkimReviewOutputSchema : ReviewOutputSchema;
+
   const response = await agent.generate(userMessage, {
-    structuredOutput: {
-      schema: ReviewOutputSchema,
-    },
+    structuredOutput: { schema },
   });
 
   const parsed = response.object;

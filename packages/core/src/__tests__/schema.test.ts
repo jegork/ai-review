@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { ReviewOutputSchema } from "../agent/schema.js";
+import { ReviewOutputSchema, SkimReviewOutputSchema } from "../agent/schema.js";
+import { TriageOutputSchema } from "../triage/schema.js";
 
 interface JsonSchemaObject {
   type?: string;
@@ -54,6 +55,28 @@ function collectStrictViolations(schema: JsonSchemaObject, path = ""): string[] 
 describe("ReviewOutputSchema strict mode compatibility", () => {
   it("has all properties listed in required (openai strict structured output)", () => {
     const jsonSchema = z.toJSONSchema(ReviewOutputSchema) as JsonSchemaObject;
+    const violations = collectStrictViolations(jsonSchema);
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+});
+
+describe("SkimReviewOutputSchema strict mode compatibility", () => {
+  it("has all properties listed in required", () => {
+    const jsonSchema = z.toJSONSchema(SkimReviewOutputSchema) as JsonSchemaObject;
+    const violations = collectStrictViolations(jsonSchema);
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("does not include suggestedFix in findings", () => {
+    const jsonSchema = z.toJSONSchema(SkimReviewOutputSchema) as JsonSchemaObject;
+    const findingsItems = jsonSchema.properties?.findings?.items;
+    expect(findingsItems?.properties).not.toHaveProperty("suggestedFix");
+  });
+});
+
+describe("TriageOutputSchema strict mode compatibility", () => {
+  it("has all properties listed in required", () => {
+    const jsonSchema = z.toJSONSchema(TriageOutputSchema) as JsonSchemaObject;
     const violations = collectStrictViolations(jsonSchema);
     expect(violations, violations.join("\n")).toEqual([]);
   });

@@ -9,12 +9,16 @@ import {
   extractTicketRefs,
   resolveTickets,
   runMultiCallReview,
+  runCascadeReview,
   formatSummaryComment,
   GitHubTicketProvider,
   JiraTicketProvider,
   LinearTicketProvider,
   loadMcpServerConfigsFromEnv,
   logger,
+  isCascadeEnabled,
+  runTriage,
+  splitByClassification,
 } from "@rusty-bot/core";
 import { GitHubProvider } from "./provider.js";
 import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./storage.js";
@@ -82,9 +86,6 @@ export async function orchestrateReview(params: {
     const patches = parseDiff(rawDiff);
     const filtered = filterFiles(patches, config.ignorePatterns);
     const reviewable = stripDeletionOnlyHunks(filtered);
-    const expanded = await expandContext(reviewable, (path) =>
-      provider.getFileContent(path, metadata.sourceBranch),
-    );
 
     const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
     const ticketProviders = await buildTicketProviders(owner, repo);
@@ -93,13 +94,62 @@ export async function orchestrateReview(params: {
     const languageSummary = summarizeLanguages(reviewable);
     const mcpServers = await loadMcpServerConfigsFromEnv();
 
-    const result = await runMultiCallReview(expanded, config, metadata, tickets, {
-      provider,
-      sourceRef: metadata.sourceBranch,
-      languageSummary,
-      mcpServers,
-      maxTokens: MAX_DIFF_TOKENS,
-    });
+    let result;
+
+    if (isCascadeEnabled()) {
+      log.info({ fileCount: reviewable.length }, "cascade enabled, running triage");
+
+      let triageResult;
+      try {
+        triageResult = await runTriage(reviewable);
+      } catch (err) {
+        log.warn({ err }, "triage failed, falling back to full review");
+      }
+
+      if (triageResult) {
+        const { skip, skim, deepReview } = splitByClassification(reviewable, triageResult.files);
+        log.info(
+          { skipped: skip.length, skimmed: skim.length, deepReview: deepReview.length },
+          "triage classification",
+        );
+
+        // only expand context for deep-review files
+        const expandedDeep = await expandContext(deepReview, (path) =>
+          provider.getFileContent(path, metadata.sourceBranch),
+        );
+
+        result = await runCascadeReview(skim, expandedDeep, config, metadata, tickets, {
+          provider,
+          sourceRef: metadata.sourceBranch,
+          languageSummary,
+          mcpServers,
+          maxTokens: MAX_DIFF_TOKENS,
+        });
+
+        result.triageStats = {
+          filesSkipped: skip.length,
+          filesSkimmed: skim.length,
+          filesDeepReviewed: deepReview.length,
+          triageModelUsed: triageResult.modelUsed,
+          triageTokenCount: triageResult.tokenCount,
+        };
+      }
+    }
+
+    if (!result) {
+      // non-cascade path or cascade fallback
+      const expanded = await expandContext(reviewable, (path) =>
+        provider.getFileContent(path, metadata.sourceBranch),
+      );
+
+      result = await runMultiCallReview(expanded, config, metadata, tickets, {
+        provider,
+        sourceRef: metadata.sourceBranch,
+        languageSummary,
+        mcpServers,
+        maxTokens: MAX_DIFF_TOKENS,
+      });
+    }
 
     const summary = formatSummaryComment(result);
     await provider.postSummaryComment(summary);
@@ -123,6 +173,15 @@ export async function orchestrateReview(params: {
       tokenCount: result.tokenCount,
       recommendation: result.recommendation,
       prUrl: metadata.url,
+      ...(result.triageStats
+        ? {
+            triageModelUsed: result.triageStats.triageModelUsed,
+            triageTokenCount: result.triageStats.triageTokenCount,
+            filesSkipped: result.triageStats.filesSkipped,
+            filesSkimmed: result.triageStats.filesSkimmed,
+            filesDeepReviewed: result.triageStats.filesDeepReviewed,
+          }
+        : {}),
     };
 
     await saveReview(review);

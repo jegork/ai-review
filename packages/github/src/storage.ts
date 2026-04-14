@@ -29,6 +29,11 @@ export interface ReviewRecord {
   tokenCount: number;
   recommendation: string;
   prUrl: string;
+  triageModelUsed?: string;
+  triageTokenCount?: number;
+  filesSkipped?: number;
+  filesSkimmed?: number;
+  filesDeepReviewed?: number;
 }
 
 interface StorageData {

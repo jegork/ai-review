@@ -3,6 +3,10 @@ export type {
   FocusArea,
   Severity,
   Recommendation,
+  TriageClassification,
+  TriageFileResult,
+  TriageResult,
+  TriageStats,
   Finding,
   Observation,
   ReviewResult,
@@ -25,3 +29,4 @@ export * from "./tickets/index.js";
 export * from "./diff/index.js";
 export * from "./agent/index.js";
 export * from "./mcp/index.js";
+export * from "./triage/index.js";

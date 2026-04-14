@@ -19,6 +19,20 @@ export const FindingSchema = z.object({
     ),
 });
 
+export const SkimFindingSchema = z.object({
+  file: z.string(),
+  line: z.number(),
+  endLine: z
+    .number()
+    .nullable()
+    .describe(
+      "last line of the range when the issue spans multiple lines; null for single-line issues",
+    ),
+  severity: z.enum(["critical", "warning", "suggestion"]),
+  category: z.enum(["security", "performance", "bugs", "style", "tests", "docs"]),
+  message: z.string(),
+});
+
 export const ObservationSchema = z.object({
   file: z.string(),
   line: z.number(),
@@ -34,6 +48,20 @@ export const ReviewOutputSchema = z.object({
     .describe("merge recommendation based on findings"),
   findings: z
     .array(FindingSchema)
+    .describe("issues found in the changed code, tied to specific lines in the diff"),
+  observations: z
+    .array(ObservationSchema)
+    .describe("issues found in referenced but unchanged code"),
+  filesReviewed: z.array(z.string()).describe("list of file paths that were reviewed"),
+});
+
+export const SkimReviewOutputSchema = z.object({
+  summary: z.string().describe("concise summary of the PR and overall assessment"),
+  recommendation: z
+    .enum(["looks_good", "address_before_merge", "critical_issues"])
+    .describe("merge recommendation based on findings"),
+  findings: z
+    .array(SkimFindingSchema)
     .describe("issues found in the changed code, tied to specific lines in the diff"),
   observations: z
     .array(ObservationSchema)
