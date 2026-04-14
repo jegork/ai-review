@@ -275,6 +275,22 @@ pnpm --filter @rusty-bot/github start
 pnpm --filter @rusty-bot/dashboard dev
 ```
 
+## Claude Code skills
+
+This repo publishes agent skills under `skills/`. They're indexed by [skills.sh](https://skills.sh) and installable with the `skills` CLI:
+
+```bash
+# install every skill in this repo
+npx skills add jegork/ai-review
+
+# or just one
+npx skills add jegork/ai-review/pr-comment-monitor
+```
+
+Available skills:
+
+- **pr-comment-monitor** — detects the remote git provider (GitHub / Azure DevOps / GitLab / Bitbucket), watches the current branch's open PR for new review comments, handles each one (code edit + push, or reply), and resolves the thread.
+
 ## License
 
 MIT
