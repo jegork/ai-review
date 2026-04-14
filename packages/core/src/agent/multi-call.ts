@@ -110,12 +110,16 @@ export async function runMultiCallReview(
   let resolvedOptions: RunReviewOptions = reviewOptions;
 
   if (mcpServers && Object.keys(mcpServers).length > 0) {
-    const mcp = await connectMcpServers(mcpServers);
-    mcpDisconnect = mcp.disconnect;
-    resolvedOptions = {
-      ...reviewOptions,
-      extraTools: { ...reviewOptions.extraTools, ...mcp.tools },
-    };
+    try {
+      const mcp = await connectMcpServers(mcpServers);
+      mcpDisconnect = mcp.disconnect;
+      resolvedOptions = {
+        ...reviewOptions,
+        extraTools: { ...reviewOptions.extraTools, ...mcp.tools },
+      };
+    } catch (err) {
+      logger.warn({ err }, "failed to connect MCP servers; continuing without MCP tools");
+    }
   }
 
   try {
