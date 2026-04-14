@@ -130,6 +130,7 @@ describe("runMultiCallReview", () => {
             ticketId: "AUTH-42",
             requirement: "Protected routes validate JWT",
             status: "unclear",
+            evidence: null,
           },
         ],
       })

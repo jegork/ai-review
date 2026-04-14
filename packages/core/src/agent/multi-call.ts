@@ -141,9 +141,9 @@ export function mergeResults(results: ReviewResult[], modelUsed: string): Review
   };
 }
 
-function normalizeEvidence(evidence?: string | null): string | undefined {
+function normalizeEvidence(evidence: string | null): string | null {
   const trimmed = evidence?.trim();
-  return trimmed ? trimmed : undefined;
+  return trimmed ? trimmed : null;
 }
 
 function normalizeComplianceKeyPart(value?: string | null): string {
@@ -189,7 +189,7 @@ function mergeTicketCompliance(results: ReviewResult[]): TicketComplianceItem[] 
 
   return [...merged.values()].map(({ evidenceParts, ...item }) => ({
     ...item,
-    evidence: evidenceParts.length > 0 ? evidenceParts.join(" | ") : undefined,
+    evidence: evidenceParts.length > 0 ? evidenceParts.join(" | ") : null,
   }));
 }
 

@@ -1,4 +1,15 @@
-export { ReviewOutputSchema, SkimReviewOutputSchema } from "./schema.js";
+export {
+  SeveritySchema,
+  FocusAreaSchema,
+  RecommendationSchema,
+  TicketComplianceStatusSchema,
+  FindingSchema,
+  SkimFindingSchema,
+  ObservationSchema,
+  TicketComplianceSchema,
+  ReviewOutputSchema,
+  SkimReviewOutputSchema,
+} from "./schema.js";
 export { buildSystemPrompt, buildUserMessage } from "./prompts.js";
 export { runReview } from "./review.js";
 export type { RunReviewOptions, ReviewTier } from "./review.js";

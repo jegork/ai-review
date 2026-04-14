@@ -9,6 +9,7 @@ export type {
   TriageStats,
   Finding,
   Observation,
+  ReviewOutput,
   ReviewResult,
   ReviewConfig,
   PRMetadata,
