@@ -154,6 +154,8 @@ export class AzureDevOpsProvider implements GitProvider {
 
     if (iterations.value.length === 0) return [];
     const lastIteration = iterations.value[iterations.value.length - 1];
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive guard against schema changes
+    if (!lastIteration) return [];
 
     const changes = await this.request(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/iterations/${lastIteration.id}/changes?${API_VERSION}`,

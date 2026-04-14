@@ -171,7 +171,8 @@ export class GitHubProvider implements GitProvider {
         per_page: 20,
         headers: { accept: "application/vnd.github.text-match+json" },
       });
-      return data.items.map((item) => ({
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- items may be absent on rate-limited or error responses
+      return (data.items ?? []).map((item) => ({
         file: item.path,
         line: 0,
         content: item.text_matches?.[0]?.fragment ?? "",
