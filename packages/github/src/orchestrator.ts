@@ -13,6 +13,7 @@ import {
   GitHubTicketProvider,
   JiraTicketProvider,
   LinearTicketProvider,
+  logger,
 } from "@rusty-bot/core";
 import { GitHubProvider } from "./provider.js";
 import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./storage.js";
@@ -122,8 +123,8 @@ export async function orchestrateReview(params: {
 
     await saveReview(review);
 
-    console.log(`review completed for ${owner}/${repo}#${pullNumber}`);
+    logger.info({ owner, repo, pullNumber }, "review completed");
   } catch (err) {
-    console.error(`review failed for ${owner}/${repo}#${pullNumber}:`, err);
+    logger.error({ owner, repo, pullNumber, err }, "review failed");
   }
 }
