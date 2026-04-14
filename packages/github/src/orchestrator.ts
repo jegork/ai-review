@@ -13,10 +13,12 @@ import {
   GitHubTicketProvider,
   JiraTicketProvider,
   LinearTicketProvider,
+  logger,
 } from "@rusty-bot/core";
 import { GitHubProvider } from "./provider.js";
 import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./storage.js";
 
+const log = logger.child({ package: "github" });
 const MAX_DIFF_TOKENS = 60_000;
 const ALL_FOCUS_AREAS: FocusArea[] = ["security", "performance", "bugs", "style", "tests", "docs"];
 
@@ -122,8 +124,8 @@ export async function orchestrateReview(params: {
 
     await saveReview(review);
 
-    console.log(`review completed for ${owner}/${repo}#${pullNumber}`);
+    log.info({ owner, repo, pullNumber }, "review completed");
   } catch (err) {
-    console.error(`review failed for ${owner}/${repo}#${pullNumber}:`, err);
+    log.error({ owner, repo, pullNumber, err }, "review failed");
   }
 }
