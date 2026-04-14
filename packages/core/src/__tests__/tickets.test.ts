@@ -223,8 +223,7 @@ describe("resolveTickets", () => {
   });
 
   it("catches errors and continues", async () => {
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(vi.fn());
     const mockProvider: TicketProvider = {
       fetchTicket: vi.fn().mockRejectedValueOnce(new Error("fail")).mockResolvedValueOnce({
         id: "2",

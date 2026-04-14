@@ -75,9 +75,11 @@ function parseFileBlock(lines: string[]): FilePatch | null {
     const hunkMatch = HUNK_HEADER_RE.exec(line);
     if (hunkMatch) {
       const oldStart = parseInt(hunkMatch[1], 10);
-      const oldLines = hunkMatch[2] ? parseInt(hunkMatch[2], 10) : 1;
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- capture groups can be undefined at runtime
+      const oldLines = hunkMatch[2] != null ? parseInt(hunkMatch[2], 10) : 1;
       const newStart = parseInt(hunkMatch[3], 10);
-      const newLines = hunkMatch[4] ? parseInt(hunkMatch[4], 10) : 1;
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- capture groups can be undefined at runtime
+      const newLines = hunkMatch[4] != null ? parseInt(hunkMatch[4], 10) : 1;
 
       const contentLines: string[] = [];
       let j = i + 1;

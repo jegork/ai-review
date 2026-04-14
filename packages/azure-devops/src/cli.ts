@@ -25,6 +25,7 @@ export function parseConfig(): {
   provider: AzureDevOpsProvider;
   config: ReviewConfig;
   failOnCritical: boolean;
+  env: { orgUrl: string; project: string; accessToken: string };
 } {
   const pullRequestId = process.env.SYSTEM_PULLREQUEST_PULLREQUESTID;
   const orgUrl = process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI;
@@ -68,11 +69,12 @@ export function parseConfig(): {
       ...(customInstructions ? { customInstructions } : {}),
     },
     failOnCritical,
+    env: { orgUrl, project, accessToken },
   };
 }
 
 async function main(): Promise<void> {
-  const { provider, config, failOnCritical } = parseConfig();
+  const { provider, config, failOnCritical, env } = parseConfig();
 
   const metadata = await provider.getPRMetadata();
   log(`Reviewing PR #${metadata.id} in ${metadata.sourceBranch} → ${metadata.targetBranch}`);
@@ -95,9 +97,9 @@ async function main(): Promise<void> {
     ticketProviders.set(
       "azure-devops",
       new AzureDevOpsTicketProvider({
-        orgUrl: process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI ?? "",
-        project: process.env.SYSTEM_TEAMPROJECT ?? "",
-        pat: process.env.SYSTEM_ACCESSTOKEN ?? "",
+        orgUrl: env.orgUrl,
+        project: env.project,
+        pat: env.accessToken,
       }),
     );
   }

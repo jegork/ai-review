@@ -30,9 +30,11 @@ function parseHunkHeader(line: string): {
   }
   return {
     oldStart: parseInt(match[1], 10),
-    oldLines: match[2] ? parseInt(match[2], 10) : 1,
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- capture groups can be undefined at runtime
+    oldLines: match[2] != null ? parseInt(match[2], 10) : 1,
     newStart: parseInt(match[3], 10),
-    newLines: match[4] ? parseInt(match[4], 10) : 1,
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- capture groups can be undefined at runtime
+    newLines: match[4] != null ? parseInt(match[4], 10) : 1,
   };
 }
 
@@ -139,7 +141,8 @@ export class GitHubProvider implements GitProvider {
       id: String(data.number),
       title: data.title,
       description: data.body ?? "",
-      author: (data.user as { login: string } | null)?.login ?? "",
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- user can be null for deleted accounts despite Octokit types
+      author: data.user?.login ?? "",
       sourceBranch: data.head.ref,
       targetBranch: data.base.ref,
       url: data.html_url,
