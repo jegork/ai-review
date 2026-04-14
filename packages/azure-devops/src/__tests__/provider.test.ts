@@ -206,12 +206,12 @@ describe("AzureDevOpsProvider", () => {
       expect(firstBody.threadContext.rightFileEnd).toEqual({ line: 10, offset: 1 });
       expect(firstBody.comments[0].content).toContain("<!-- rusty-bot-review -->");
       expect(firstBody.comments[0].content).toContain("SQL injection risk");
-      expect(firstBody.comments[0].content).toContain("**Suggested fix:**");
+      expect(firstBody.comments[0].content).toContain("```suggestion");
 
       const secondBody = JSON.parse(fetchSpy.mock.calls[1][1].body);
       expect(secondBody.threadContext.filePath).toBe("/src/utils.ts");
       expect(secondBody.threadContext.rightFileStart.line).toBe(25);
-      expect(secondBody.comments[0].content).not.toContain("**Suggested fix:**");
+      expect(secondBody.comments[0].content).not.toContain("```suggestion");
     });
 
     it("skips API call when findings array is empty", async () => {
@@ -320,6 +320,62 @@ describe("AzureDevOpsProvider", () => {
       await provider.deleteExistingBotComments();
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("getDiff", () => {
+    function mockPRAndIterations() {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          pullRequestId: 42,
+          title: "feat: stuff",
+          description: "",
+          createdBy: { displayName: "User", uniqueName: "u@e.com" },
+          sourceRefName: "refs/heads/feature",
+          targetRefName: "refs/heads/main",
+          repository: { webUrl: "" },
+        }),
+      );
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ value: [{ id: 1 }] }));
+    }
+
+    it("skips change entries where item.path is null", async () => {
+      mockPRAndIterations();
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            { changeType: "edit", item: { path: "/src/real.ts", gitObjectType: "blob" } },
+            { changeType: "edit", item: { path: null, gitObjectType: "blob" } },
+          ],
+        }),
+      );
+
+      // file content fetches for the one valid entry
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse("const a = 1;", true));
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse("const a = 2;", true));
+
+      const patches = await provider.getDiff();
+
+      const paths = patches.map((p) => p.path);
+      expect(paths).not.toContain(null);
+      expect(paths).toContain("src/real.ts");
+    });
+
+    it("handles response where all entries have null paths", async () => {
+      mockPRAndIterations();
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            { changeType: "edit", item: { path: null } },
+            { changeType: "add", item: { path: null } },
+          ],
+        }),
+      );
+
+      const patches = await provider.getDiff();
+      expect(patches).toEqual([]);
     });
   });
 

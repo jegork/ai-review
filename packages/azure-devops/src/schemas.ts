@@ -27,7 +27,7 @@ export const AdoIterationsSchema = z.object({
 export const AdoChangeEntrySchema = z.object({
   changeType: z.string(),
   item: z.object({
-    path: z.string(),
+    path: z.string().nullable(),
     gitObjectType: z.string().optional(),
   }),
 });

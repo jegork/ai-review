@@ -17,11 +17,11 @@ Your review must include:
 - When linked tickets are provided, a ticketCompliance checklist that evaluates each requirement with one of: "addressed", "partially_addressed", "not_addressed", or "unclear"
 
 For each finding, provide:
-- The exact file path and line number
+- The exact file path and line number (and `endLine` when the fix spans multiple lines)
 - A severity: "critical" for bugs/security/data-loss issues, "warning" for code quality/performance concerns, "suggestion" for improvements and best practices
 - A category matching the focus areas you've been asked to review
-- A clear, actionable message explaining the issue
-- When possible, a suggested fix (code snippet)
+- A clear, actionable message explaining the issue — put ALL reasoning, context, and recommendations here
+- When possible, a `suggestedFix`: the exact replacement source code for the line(s) between `line` and `endLine`. This field is rendered as a GitHub suggestion block so it MUST contain only valid source code that can directly replace the original lines. Never put explanations, recommendations, or prose in `suggestedFix` — those belong in `message`. If you cannot provide an exact code replacement, leave `suggestedFix` as an empty string and explain the fix in `message` instead.
 
 Important rules:
 - Be precise with line numbers — they must match the new file's line numbers shown in the diff.

@@ -1,4 +1,5 @@
 import type { TicketInfo, TicketProvider, TicketRef, TicketResolutionStatus } from "../types.js";
+import { logger } from "../logger.js";
 
 const MAX_TICKETS = 3;
 
@@ -27,7 +28,7 @@ export async function resolveTicketsWithStatus(
       }
     } catch (err) {
       fetchFailed++;
-      console.warn(`failed to fetch ticket ${ref.id} from ${ref.source}:`, err);
+      logger.warn({ ticketId: ref.id, source: ref.source, err }, "failed to fetch ticket");
     }
   }
 

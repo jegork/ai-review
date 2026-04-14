@@ -22,6 +22,7 @@ export type {
 } from "./types.js";
 
 export { getMastra, getStorage } from "./mastra.js";
+export { logger, flushLogger } from "./logger.js";
 export * from "./formatter/index.js";
 export * from "./tickets/index.js";
 export * from "./diff/index.js";
