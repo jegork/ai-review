@@ -31,4 +31,4 @@ Important rules:
 - For ticket compliance, use "not_addressed" only when the visible changes clearly fail to satisfy a requirement; use "unclear" when the diff does not contain enough evidence to decide.
 {{style_instructions}}
 {{focus_instructions}}
-{{custom_instructions}}
+{{convention_instructions}}

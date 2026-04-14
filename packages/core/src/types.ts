@@ -54,7 +54,7 @@ export interface ReviewConfig {
   style: ReviewStyle;
   focusAreas: FocusArea[];
   ignorePatterns: string[];
-  customInstructions?: string;
+  conventionFile?: string;
   consensusPasses?: number;
   consensusThreshold?: number | null;
 }

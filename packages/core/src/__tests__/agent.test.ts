@@ -93,16 +93,16 @@ describe("buildSystemPrompt", () => {
     }
   });
 
-  it("includes custom instructions when provided", () => {
+  it("includes convention file content when provided", () => {
     const prompt = buildSystemPrompt({
       ...baseConfig,
-      customInstructions: "Always check for SQL injection in raw queries",
+      conventionFile: "Always check for SQL injection in raw queries",
     });
     expect(prompt).toContain("Always check for SQL injection in raw queries");
     expect(prompt).toContain("repository maintainer");
   });
 
-  it("omits custom instructions section when not provided", () => {
+  it("omits convention instructions section when not provided", () => {
     const prompt = buildSystemPrompt(baseConfig);
     expect(prompt).not.toContain("repository maintainer");
   });

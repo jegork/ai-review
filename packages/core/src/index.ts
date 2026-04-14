@@ -28,3 +28,4 @@ export * from "./tickets/index.js";
 export * from "./diff/index.js";
 export * from "./agent/index.js";
 export * from "./mcp/index.js";
+export { fetchConventionFile } from "./convention-file.js";

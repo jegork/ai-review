@@ -230,7 +230,6 @@ describe("server", () => {
         style: "strict",
         focusAreas: ["security", "bugs"],
         ignorePatterns: ["*.test.ts"],
-        customInstructions: "be extra careful",
       };
 
       const putRes = await app.request("/api/config/repos/my-org/my-repo", {

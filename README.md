@@ -197,9 +197,30 @@ curl -X PUT http://localhost:3000/api/config/repos/owner/repo \
   -d '{
     "style": "roast",
     "focusAreas": ["security", "bugs", "performance"],
-    "ignorePatterns": ["*.generated.ts", "vendor/**"],
-    "customInstructions": "This repo uses Effect-TS, review accordingly"
+    "ignorePatterns": ["*.generated.ts", "vendor/**"]
   }'
+```
+
+### Convention Files
+
+Check in a markdown file to your repo root to provide review instructions:
+
+| File | Priority |
+|------|----------|
+| `.rusty-bot.md` | Highest |
+| `REVIEW-BOT.md` | Medium |
+| `AGENTS.md` | Lowest |
+
+The bot picks up the first file found (winner-takes-all) and injects its content into the system prompt. The file is fetched from the **target branch** so PR authors cannot tamper with review rules.
+
+Example `.rusty-bot.md`:
+
+```markdown
+- We use Effect-TS, don't flag `.pipe()` chains as complexity issues
+- All API endpoints must have Zod validation — flag missing schemas as warnings
+- Ignore `generated/` and `__snapshots__/` directories
+- Security findings in `scripts/` are low priority, it's internal tooling
+- Be lenient on style, strict on security
 ```
 
 ### Review Styles
