@@ -10,6 +10,7 @@ import {
   runMultiCallReview,
   formatSummaryComment,
   logger,
+  flushLogger,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
@@ -148,6 +149,6 @@ const isDirectRun = process.argv[1] && import.meta.url === `file://${process.arg
 if (isDirectRun) {
   main().catch((err) => {
     log.fatal({ err }, "fatal error");
-    process.exit(2);
+    flushLogger(() => process.exit(2));
   });
 }

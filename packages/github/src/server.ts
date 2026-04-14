@@ -20,6 +20,8 @@ import {
   type RepoConfig,
 } from "./storage.js";
 
+const log = logger.child({ package: "github" });
+
 export const app = new Hono();
 
 app.use("*", cors());
@@ -93,7 +95,7 @@ app.post("/api/webhooks/github", async (c) => {
   // dispatch review async so we return 200 immediately
   createAppOctokit(appId, privateKey, installationId)
     .then((octokit) => orchestrateReview({ octokit, owner, repo, pullNumber, installationId }))
-    .catch((err) => logger.error({ err }, "failed to dispatch review"));
+    .catch((err) => log.error({ err }, "failed to dispatch review"));
 
   return c.json({ ok: true });
 });
@@ -211,5 +213,5 @@ if (dashboardEnabled) {
 if (process.env.NODE_ENV !== "test") {
   const port = Number(process.env.PORT ?? 3000);
   serve({ fetch: app.fetch, port });
-  logger.info({ port }, "server listening");
+  log.info({ port }, "server listening");
 }
