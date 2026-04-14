@@ -12,7 +12,7 @@ export interface RunReviewOptions {
   provider?: GitProvider;
   sourceRef?: string;
   /** MCP servers to connect to for additional tools. */
-  mcpServers?: McpServerConfig[];
+  mcpServers?: McpServerConfig;
   languageSummary?: string;
 }
 
@@ -45,7 +45,7 @@ export async function runReview(
   let mcpTools: ToolsInput = {};
   let disconnectMcp: (() => Promise<void>) | undefined;
 
-  if (options?.mcpServers && options.mcpServers.length > 0) {
+  if (options?.mcpServers && Object.keys(options.mcpServers).length > 0) {
     const mcp = await connectMcpServers(options.mcpServers);
     mcpTools = mcp.tools;
     disconnectMcp = mcp.disconnect;
