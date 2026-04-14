@@ -22,7 +22,6 @@ vi.mock("../agent/review.js", () => ({
   })),
 }));
 
-// import after mock is set up
 const { runMultiCallReview } = await import("../agent/multi-call.js");
 
 function makePatch(path: string, contentSize: number): FilePatch {
@@ -58,6 +57,7 @@ const config: ReviewConfig = {
   style: "balanced",
   focusAreas: [],
   ignorePatterns: [],
+  consensusPasses: 1,
 };
 
 describe("runMultiCallReview", () => {
@@ -69,19 +69,16 @@ describe("runMultiCallReview", () => {
   });
 
   it("splits into multiple calls when diff exceeds budget", async () => {
-    // each patch is ~2500 tokens, budget is 3000 — forces 2+ calls
     const patches = [makePatch("big1.ts", 1000), makePatch("big2.ts", 1000)];
     const result = await runMultiCallReview(patches, config, prMetadata, undefined, {
       maxTokens: 3000,
     });
-    // should have findings from multiple calls merged
     expect(result.findings.length).toBeGreaterThanOrEqual(1);
     expect(result.tokenCount).toBeGreaterThan(0);
   });
 
   it("deduplicates findings with same file+line+message", async () => {
     const patches = [makePatch("a.ts", 10)];
-    // single call returns 1 finding; since we go through single path, just 1
     const result = await runMultiCallReview(patches, config, prMetadata);
     expect(result.findings).toHaveLength(1);
   });
@@ -111,5 +108,13 @@ describe("runMultiCallReview", () => {
     });
     const result = await runMultiCallReview([], config, prMetadata);
     expect(result.findings).toHaveLength(0);
+  });
+
+  it("routes through consensus when consensusPasses > 1", async () => {
+    const consensusConfig: ReviewConfig = { ...config, consensusPasses: 3 };
+    const patches = [makePatch("small.ts", 10)];
+    const result = await runMultiCallReview(patches, consensusConfig, prMetadata);
+    expect(result.consensusMetadata).toEqual({ passes: 3, threshold: 2 });
+    expect(result.findings.length).toBeGreaterThanOrEqual(1);
   });
 });
