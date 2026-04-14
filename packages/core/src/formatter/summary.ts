@@ -54,17 +54,31 @@ function buildTicketFetchMessage(status: TicketResolutionStatus): string {
     return "No linked ticket references detected.";
   }
 
+  const consideredSuffix =
+    status.refsFound > status.refsConsidered ? ` (reviewed first ${status.refsConsidered})` : "";
+
+  const detailParts: string[] = [];
+  if (status.missingProvider > 0) {
+    detailParts.push(`${status.missingProvider} skipped due to missing provider`);
+  }
+  if (status.fetchFailed > 0) {
+    detailParts.push(`${status.fetchFailed} failed to fetch`);
+  }
+
   if (status.fetched > 0) {
-    const consideredSuffix =
-      status.refsFound > status.refsConsidered ? ` (reviewed first ${status.refsConsidered})` : "";
-    return `Fetched ${status.fetched} of ${status.refsConsidered} linked ticket(s)${consideredSuffix}.`;
+    const detailSuffix = detailParts.length > 0 ? ` ${detailParts.join(", ")}.` : "";
+    return `Fetched ${status.fetched} of ${status.refsConsidered} linked ticket(s)${consideredSuffix}.${detailSuffix}`;
   }
 
   if (status.missingProvider > 0 && status.fetchFailed === 0) {
-    return `Found ${status.refsConsidered} linked ticket reference(s), but no matching ticket provider was configured.`;
+    return `Found ${status.refsConsidered} linked ticket reference(s)${consideredSuffix}, but no matching ticket provider was configured.`;
   }
 
-  return `Found ${status.refsConsidered} linked ticket reference(s), but could not fetch ticket details.`;
+  if (status.fetchFailed > 0 && status.missingProvider === 0) {
+    return `Found ${status.refsConsidered} linked ticket reference(s)${consideredSuffix}, but ${status.fetchFailed} fetch${status.fetchFailed === 1 ? " failed" : "es failed"}.`;
+  }
+
+  return `Found ${status.refsConsidered} linked ticket reference(s)${consideredSuffix}, but could not fetch ticket details. ${detailParts.join(", ")}.`;
 }
 
 export function formatSummaryComment(

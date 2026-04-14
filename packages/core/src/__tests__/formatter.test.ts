@@ -204,7 +204,7 @@ describe("formatSummaryComment", () => {
     });
 
     expect(result).toContain("## Ticket Fetch");
-    expect(result).toContain("Fetched 1 of 2 linked ticket(s).");
+    expect(result).toContain("Fetched 1 of 2 linked ticket(s). 1 failed to fetch.");
   });
 
   it("explains when ticket refs were found but could not be fetched", () => {
@@ -222,6 +222,38 @@ describe("formatSummaryComment", () => {
     expect(result).toContain(
       "Found 1 linked ticket reference(s), but no matching ticket provider was configured.",
     );
+  });
+
+  it("reports both missing providers and failed fetches when some tickets were fetched", () => {
+    const review = makeReview();
+    const result = formatSummaryComment(review, {
+      ticketResolution: {
+        refsFound: 4,
+        refsConsidered: 3,
+        fetched: 1,
+        missingProvider: 1,
+        fetchFailed: 1,
+      },
+    });
+
+    expect(result).toContain(
+      "Fetched 1 of 3 linked ticket(s) (reviewed first 3). 1 skipped due to missing provider, 1 failed to fetch.",
+    );
+  });
+
+  it("reports explicit fetch failures when no tickets could be fetched", () => {
+    const review = makeReview();
+    const result = formatSummaryComment(review, {
+      ticketResolution: {
+        refsFound: 2,
+        refsConsidered: 2,
+        fetched: 0,
+        missingProvider: 0,
+        fetchFailed: 2,
+      },
+    });
+
+    expect(result).toContain("Found 2 linked ticket reference(s), but 2 fetches failed.");
   });
 
   it("handles a single file reviewed", () => {
