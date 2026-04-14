@@ -153,6 +153,7 @@ export async function judgeFindings(
   const evalByIndex = new Map(evaluations.map((e) => [e.index, e]));
   const accepted: Finding[] = [];
   const rejected: Finding[] = [];
+  const rejectedWithEval: { finding: Finding; evaluation: JudgeEvaluation }[] = [];
   const resolvedEvaluations: JudgeEvaluation[] = [];
 
   for (let i = 0; i < findings.length; i++) {
@@ -168,19 +169,18 @@ export async function judgeFindings(
       accepted.push(findings[i]);
     } else {
       rejected.push(findings[i]);
+      rejectedWithEval.push({ finding: findings[i], evaluation: resolved });
     }
   }
 
-  for (const r of rejected) {
-    const origIdx = findings.indexOf(r);
-    const ev = resolvedEvaluations[origIdx];
+  for (const { finding, evaluation } of rejectedWithEval) {
     log.debug(
       {
-        file: r.file,
-        line: r.line,
-        severity: r.severity,
-        confidence: ev.confidence,
-        reasoning: ev.reasoning,
+        file: finding.file,
+        line: finding.line,
+        severity: finding.severity,
+        confidence: evaluation.confidence,
+        reasoning: evaluation.reasoning,
       },
       "finding filtered by judge",
     );
