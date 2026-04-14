@@ -91,10 +91,15 @@ export interface TicketComplianceItem {
 }
 
 export interface TicketResolutionStatus {
+  /** Total linked ticket references detected before any cap is applied. */
   refsFound: number;
+  /** Number of refs actually considered for resolution after caps such as MAX_TICKETS. */
   refsConsidered: number;
+  /** Number of considered refs that were successfully fetched into TicketInfo objects. */
   fetched: number;
+  /** Number of considered refs skipped because no provider was configured for their source. */
   missingProvider: number;
+  /** Number of considered refs that had a provider but still failed to resolve. */
   fetchFailed: number;
 }
 

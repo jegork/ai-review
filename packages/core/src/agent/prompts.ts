@@ -73,6 +73,8 @@ export function buildUserMessage(
     parts.push(
       "\nPlease extract the concrete requirements or acceptance criteria from each linked ticket " +
         "into the structured ticketCompliance output. Evaluate each requirement individually, " +
+        "keep requirement wording stable across equivalent checks so later passes can merge into the same checklist, " +
+        "and prefer adding evidence to an existing requirement rather than restating it with different phrasing. " +
         "set ticketId when you can, cite diff evidence when available, use `not_addressed` " +
         "only when the visible changes clearly do not satisfy the requirement, and use `unclear` " +
         "when the visible changes are insufficient to decide.",

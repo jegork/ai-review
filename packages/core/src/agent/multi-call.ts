@@ -55,6 +55,24 @@ function splitIntoGroups(patches: FilePatch[], maxTokensPerGroup: number): FileP
   return groups;
 }
 
+function estimateTicketContextTokens(ticketContext?: TicketInfo[]): number {
+  if (!ticketContext || ticketContext.length === 0) return 0;
+
+  const serialized = ticketContext
+    .map((ticket) =>
+      [
+        ticket.id,
+        ticket.title,
+        ticket.description,
+        ticket.acceptanceCriteria ?? "",
+        ticket.labels.join(","),
+      ].join("\n"),
+    )
+    .join("\n\n");
+
+  return countTokens(serialized);
+}
+
 function mergeResults(results: ReviewResult[], modelUsed: string): ReviewResult {
   const allFindings: Finding[] = [];
   const allObservations: Observation[] = [];
@@ -193,6 +211,18 @@ export async function runMultiCallReview(
 
     // split into groups that each fit within the token budget
     const groups = splitIntoGroups(patches, maxTokens);
+
+    if (ticketContext && ticketContext.length > 0 && groups.length > 1) {
+      const ticketContextTokens = estimateTicketContextTokens(ticketContext);
+      logger.info(
+        {
+          chunks: groups.length,
+          linkedTickets: ticketContext.length,
+          estimatedRepeatedTicketTokens: ticketContextTokens * Math.max(groups.length - 1, 0),
+        },
+        "multi-call review is reusing ticket context across chunks to accumulate compliance evidence",
+      );
+    }
 
     // Each chunk needs the same ticket context so compliance evidence can be
     // gathered across the full PR, then merged into one checklist.
