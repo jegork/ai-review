@@ -32,14 +32,13 @@ export function parseConfig(): {
   const repoName = process.env.BUILD_REPOSITORY_NAME;
   const accessToken = process.env.SYSTEM_ACCESSTOKEN;
 
-  const missing: string[] = [];
-  if (!pullRequestId) missing.push("SYSTEM_PULLREQUEST_PULLREQUESTID");
-  if (!orgUrl) missing.push("SYSTEM_TEAMFOUNDATIONCOLLECTIONURI");
-  if (!project) missing.push("SYSTEM_TEAMPROJECT");
-  if (!repoName) missing.push("BUILD_REPOSITORY_NAME");
-  if (!accessToken) missing.push("SYSTEM_ACCESSTOKEN");
-
-  if (missing.length > 0) {
+  if (!pullRequestId || !orgUrl || !project || !repoName || !accessToken) {
+    const missing: string[] = [];
+    if (!pullRequestId) missing.push("SYSTEM_PULLREQUEST_PULLREQUESTID");
+    if (!orgUrl) missing.push("SYSTEM_TEAMFOUNDATIONCOLLECTIONURI");
+    if (!project) missing.push("SYSTEM_TEAMPROJECT");
+    if (!repoName) missing.push("BUILD_REPOSITORY_NAME");
+    if (!accessToken) missing.push("SYSTEM_ACCESSTOKEN");
     throw new Error(`missing required env vars: ${missing.join(", ")}`);
   }
 
@@ -56,11 +55,11 @@ export function parseConfig(): {
 
   return {
     provider: new AzureDevOpsProvider({
-      orgUrl: orgUrl!,
-      project: project!,
-      repoName: repoName!,
-      pullRequestId: parseInt(pullRequestId!, 10),
-      accessToken: accessToken!,
+      orgUrl,
+      project,
+      repoName,
+      pullRequestId: parseInt(pullRequestId, 10),
+      accessToken,
     }),
     config: {
       style: reviewStyle as ReviewStyle,
@@ -101,9 +100,9 @@ async function main(): Promise<void> {
     ticketProviders.set(
       "azure-devops",
       new AzureDevOpsTicketProvider({
-        orgUrl: process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI!,
-        project: process.env.SYSTEM_TEAMPROJECT!,
-        pat: process.env.SYSTEM_ACCESSTOKEN!,
+        orgUrl: process.env.SYSTEM_TEAMFOUNDATIONCOLLECTIONURI ?? "",
+        project: process.env.SYSTEM_TEAMPROJECT ?? "",
+        pat: process.env.SYSTEM_ACCESSTOKEN ?? "",
       }),
     );
   }
@@ -143,7 +142,7 @@ async function main(): Promise<void> {
 const isDirectRun = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
 
 if (isDirectRun) {
-  main().catch((err) => {
+  main().catch((err: unknown) => {
     console.error(`${LOG_PREFIX} Fatal error:`, err);
     process.exit(2);
   });

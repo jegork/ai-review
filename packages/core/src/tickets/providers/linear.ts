@@ -33,21 +33,31 @@ export class LinearTicketProvider implements TicketProvider {
 
     if (!res.ok) return null;
 
-    const json = (await res.json()) as Record<string, Record<string, unknown>>;
-    const issue = isIdentifier
-      ? json.data?.issueByIdentifier
-      : json.data?.issue;
+    const json = (await res.json()) as {
+      data?: {
+        issueByIdentifier?: {
+          identifier?: string;
+          title?: string;
+          description?: string;
+          labels?: { nodes?: { name?: string }[] };
+        };
+        issue?: {
+          identifier?: string;
+          title?: string;
+          description?: string;
+          labels?: { nodes?: { name?: string }[] };
+        };
+      };
+    };
+    const issue = isIdentifier ? json.data?.issueByIdentifier : json.data?.issue;
 
-    if (!issue || typeof issue !== "object") return null;
-
-    const data = issue as Record<string, unknown>;
-    const labels = data.labels as { nodes?: Array<{ name?: string }> } | undefined;
+    if (!issue) return null;
 
     return {
-      id: (data.identifier as string) ?? ref,
-      title: (data.title as string) ?? "",
-      description: ((data.description as string) ?? "").slice(0, MAX_DESC_LENGTH),
-      labels: (labels?.nodes ?? []).map((l) => l.name ?? ""),
+      id: issue.identifier ?? ref,
+      title: issue.title ?? "",
+      description: (issue.description ?? "").slice(0, MAX_DESC_LENGTH),
+      labels: (issue.labels?.nodes ?? []).map((l) => l.name ?? ""),
       source: "linear",
     };
   }

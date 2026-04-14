@@ -14,9 +14,7 @@ function extractFromDescription(text: string): TicketRef[] {
   const refs: TicketRef[] = [];
 
   // github full URL: https://github.com/owner/repo/issues/123
-  for (const m of text.matchAll(
-    /https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/issues\/(\d+)/g,
-  )) {
+  for (const m of text.matchAll(/https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/issues\/(\d+)/g)) {
     refs.push({
       id: `${m[1]}/${m[2]}#${m[3]}`,
       source: "github",
@@ -32,16 +30,12 @@ function extractFromDescription(text: string): TicketRef[] {
   }
 
   // linear URL: contains linear.app with identifier
-  for (const m of text.matchAll(
-    /https:\/\/linear\.app\/[\w.-]+\/issue\/([A-Z]{2,10}-\d+)/g,
-  )) {
+  for (const m of text.matchAll(/https:\/\/linear\.app\/[\w.-]+\/issue\/([A-Z]{2,10}-\d+)/g)) {
     refs.push({ id: m[1], source: "linear", url: m[0] });
   }
 
   // jira URL: .../browse/PROJ-123 or .../jira.../browse/PROJ-123
-  for (const m of text.matchAll(
-    /(https:\/\/[^\s]*jira[^\s]*\/browse\/([A-Z]{2,10}-\d+))/g,
-  )) {
+  for (const m of text.matchAll(/(https:\/\/[^\s]*jira[^\s]*\/browse\/([A-Z]{2,10}-\d+))/g)) {
     refs.push({ id: m[2], source: "jira", url: m[1] });
   }
 
@@ -51,9 +45,7 @@ function extractFromDescription(text: string): TicketRef[] {
   }
 
   // owner/repo#123 (github cross-repo ref) - avoid matching URLs already captured
-  for (const m of text.matchAll(
-    /(?<![/\w])([\w.-]+)\/([\w.-]+)#(\d+)(?!\d)/g,
-  )) {
+  for (const m of text.matchAll(/(?<![/\w])([\w.-]+)\/([\w.-]+)#(\d+)(?!\d)/g)) {
     // skip if this looks like it's part of a URL we already matched
     if (m[1] === "github.com" || m[1] === "dev.azure.com") continue;
     refs.push({ id: `${m[1]}/${m[2]}#${m[3]}`, source: "github" });
@@ -64,9 +56,7 @@ function extractFromDescription(text: string): TicketRef[] {
     refs.push({ id: m[1], source: "github" });
   }
 
-  const linearIds = new Set(
-    refs.filter((r) => r.source === "linear").map((r) => r.id),
-  );
+  const linearIds = new Set(refs.filter((r) => r.source === "linear").map((r) => r.id));
 
   // PROJ-123 style (jira by default, linear if URL already found for that id)
   for (const m of text.matchAll(/\b([A-Z]{2,10}-\d+)\b/g)) {
@@ -84,21 +74,21 @@ function extractFromBranch(branch: string): TicketRef[] {
   const refs: TicketRef[] = [];
 
   // AB#123 in branch
-  const abMatch = branch.match(/AB#(\d+)/);
+  const abMatch = /AB#(\d+)/.exec(branch);
   if (abMatch) {
     refs.push({ id: abMatch[1], source: "azure-devops" });
     return refs;
   }
 
   // PROJ-123 style in branch
-  const projMatch = branch.match(/([A-Z]{2,10}-\d+)/);
+  const projMatch = /([A-Z]{2,10}-\d+)/.exec(branch);
   if (projMatch) {
     refs.push({ id: projMatch[1], source: "jira" });
     return refs;
   }
 
   // feature/123-desc style (bare number after slash)
-  const numMatch = branch.match(/\/(\d+)(?:-|$)/);
+  const numMatch = /\/(\d+)(?:-|$)/.exec(branch);
   if (numMatch) {
     refs.push({ id: numMatch[1], source: "github" });
     return refs;
@@ -107,10 +97,7 @@ function extractFromBranch(branch: string): TicketRef[] {
   return refs;
 }
 
-export function extractTicketRefs(
-  description: string,
-  branchName: string,
-): TicketRef[] {
+export function extractTicketRefs(description: string, branchName: string): TicketRef[] {
   const descRefs = extractFromDescription(description);
   const branchRefs = extractFromBranch(branchName);
   return dedup([...descRefs, ...branchRefs]);

@@ -24,15 +24,15 @@ function parseHunkHeader(line: string): {
   newStart: number;
   newLines: number;
 } {
-  const match = line.match(/^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/);
+  const match = /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/.exec(line);
   if (!match) {
     return { oldStart: 0, oldLines: 0, newStart: 0, newLines: 0 };
   }
   return {
     oldStart: parseInt(match[1], 10),
-    oldLines: match[2] !== undefined ? parseInt(match[2], 10) : 1,
+    oldLines: match[2] ? parseInt(match[2], 10) : 1,
     newStart: parseInt(match[3], 10),
-    newLines: match[4] !== undefined ? parseInt(match[4], 10) : 1,
+    newLines: match[4] ? parseInt(match[4], 10) : 1,
   };
 }
 
@@ -43,11 +43,11 @@ function parseDiff(rawDiff: string): FilePatch[] {
   for (const section of fileSections) {
     const lines = section.split("\n");
 
-    const pathMatch = section.match(/^--- a\/(.+)\n\+\+\+ b\/(.+)/m);
+    const pathMatch = /^--- a\/(.+)\n\+\+\+ b\/(.+)/m.exec(section);
     const binaryMatch = section.includes("Binary files");
 
     if (binaryMatch) {
-      const headerMatch = lines[0]?.match(/a\/(.+?) b\/(.+)/);
+      const headerMatch = /a\/(.+?) b\/(.+)/.exec(lines[0]);
       const path = headerMatch?.[2] ?? "unknown";
       patches.push({
         path,
@@ -139,7 +139,7 @@ export class GitHubProvider implements GitProvider {
       id: String(data.number),
       title: data.title,
       description: data.body ?? "",
-      author: data.user?.login ?? "",
+      author: (data.user as { login: string } | null)?.login ?? "",
       sourceBranch: data.head.ref,
       targetBranch: data.base.ref,
       url: data.html_url,
@@ -168,7 +168,7 @@ export class GitHubProvider implements GitProvider {
         per_page: 20,
         headers: { accept: "application/vnd.github.text-match+json" },
       });
-      return (data.items ?? []).map((item) => ({
+      return data.items.map((item) => ({
         file: item.path,
         line: 0,
         content: item.text_matches?.[0]?.fragment ?? "",

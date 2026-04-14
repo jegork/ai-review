@@ -2,10 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { extractTicketRefs } from "../tickets/extract.js";
 import { resolveTickets } from "../tickets/resolve.js";
 import { GitHubTicketProvider } from "../tickets/providers/github.js";
-import {
-  JiraTicketProvider,
-  extractAdfText,
-} from "../tickets/providers/jira.js";
+import { JiraTicketProvider, extractAdfText } from "../tickets/providers/jira.js";
 import { LinearTicketProvider } from "../tickets/providers/linear.js";
 import { AzureDevOpsTicketProvider } from "../tickets/providers/azure-devops.js";
 import type { TicketProvider, TicketRef } from "../types.js";
@@ -26,10 +23,7 @@ describe("extractTicketRefs", () => {
     });
 
     it("extracts full github issue URL", () => {
-      const refs = extractTicketRefs(
-        "https://github.com/acme/widgets/issues/55",
-        "main",
-      );
+      const refs = extractTicketRefs("https://github.com/acme/widgets/issues/55", "main");
       expect(refs).toContainEqual(
         expect.objectContaining({
           id: "acme/widgets#55",
@@ -40,10 +34,7 @@ describe("extractTicketRefs", () => {
     });
 
     it("does not double-count github URL and extracted #number", () => {
-      const refs = extractTicketRefs(
-        "https://github.com/a/b/issues/1",
-        "main",
-      );
+      const refs = extractTicketRefs("https://github.com/a/b/issues/1", "main");
       const githubRefs = refs.filter((r) => r.source === "github");
       expect(githubRefs).toHaveLength(1);
     });
@@ -60,9 +51,7 @@ describe("extractTicketRefs", () => {
         "https://mycompany.atlassian.jira.net/browse/PROJ-456",
         "main",
       );
-      expect(refs).toContainEqual(
-        expect.objectContaining({ id: "PROJ-456", source: "jira" }),
-      );
+      expect(refs).toContainEqual(expect.objectContaining({ id: "PROJ-456", source: "jira" }));
     });
 
     it("handles 2-letter project keys", () => {
@@ -92,16 +81,11 @@ describe("extractTicketRefs", () => {
         "https://linear.app/myteam/issue/TEAM-42 is the ticket",
         "main",
       );
-      expect(refs).toContainEqual(
-        expect.objectContaining({ id: "TEAM-42", source: "linear" }),
-      );
+      expect(refs).toContainEqual(expect.objectContaining({ id: "TEAM-42", source: "linear" }));
     });
 
     it("does not duplicate PROJ-123 when linear URL provides it", () => {
-      const refs = extractTicketRefs(
-        "https://linear.app/t/issue/ENG-10",
-        "main",
-      );
+      const refs = extractTicketRefs("https://linear.app/t/issue/ENG-10", "main");
       const engRefs = refs.filter((r) => r.id === "ENG-10");
       expect(engRefs).toHaveLength(1);
       expect(engRefs[0].source).toBe("linear");
@@ -119,9 +103,7 @@ describe("extractTicketRefs", () => {
         "https://dev.azure.com/myorg/myproj/_workitems/edit/321",
         "main",
       );
-      expect(refs).toContainEqual(
-        expect.objectContaining({ id: "321", source: "azure-devops" }),
-      );
+      expect(refs).toContainEqual(expect.objectContaining({ id: "321", source: "azure-devops" }));
     });
   });
 
@@ -149,18 +131,12 @@ describe("extractTicketRefs", () => {
 
   describe("multiple and mixed refs", () => {
     it("extracts multiple refs from one description", () => {
-      const refs = extractTicketRefs(
-        "fixes #1, #2, and PROJ-99",
-        "main",
-      );
+      const refs = extractTicketRefs("fixes #1, #2, and PROJ-99", "main");
       expect(refs.length).toBeGreaterThanOrEqual(3);
     });
 
     it("handles mixed sources", () => {
-      const refs = extractTicketRefs(
-        "see #10 and AB#20 and PROJ-30",
-        "main",
-      );
+      const refs = extractTicketRefs("see #10 and AB#20 and PROJ-30", "main");
       const sources = new Set(refs.map((r) => r.source));
       expect(sources).toContain("github");
       expect(sources).toContain("azure-devops");
@@ -170,9 +146,7 @@ describe("extractTicketRefs", () => {
 
   describe("no refs", () => {
     it("returns empty for plain text", () => {
-      expect(extractTicketRefs("just a normal description", "main")).toEqual(
-        [],
-      );
+      expect(extractTicketRefs("just a normal description", "main")).toEqual([]);
     });
 
     it("returns empty for empty inputs", () => {
@@ -189,9 +163,7 @@ describe("extractTicketRefs", () => {
 
     it("deduplicates same github ref appearing twice", () => {
       const refs = extractTicketRefs("#5 and also #5", "main");
-      const fiveRefs = refs.filter(
-        (r) => r.id === "5" && r.source === "github",
-      );
+      const fiveRefs = refs.filter((r) => r.id === "5" && r.source === "github");
       expect(fiveRefs).toHaveLength(1);
     });
   });
@@ -251,18 +223,16 @@ describe("resolveTickets", () => {
   });
 
   it("catches errors and continues", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const mockProvider: TicketProvider = {
-      fetchTicket: vi
-        .fn()
-        .mockRejectedValueOnce(new Error("fail"))
-        .mockResolvedValueOnce({
-          id: "2",
-          title: "ok",
-          description: "",
-          labels: [],
-          source: "github",
-        }),
+      fetchTicket: vi.fn().mockRejectedValueOnce(new Error("fail")).mockResolvedValueOnce({
+        id: "2",
+        title: "ok",
+        description: "",
+        labels: [],
+        source: "github",
+      }),
     };
     const providers = new Map([["github", mockProvider]]);
     const refs: TicketRef[] = [
@@ -330,9 +300,7 @@ describe("provider normalization", () => {
         owner: "o",
         repo: "r",
       });
-      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-        new Response("", { status: 404 }),
-      );
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response("", { status: 404 }));
 
       expect(await provider.fetchTicket("999")).toBeNull();
     });
@@ -458,23 +426,21 @@ describe("provider normalization", () => {
     it("uses issueByIdentifier for TEAM-123 refs", async () => {
       const provider = new LinearTicketProvider({ apiKey: "key" });
 
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockResolvedValueOnce(
-          new Response(
-            JSON.stringify({
-              data: {
-                issueByIdentifier: {
-                  identifier: "ENG-5",
-                  title: "Linear issue",
-                  description: "desc",
-                  labels: { nodes: [{ name: "feature" }] },
-                },
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              issueByIdentifier: {
+                identifier: "ENG-5",
+                title: "Linear issue",
+                description: "desc",
+                labels: { nodes: [{ name: "feature" }] },
               },
-            }),
-            { status: 200 },
-          ),
-        );
+            },
+          }),
+          { status: 200 },
+        ),
+      );
 
       const result = await provider.fetchTicket("ENG-5");
       expect(result).toEqual({
@@ -492,27 +458,25 @@ describe("provider normalization", () => {
     it("uses issue(id:) for UUID-style refs", async () => {
       const provider = new LinearTicketProvider({ apiKey: "key" });
 
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockResolvedValueOnce(
-          new Response(
-            JSON.stringify({
-              data: {
-                issue: {
-                  identifier: "ENG-5",
-                  title: "t",
-                  description: "",
-                  labels: { nodes: [] },
-                },
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              issue: {
+                identifier: "ENG-5",
+                title: "t",
+                description: "",
+                labels: { nodes: [] },
               },
-            }),
-            { status: 200 },
-          ),
-        );
+            },
+          }),
+          { status: 200 },
+        ),
+      );
 
       await provider.fetchTicket("some-uuid");
       const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
-      expect(body.query).toContain('issue(id:');
+      expect(body.query).toContain("issue(id:");
     });
   });
 

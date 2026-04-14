@@ -28,22 +28,25 @@ export class AzureDevOpsTicketProvider implements TicketProvider {
 
     if (!res.ok) return null;
 
-    const data = (await res.json()) as Record<string, unknown>;
-    const fields = (data.fields as Record<string, unknown>) ?? {};
+    const data = (await res.json()) as {
+      id?: number;
+      fields?: Record<string, unknown>;
+    };
+    const fields = data.fields ?? {};
 
     const tags = fields["System.Tags"];
     const labels =
       typeof tags === "string"
         ? tags
             .split(";")
-            .map((t: string) => t.trim())
+            .map((t) => t.trim())
             .filter(Boolean)
         : [];
 
     return {
-      id: String((data.id as number) ?? ref),
-      title: (fields["System.Title"] as string) ?? "",
-      description: ((fields["System.Description"] as string) ?? "").slice(
+      id: String(data.id ?? ref),
+      title: (fields["System.Title"] as string | undefined) ?? "",
+      description: ((fields["System.Description"] as string | undefined) ?? "").slice(
         0,
         MAX_DESC_LENGTH,
       ),

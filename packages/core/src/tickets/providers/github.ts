@@ -28,15 +28,18 @@ export class GitHubTicketProvider implements TicketProvider {
 
     if (!res.ok) return null;
 
-    const data = (await res.json()) as Record<string, unknown>;
+    const data = (await res.json()) as {
+      number: number;
+      title?: string;
+      body?: string;
+      labels?: { name?: string }[];
+    };
 
     return {
       id: String(data.number),
-      title: (data.title as string) ?? "",
-      description: ((data.body as string) ?? "").slice(0, MAX_DESC_LENGTH),
-      labels: ((data.labels as Array<{ name?: string }>) ?? []).map(
-        (l) => l.name ?? "",
-      ),
+      title: data.title ?? "",
+      description: (data.body ?? "").slice(0, MAX_DESC_LENGTH),
+      labels: (data.labels ?? []).map((l) => l.name ?? ""),
       source: "github",
     };
   }

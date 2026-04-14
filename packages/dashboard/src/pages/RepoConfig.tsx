@@ -4,15 +4,31 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, type RepoConfig } from "../api";
 
 const STYLES: { value: RepoConfig["style"]; label: string; description: string }[] = [
-  { value: "strict", label: "Strict", description: "Flag all potential issues, including minor ones" },
-  { value: "balanced", label: "Balanced", description: "Focus on meaningful issues, skip nitpicks" },
-  { value: "lenient", label: "Lenient", description: "Only surface critical bugs and security issues" },
+  {
+    value: "strict",
+    label: "Strict",
+    description: "Flag all potential issues, including minor ones",
+  },
+  {
+    value: "balanced",
+    label: "Balanced",
+    description: "Focus on meaningful issues, skip nitpicks",
+  },
+  {
+    value: "lenient",
+    label: "Lenient",
+    description: "Only surface critical bugs and security issues",
+  },
   { value: "roast", label: "Roast", description: "Brutally honest with dark humour" },
 ];
 
 const FOCUS_AREAS: { value: string; label: string; subtitle: string }[] = [
   { value: "security", label: "Security", subtitle: "Vulnerabilities, injections, auth flaws" },
-  { value: "performance", label: "Performance", subtitle: "Algorithmic complexity, caching, queries" },
+  {
+    value: "performance",
+    label: "Performance",
+    subtitle: "Algorithmic complexity, caching, queries",
+  },
   { value: "testing", label: "Testing", subtitle: "Coverage, edge cases, test quality" },
   { value: "readability", label: "Readability", subtitle: "Naming, structure, documentation" },
   { value: "architecture", label: "Architecture", subtitle: "Design patterns, coupling, cohesion" },
@@ -26,7 +42,7 @@ export function RepoConfig() {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["repo", owner, repo],
-    queryFn: () => api.getRepo(owner!, repo!),
+    queryFn: () => api.getRepo(owner ?? "", repo ?? ""),
     enabled: !!owner && !!repo,
   });
 
@@ -46,15 +62,18 @@ export function RepoConfig() {
 
   const mutation = useMutation({
     mutationFn: () =>
-      api.updateRepo(owner!, repo!, {
+      api.updateRepo(owner ?? "", repo ?? "", {
         style,
         focusAreas,
-        ignorePatterns: ignorePatterns.split("\n").map((s) => s.trim()).filter(Boolean),
+        ignorePatterns: ignorePatterns
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean),
         customInstructions,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["repo", owner, repo] });
-      queryClient.invalidateQueries({ queryKey: ["repos"] });
+      void queryClient.invalidateQueries({ queryKey: ["repo", owner, repo] });
+      void queryClient.invalidateQueries({ queryKey: ["repos"] });
     },
   });
 
@@ -70,7 +89,7 @@ export function RepoConfig() {
   return (
     <div className="max-w-2xl">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => void navigate(-1)}
         className="text-slate-400 hover:text-slate-200 text-sm mb-4 transition-colors"
       >
         ← Back
@@ -166,12 +185,8 @@ export function RepoConfig() {
         />
       </section>
 
-      {mutation.isSuccess && (
-        <p className="text-green-400 text-sm mb-3">Saved successfully.</p>
-      )}
-      {mutation.isError && (
-        <p className="text-red-400 text-sm mb-3">Failed to save.</p>
-      )}
+      {mutation.isSuccess && <p className="text-green-400 text-sm mb-3">Saved successfully.</p>}
+      {mutation.isError && <p className="text-red-400 text-sm mb-3">Failed to save.</p>}
 
       <button
         onClick={() => mutation.mutate()}

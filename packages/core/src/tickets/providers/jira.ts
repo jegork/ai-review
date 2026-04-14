@@ -43,8 +43,15 @@ export class JiraTicketProvider implements TicketProvider {
 
     if (!res.ok) return null;
 
-    const data = (await res.json()) as Record<string, unknown>;
-    const fields = (data.fields as Record<string, unknown>) ?? {};
+    const data = (await res.json()) as {
+      key?: string;
+      fields?: {
+        summary?: string;
+        description?: string | Record<string, unknown>;
+        labels?: string[];
+      };
+    };
+    const fields = data.fields ?? {};
 
     let description = "";
     if (typeof fields.description === "string") {
@@ -54,8 +61,8 @@ export class JiraTicketProvider implements TicketProvider {
     }
 
     return {
-      id: (data.key as string) ?? ref,
-      title: (fields.summary as string) ?? "",
+      id: data.key ?? ref,
+      title: fields.summary ?? "",
       description: description.slice(0, MAX_DESC_LENGTH),
       labels: Array.isArray(fields.labels) ? fields.labels : [],
       source: "jira",

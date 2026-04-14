@@ -505,8 +505,8 @@ describe("stripDeletionOnlyHunks", () => {
 
 describe("expandContext", () => {
   const fileContent = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join("\n");
-  const fetcher = async (_path: string) => fileContent;
-  const nullFetcher = async (_path: string) => null;
+  const fetcher = (_path: string) => Promise.resolve(fileContent);
+  const nullFetcher = (_path: string) => Promise.resolve<string | null>(null);
 
   function makePatch(overrides?: Partial<FilePatch>): FilePatch {
     return {

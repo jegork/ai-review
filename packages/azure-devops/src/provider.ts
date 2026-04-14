@@ -21,7 +21,7 @@ interface AzureDevOpsProviderConfig {
 
 interface AdoThread {
   id: number;
-  comments: Array<{ id: number; content: string }>;
+  comments: { id: number; content?: string }[];
   status: number;
 }
 
@@ -43,15 +43,15 @@ function parseHunkHeader(line: string): {
   newStart: number;
   newLines: number;
 } {
-  const match = line.match(/^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/);
+  const match = /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/.exec(line);
   if (!match) {
     return { oldStart: 0, oldLines: 0, newStart: 0, newLines: 0 };
   }
   return {
     oldStart: parseInt(match[1], 10),
-    oldLines: match[2] !== undefined ? parseInt(match[2], 10) : 1,
+    oldLines: match[2] ? parseInt(match[2], 10) : 1,
     newStart: parseInt(match[3], 10),
-    newLines: match[4] !== undefined ? parseInt(match[4], 10) : 1,
+    newLines: match[4] ? parseInt(match[4], 10) : 1,
   };
 }
 
@@ -62,11 +62,11 @@ function parseDiffText(rawDiff: string): FilePatch[] {
   for (const section of fileSections) {
     const lines = section.split("\n");
 
-    const pathMatch = section.match(/^--- a\/(.+)\n\+\+\+ b\/(.+)/m);
+    const pathMatch = /^--- a\/(.+)\n\+\+\+ b\/(.+)/m.exec(section);
     const binaryMatch = section.includes("Binary files");
 
     if (binaryMatch) {
-      const headerMatch = lines[0]?.match(/a\/(.+?) b\/(.+)/);
+      const headerMatch = /a\/(.+?) b\/(.+)/.exec(lines[0]);
       const path = headerMatch?.[2] ?? "unknown";
       patches.push({
         path,
@@ -139,14 +139,17 @@ export class AzureDevOpsProvider implements GitProvider {
   }
 
   private async request<T>(url: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${this.accessToken}`,
-        "Content-Type": "application/json",
-        ...options?.headers,
-      },
-    });
+    const { headers: extraHeaders, ...restOptions } = options ?? {};
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.accessToken}`,
+      "Content-Type": "application/json",
+    };
+    if (extraHeaders) {
+      new Headers(extraHeaders).forEach((v, k) => {
+        headers[k] = v;
+      });
+    }
+    const response = await fetch(url, { ...restOptions, headers });
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
@@ -171,8 +174,8 @@ export class AzureDevOpsProvider implements GitProvider {
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/iterations?${API_VERSION}`,
     );
 
+    if (iterations.value.length === 0) return [];
     const lastIteration = iterations.value[iterations.value.length - 1];
-    if (!lastIteration) return [];
 
     const changes = await this.request<{ changeEntries: AdoChangeEntry[] }>(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/iterations/${lastIteration.id}/changes?${API_VERSION}`,
@@ -234,8 +237,8 @@ export class AzureDevOpsProvider implements GitProvider {
     const data = await this.request<{
       pullRequestId: number;
       title: string;
-      description: string;
-      createdBy: { displayName: string; uniqueName: string };
+      description?: string;
+      createdBy: { displayName: string; uniqueName?: string } | null;
       sourceRefName: string;
       targetRefName: string;
       url: string;
@@ -292,12 +295,12 @@ export class AzureDevOpsProvider implements GitProvider {
       });
       if (!response.ok) return [];
       const data = (await response.json()) as {
-        results?: Array<{
+        results?: {
           fileName: string;
-          path: string;
-          matches?: Record<string, Array<{ charOffset: number; length: number }>>;
+          path?: string;
+          matches?: Record<string, { charOffset: number; length: number }[]>;
           contentId?: string;
-        }>;
+        }[];
       };
       return (data.results ?? []).map((r) => ({
         file: r.path?.replace(/^\//, "") ?? r.fileName,
