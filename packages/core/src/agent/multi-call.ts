@@ -177,18 +177,6 @@ function mergeTicketCompliance(results: ReviewResult[]): TicketComplianceItem[] 
   }));
 }
 
-async function reviewChunk(
-  patches: FilePatch[],
-  config: ReviewConfig,
-  prMetadata: PRMetadata,
-  maxTokens: number,
-  ticketContext?: TicketInfo[],
-  options?: RunReviewOptions,
-): Promise<ReviewResult> {
-  const { compressed } = compressDiff(patches, maxTokens);
-  return runConsensusReview(patches, config, prMetadata, compressed, ticketContext, options);
-}
-
 export async function runMultiCallReview(
   patches: FilePatch[],
   config: ReviewConfig,
@@ -221,11 +209,11 @@ export async function runMultiCallReview(
     let result: ReviewResult;
 
     if (skippedFiles.length === 0) {
-      result = await reviewChunk(
+      result = await runConsensusReview(
         patches,
         config,
         prMetadata,
-        maxTokens,
+        compressed,
         ticketContext,
         resolvedOptions,
       );
@@ -246,11 +234,12 @@ export async function runMultiCallReview(
 
       const results: ReviewResult[] = [];
       for (const group of groups) {
-        const groupResult = await reviewChunk(
+        const groupCompressed = compressDiff(group, maxTokens).compressed;
+        const groupResult = await runConsensusReview(
           group,
           config,
           prMetadata,
-          maxTokens,
+          groupCompressed,
           ticketContext,
           resolvedOptions,
         );
