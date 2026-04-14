@@ -13,6 +13,7 @@ import {
   GitHubTicketProvider,
   JiraTicketProvider,
   LinearTicketProvider,
+  loadMcpServerConfigsFromEnv,
   logger,
 } from "@rusty-bot/core";
 import { GitHubProvider } from "./provider.js";
@@ -90,11 +91,13 @@ export async function orchestrateReview(params: {
     const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
     const languageSummary = summarizeLanguages(reviewable);
+    const mcpServers = await loadMcpServerConfigsFromEnv();
 
     const result = await runMultiCallReview(expanded, config, metadata, tickets, {
       provider,
       sourceRef: metadata.sourceBranch,
       languageSummary,
+      mcpServers,
       maxTokens: MAX_DIFF_TOKENS,
     });
 

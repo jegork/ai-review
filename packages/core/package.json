@@ -20,6 +20,7 @@
     "@azure/identity": "^4.13.1",
     "@mastra/core": "^1.5.0",
     "@mastra/libsql": "^1.0.0",
+    "@mastra/mcp": "^1.4.2",
     "picomatch": "^4.0.4",
     "pino": "^10.3.1",
     "tiktoken": "^1.0.0",

@@ -9,6 +9,7 @@ import {
   AzureDevOpsTicketProvider,
   runMultiCallReview,
   formatSummaryComment,
+  loadMcpServerConfigsFromEnv,
   logger,
   flushLogger,
 } from "@rusty-bot/core";
@@ -111,13 +112,20 @@ async function main(): Promise<void> {
   const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
   const languageSummary = summarizeLanguages(expanded);
+  const mcpServers = await loadMcpServerConfigsFromEnv();
 
   const review = await runMultiCallReview(
     expanded,
     config,
     metadata,
     tickets.length > 0 ? tickets : undefined,
-    { provider, sourceRef: metadata.sourceBranch, languageSummary, maxTokens: MAX_TOKENS },
+    {
+      provider,
+      sourceRef: metadata.sourceBranch,
+      languageSummary,
+      mcpServers,
+      maxTokens: MAX_TOKENS,
+    },
   );
 
   const criticalCount = review.findings.filter((f) => f.severity === "critical").length;
