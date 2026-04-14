@@ -179,6 +179,7 @@ describe("GitHubProvider", () => {
           severity: "suggestion",
           category: "style",
           message: "prefer const",
+          suggestedFix: null,
         },
       ];
 

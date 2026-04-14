@@ -195,6 +195,7 @@ describe("AzureDevOpsProvider", () => {
           severity: "suggestion",
           category: "style",
           message: "prefer const",
+          suggestedFix: null,
         },
       ];
 
@@ -232,6 +233,7 @@ describe("AzureDevOpsProvider", () => {
           severity: "warning",
           category: "bugs",
           message: "bug",
+          suggestedFix: null,
         },
       ]);
 

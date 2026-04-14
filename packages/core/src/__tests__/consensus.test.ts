@@ -9,6 +9,7 @@ function makeFinding(overrides: Partial<Finding> = {}): Finding {
     severity: "warning",
     category: "bugs",
     message: "potential null reference in handler function",
+    suggestedFix: null,
     ...overrides,
   };
 }

@@ -14,6 +14,7 @@ function makeMockReview(diff: string): ReviewResult {
         severity: "warning" as const,
         category: "bugs" as const,
         message: `finding from chunk with ${countTokens(diff)} tokens`,
+        suggestedFix: null,
       },
     ],
     observations: [],
