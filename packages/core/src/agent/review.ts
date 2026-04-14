@@ -60,6 +60,6 @@ export async function runReview(
     ticketCompliance: parsed.ticketCompliance,
     filesReviewed: parsed.filesReviewed,
     modelUsed: modelName,
-    tokenCount: response.usage?.totalTokens ?? 0,
+    tokenCount: response.usage.totalTokens ?? 0,
   };
 }

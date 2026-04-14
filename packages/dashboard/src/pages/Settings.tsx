@@ -64,7 +64,7 @@ export function Settings() {
     mutationFn: () =>
       api.updateSettings({ llmModel, jiraToken, linearToken, adoToken } as Settings),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
   });
 
@@ -114,12 +114,8 @@ export function Settings() {
         </div>
       </div>
 
-      {mutation.isSuccess && (
-        <p className="text-green-400 text-sm mt-4">Saved successfully.</p>
-      )}
-      {mutation.isError && (
-        <p className="text-red-400 text-sm mt-4">Failed to save settings.</p>
-      )}
+      {mutation.isSuccess && <p className="text-green-400 text-sm mt-4">Saved successfully.</p>}
+      {mutation.isError && <p className="text-red-400 text-sm mt-4">Failed to save settings.</p>}
 
       <button
         onClick={() => mutation.mutate()}

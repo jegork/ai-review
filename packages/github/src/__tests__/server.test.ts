@@ -11,7 +11,7 @@ vi.mock("../auth.js", () => ({
 
 vi.mock("../storage.js", async () => {
   let configs: Record<string, Record<string, unknown>> = {};
-  let reviews: Array<Record<string, unknown>> = [];
+  let reviews: Record<string, unknown>[] = [];
   let settings: Record<string, string> = {};
 
   return {

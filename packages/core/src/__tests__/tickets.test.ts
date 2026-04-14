@@ -224,7 +224,7 @@ describe("resolveTickets", () => {
   });
 
   it("catches errors and continues", async () => {
-    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(logger, "warn").mockImplementation(vi.fn());
     const mockProvider: TicketProvider = {
       fetchTicket: vi.fn().mockRejectedValueOnce(new Error("fail")).mockResolvedValueOnce({
         id: "2",

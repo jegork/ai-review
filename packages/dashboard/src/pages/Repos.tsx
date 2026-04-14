@@ -24,7 +24,7 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
         customInstructions: "",
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["repos"] });
+      void queryClient.invalidateQueries({ queryKey: ["repos"] });
       onClose();
     },
   });
@@ -47,9 +47,7 @@ function AddRepoForm({ onClose }: { onClose: () => void }) {
           onChange={(e) => setRepo(e.target.value)}
         />
       </div>
-      {mutation.isError && (
-        <p className="text-red-400 text-xs mb-2">Failed to add repository.</p>
-      )}
+      {mutation.isError && <p className="text-red-400 text-xs mb-2">Failed to add repository.</p>}
       <div className="flex gap-2">
         <button
           onClick={() => mutation.mutate()}
@@ -99,7 +97,7 @@ export function Repos() {
         {data?.map((r) => (
           <div
             key={`${r.owner}/${r.repo}`}
-            onClick={() => navigate(`/repos/${r.owner}/${r.repo}`)}
+            onClick={() => void navigate(`/repos/${r.owner}/${r.repo}`)}
             className="p-4 bg-slate-800 border border-slate-700 rounded-lg cursor-pointer hover:border-slate-500 transition-colors"
           >
             <p className="text-slate-100 font-medium text-sm mb-2">
