@@ -3,10 +3,19 @@ import type {
   FilePatch,
   PRMetadata,
   Finding,
-  Hunk,
   CodeSearchResult,
 } from "@rusty-bot/core";
 import { formatInlineComment } from "@rusty-bot/core";
+import { structuredPatch } from "diff";
+import type { StructuredPatchHunk } from "diff";
+import type { z } from "zod";
+import {
+  AdoPullRequestSchema,
+  AdoIterationsSchema,
+  AdoChangesSchema,
+  AdoThreadsSchema,
+  AdoSearchResultSchema,
+} from "./schemas.js";
 
 const BOT_MARKER = "<!-- rusty-bot-review -->";
 const API_VERSION = "api-version=7.0";
@@ -19,104 +28,41 @@ interface AzureDevOpsProviderConfig {
   accessToken: string;
 }
 
-interface AdoThread {
-  id: number;
-  comments: Array<{ id: number; content: string }>;
-  status: number;
-}
+function buildPatchFromContent(
+  path: string,
+  oldContent: string | null,
+  newContent: string,
+): FilePatch {
+  const patch = structuredPatch(
+    `a/${path}`,
+    `b/${path}`,
+    oldContent ?? "",
+    newContent,
+    undefined,
+    undefined,
+    { context: 3 },
+  );
 
-interface AdoIteration {
-  id: number;
-}
+  let additions = 0;
+  let deletions = 0;
 
-interface AdoChangeEntry {
-  changeType: string;
-  item: {
-    path: string;
-    gitObjectType?: string;
-  };
-}
-
-function parseHunkHeader(line: string): {
-  oldStart: number;
-  oldLines: number;
-  newStart: number;
-  newLines: number;
-} {
-  const match = line.match(/^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/);
-  if (!match) {
-    return { oldStart: 0, oldLines: 0, newStart: 0, newLines: 0 };
-  }
-  return {
-    oldStart: parseInt(match[1], 10),
-    oldLines: match[2] !== undefined ? parseInt(match[2], 10) : 1,
-    newStart: parseInt(match[3], 10),
-    newLines: match[4] !== undefined ? parseInt(match[4], 10) : 1,
-  };
-}
-
-function parseDiffText(rawDiff: string): FilePatch[] {
-  const patches: FilePatch[] = [];
-  const fileSections = rawDiff.split(/^diff --git /m).filter(Boolean);
-
-  for (const section of fileSections) {
-    const lines = section.split("\n");
-
-    const pathMatch = section.match(/^--- a\/(.+)\n\+\+\+ b\/(.+)/m);
-    const binaryMatch = section.includes("Binary files");
-
-    if (binaryMatch) {
-      const headerMatch = lines[0]?.match(/a\/(.+?) b\/(.+)/);
-      const path = headerMatch?.[2] ?? "unknown";
-      patches.push({
-        path,
-        hunks: [],
-        additions: 0,
-        deletions: 0,
-        isBinary: true,
-      });
-      continue;
+  const hunks = patch.hunks.map((h: StructuredPatchHunk) => {
+    const lines: string[] = [];
+    for (const line of h.lines) {
+      if (line.startsWith("+")) additions++;
+      else if (line.startsWith("-")) deletions++;
+      lines.push(line);
     }
+    return {
+      oldStart: h.oldStart,
+      oldLines: h.oldLines,
+      newStart: h.newStart,
+      newLines: h.newLines,
+      content: lines.join("\n"),
+    };
+  });
 
-    if (!pathMatch) continue;
-
-    const path = pathMatch[2];
-    const hunks: Hunk[] = [];
-    let additions = 0;
-    let deletions = 0;
-
-    let currentHunk: {
-      header: ReturnType<typeof parseHunkHeader>;
-      lines: string[];
-    } | null = null;
-
-    for (const line of lines) {
-      if (line.startsWith("@@")) {
-        if (currentHunk) {
-          hunks.push({
-            ...currentHunk.header,
-            content: currentHunk.lines.join("\n"),
-          });
-        }
-        currentHunk = { header: parseHunkHeader(line), lines: [line] };
-      } else if (currentHunk) {
-        currentHunk.lines.push(line);
-        if (line.startsWith("+") && !line.startsWith("+++")) additions++;
-        if (line.startsWith("-") && !line.startsWith("---")) deletions++;
-      }
-    }
-
-    if (currentHunk) {
-      hunks.push({
-        ...currentHunk.header,
-        content: currentHunk.lines.join("\n"),
-      });
-    }
-
-    patches.push({ path, hunks, additions, deletions, isBinary: false });
-  }
-
-  return patches;
+  return { path, hunks, additions, deletions, isBinary: false };
 }
 
 export class AzureDevOpsProvider implements GitProvider {
@@ -138,7 +84,7 @@ export class AzureDevOpsProvider implements GitProvider {
     return `${this.orgUrl}/${this.project}/_apis/git/repositories/${this.repoName}`;
   }
 
-  private async request<T>(url: string, options?: RequestInit): Promise<T> {
+  private async fetchApi(url: string, options?: RequestInit): Promise<Response> {
     const response = await fetch(url, {
       ...options,
       headers: {
@@ -155,27 +101,60 @@ export class AzureDevOpsProvider implements GitProvider {
       );
     }
 
-    return response.json() as Promise<T>;
+    return response;
+  }
+
+  private async getFileContentByVersion(path: string, version: string): Promise<string | null> {
+    try {
+      const url =
+        `${this.baseUrl}/items?` +
+        `path=${encodeURIComponent("/" + path)}&` +
+        `versionDescriptor.version=${encodeURIComponent(version)}&` +
+        `versionDescriptor.versionType=branch&` +
+        `includeContent=true&${API_VERSION}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          Accept: "application/octet-stream",
+        },
+      });
+      if (!response.ok) return null;
+      return await response.text();
+    } catch {
+      return null;
+    }
+  }
+
+  private async request<T extends z.ZodType>(
+    url: string,
+    schema: T,
+    options?: RequestInit,
+  ): Promise<z.infer<T>> {
+    const response = await this.fetchApi(url, options);
+    const json = await response.json();
+    return schema.parse(json);
   }
 
   async getDiff(): Promise<FilePatch[]> {
-    const pr = await this.request<{
-      sourceRefName: string;
-      targetRefName: string;
-    }>(`${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`);
+    const pr = await this.request(
+      `${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`,
+      AdoPullRequestSchema,
+    );
 
     const sourceRef = pr.sourceRefName.replace("refs/heads/", "");
     const targetRef = pr.targetRefName.replace("refs/heads/", "");
 
-    const iterations = await this.request<{ value: AdoIteration[] }>(
+    const iterations = await this.request(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/iterations?${API_VERSION}`,
+      AdoIterationsSchema,
     );
 
     const lastIteration = iterations.value[iterations.value.length - 1];
     if (!lastIteration) return [];
 
-    const changes = await this.request<{ changeEntries: AdoChangeEntry[] }>(
+    const changes = await this.request(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/iterations/${lastIteration.id}/changes?${API_VERSION}`,
+      AdoChangesSchema,
     );
 
     const patches: FilePatch[] = [];
@@ -190,32 +169,23 @@ export class AzureDevOpsProvider implements GitProvider {
       }
 
       try {
-        // fetch the unified diff for each file by comparing commits
-        const diffUrl =
-          `${this.baseUrl}/diffs/commits?` +
-          `baseVersion=${encodeURIComponent(targetRef)}&` +
-          `targetVersion=${encodeURIComponent(sourceRef)}&` +
-          `diffCommonCommit=true&${API_VERSION}`;
+        // fetch both versions of the file and build a diff
+        const [newContent, oldContent] = await Promise.all([
+          this.getFileContentByVersion(filePath, sourceRef),
+          entry.changeType === "add"
+            ? Promise.resolve(null)
+            : this.getFileContentByVersion(filePath, targetRef),
+        ]);
 
-        const diffResponse = await fetch(diffUrl, {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-            Accept: "text/plain",
-          },
-        });
-
-        if (diffResponse.ok) {
-          const rawDiff = await diffResponse.text();
-          const parsed = parseDiffText(rawDiff);
-          // only include the file we're looking at
-          const match = parsed.find((p) => p.path === filePath);
-          if (match) {
-            patches.push(match);
+        if (newContent !== null) {
+          const patch = buildPatchFromContent(filePath, oldContent, newContent);
+          if (patch.hunks.length > 0) {
+            patches.push(patch);
             continue;
           }
         }
       } catch {
-        // fall through to constructing a minimal patch
+        // fall through to empty patch
       }
 
       patches.push({
@@ -231,16 +201,10 @@ export class AzureDevOpsProvider implements GitProvider {
   }
 
   async getPRMetadata(): Promise<PRMetadata> {
-    const data = await this.request<{
-      pullRequestId: number;
-      title: string;
-      description: string;
-      createdBy: { displayName: string; uniqueName: string };
-      sourceRefName: string;
-      targetRefName: string;
-      url: string;
-      repository: { webUrl: string };
-    }>(`${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`);
+    const data = await this.request(
+      `${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`,
+      AdoPullRequestSchema,
+    );
 
     return {
       id: String(data.pullRequestId),
@@ -291,16 +255,10 @@ export class AzureDevOpsProvider implements GitProvider {
         }),
       });
       if (!response.ok) return [];
-      const data = (await response.json()) as {
-        results?: Array<{
-          fileName: string;
-          path: string;
-          matches?: Record<string, Array<{ charOffset: number; length: number }>>;
-          contentId?: string;
-        }>;
-      };
-      return (data.results ?? []).map((r) => ({
-        file: r.path?.replace(/^\//, "") ?? r.fileName,
+      const parsed = AdoSearchResultSchema.safeParse(await response.json());
+      if (!parsed.success) return [];
+      return (parsed.data.results ?? []).map((r) => ({
+        file: r.path?.replace(/^\//, "") ?? r.fileName ?? "",
         line: 0,
         content: "",
       }));
@@ -310,7 +268,7 @@ export class AzureDevOpsProvider implements GitProvider {
   }
 
   async postSummaryComment(markdown: string): Promise<void> {
-    await this.request(
+    await this.fetchApi(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads?${API_VERSION}`,
       {
         method: "POST",
@@ -334,7 +292,7 @@ export class AzureDevOpsProvider implements GitProvider {
     for (const finding of findings) {
       const content = `${BOT_MARKER}\n${formatInlineComment(finding)}`;
 
-      await this.request(
+      await this.fetchApi(
         `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads?${API_VERSION}`,
         {
           method: "POST",
@@ -359,8 +317,9 @@ export class AzureDevOpsProvider implements GitProvider {
   }
 
   async deleteExistingBotComments(): Promise<void> {
-    const threads = await this.request<{ value: AdoThread[] }>(
+    const threads = await this.request(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads?${API_VERSION}`,
+      AdoThreadsSchema,
     );
 
     const botThreads = threads.value.filter((thread) =>
@@ -368,7 +327,7 @@ export class AzureDevOpsProvider implements GitProvider {
     );
 
     for (const thread of botThreads) {
-      await this.request(
+      await this.fetchApi(
         `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads/${thread.id}?${API_VERSION}`,
         {
           method: "PATCH",

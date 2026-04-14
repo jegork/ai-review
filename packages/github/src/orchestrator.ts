@@ -6,10 +6,10 @@ import {
   filterFiles,
   stripDeletionOnlyHunks,
   expandContext,
-  compressDiff,
+  summarizeLanguages,
   extractTicketRefs,
   resolveTickets,
-  runReview,
+  runMultiCallReview,
   formatSummaryComment,
   GitHubTicketProvider,
   JiraTicketProvider,
@@ -86,18 +86,20 @@ export async function orchestrateReview(params: {
     const expanded = await expandContext(reviewable, (path) =>
       provider.getFileContent(path, metadata.sourceBranch),
     );
-    const { compressed } = compressDiff(expanded, MAX_DIFF_TOKENS);
 
     const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
     const ticketProviders = await buildTicketProviders(owner, repo);
     const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
+    const languageSummary = summarizeLanguages(reviewable);
     const mcpServers = await loadMcpServerConfigs(MCP_CONFIG_PATH);
 
-    const result = await runReview(config, compressed, metadata, tickets, {
+    const result = await runMultiCallReview(expanded, config, metadata, tickets, {
       provider,
       sourceRef: metadata.sourceBranch,
+      languageSummary,
       mcpServers,
+      maxTokens: MAX_DIFF_TOKENS,
     });
 
     const summary = formatSummaryComment(result);

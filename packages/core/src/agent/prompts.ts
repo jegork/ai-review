@@ -10,14 +10,7 @@ function loadTemplate(relativePath: string): string {
   return readFileSync(resolve(promptsDir, relativePath), "utf-8");
 }
 
-const ALL_FOCUS_AREAS: FocusArea[] = [
-  "security",
-  "performance",
-  "bugs",
-  "style",
-  "tests",
-  "docs",
-];
+const ALL_FOCUS_AREAS: FocusArea[] = ["security", "performance", "bugs", "style", "tests", "docs"];
 
 function buildStyleInstructions(style: ReviewStyle): string {
   return loadTemplate(`styles/${style}.txt`);
@@ -46,6 +39,7 @@ export function buildUserMessage(
   diff: string,
   prMetadata: PRMetadata,
   ticketContext?: TicketInfo[],
+  languageSummary?: string,
 ): string {
   const parts: string[] = [];
 
@@ -53,6 +47,10 @@ export function buildUserMessage(
   parts.push(`**Title:** ${prMetadata.title}`);
   parts.push(`**Author:** ${prMetadata.author}`);
   parts.push(`**Branch:** ${prMetadata.sourceBranch} → ${prMetadata.targetBranch}`);
+
+  if (languageSummary) {
+    parts.push(`\n**Languages:** ${languageSummary}`);
+  }
 
   if (prMetadata.description) {
     parts.push(`\n**Description:**\n${prMetadata.description}`);

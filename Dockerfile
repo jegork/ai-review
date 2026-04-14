@@ -39,8 +39,7 @@ COPY --from=build /app/packages/dashboard/dist ./packages/dashboard/dist
 # copy prompt files that are bundled alongside dist
 COPY --from=build /app/packages/core/src/prompts ./packages/core/dist/prompts
 
-RUN useradd -r -u 1001 -g root rusty && chown -R rusty /app
-USER rusty
+RUN mkdir -p /app/data
 
 VOLUME /app/data
 
@@ -52,7 +51,7 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://localhost:' + (process.env.PORT || 3000) + '/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
-COPY --chown=rusty:root <<'EOF' /app/entrypoint.sh
+COPY <<'EOF' /app/entrypoint.sh
 #!/bin/sh
 set -e
 if [ "$RUSTY_MODE" = "pipeline" ]; then

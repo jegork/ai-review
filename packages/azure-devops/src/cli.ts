@@ -4,11 +4,11 @@ import {
   filterFiles,
   stripDeletionOnlyHunks,
   expandContext,
-  compressDiff,
+  summarizeLanguages,
   extractTicketRefs,
   resolveTickets,
   AzureDevOpsTicketProvider,
-  runReview,
+  runMultiCallReview,
   formatSummaryComment,
   loadMcpServerConfigs,
 } from "@rusty-bot/core";
@@ -91,11 +91,6 @@ async function main(): Promise<void> {
   const skippedCount = rawPatches.length - expanded.length;
   log(`Files changed: ${rawPatches.length} (${expanded.length} reviewed, ${skippedCount} skipped)`);
 
-  const { compressed, skippedFiles } = compressDiff(expanded, MAX_TOKENS);
-  if (skippedFiles.length > 0) {
-    log(`Skipped large files: ${skippedFiles.join(", ")}`);
-  }
-
   const ticketRefs = extractTicketRefs(metadata.title, metadata.description);
   const ticketProviders = new Map<string, AzureDevOpsTicketProvider>();
 
@@ -112,17 +107,22 @@ async function main(): Promise<void> {
 
   const tickets = await resolveTickets(ticketRefs, ticketProviders);
 
+  const languageSummary = summarizeLanguages(expanded);
   const mcpConfigPath = process.env.RUSTY_MCP_CONFIG ?? join(process.cwd(), "mcp-servers.json");
   const mcpServers = await loadMcpServerConfigs(mcpConfigPath);
 
-  // parseDiff expects a raw unified diff string; compressed is already
-  // the formatted diff text from compressDiff, so pass it to the agent directly
-  const review = await runReview(
+  const review = await runMultiCallReview(
+    expanded,
     config,
-    compressed,
     metadata,
     tickets.length > 0 ? tickets : undefined,
-    { provider, sourceRef: metadata.sourceBranch, mcpServers },
+    {
+      provider,
+      sourceRef: metadata.sourceBranch,
+      languageSummary,
+      mcpServers,
+      maxTokens: MAX_TOKENS,
+    },
   );
 
   const criticalCount = review.findings.filter((f) => f.severity === "critical").length;

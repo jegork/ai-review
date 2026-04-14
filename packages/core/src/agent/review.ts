@@ -13,6 +13,7 @@ export interface RunReviewOptions {
   sourceRef?: string;
   /** MCP servers to connect to for additional tools. */
   mcpServers?: McpServerConfig[];
+  languageSummary?: string;
 }
 
 function buildTools(options?: RunReviewOptions): ToolsInput {
@@ -34,7 +35,7 @@ export async function runReview(
   options?: RunReviewOptions,
 ): Promise<ReviewResult> {
   const systemPrompt = buildSystemPrompt(config);
-  const userMessage = buildUserMessage(diff, prMetadata, ticketContext);
+  const userMessage = buildUserMessage(diff, prMetadata, ticketContext, options?.languageSummary);
   const modelConfig = resolveModelConfig();
   const model = resolveModel(modelConfig);
   const modelName = getModelDisplayName(modelConfig);

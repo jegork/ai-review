@@ -1,4 +1,5 @@
 import type { TicketInfo, TicketProvider } from "../../types.js";
+import { AdoWorkItemSchema } from "../schemas.js";
 
 const MAX_DESC_LENGTH = 10_000;
 
@@ -28,25 +29,25 @@ export class AzureDevOpsTicketProvider implements TicketProvider {
 
     if (!res.ok) return null;
 
-    const data = (await res.json()) as Record<string, unknown>;
-    const fields = (data.fields as Record<string, unknown>) ?? {};
+    const parsed = AdoWorkItemSchema.safeParse(await res.json());
+    if (!parsed.success) return null;
 
-    const tags = fields["System.Tags"];
-    const labels =
-      typeof tags === "string"
-        ? tags
-            .split(";")
-            .map((t: string) => t.trim())
-            .filter(Boolean)
-        : [];
+    const { id, fields } = parsed.data;
+    const title = typeof fields?.["System.Title"] === "string" ? fields["System.Title"] : "";
+    const description =
+      typeof fields?.["System.Description"] === "string" ? fields["System.Description"] : "";
+    const tags = typeof fields?.["System.Tags"] === "string" ? fields["System.Tags"] : "";
+    const labels = tags
+      ? tags
+          .split(";")
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : [];
 
     return {
-      id: String((data.id as number) ?? ref),
-      title: (fields["System.Title"] as string) ?? "",
-      description: ((fields["System.Description"] as string) ?? "").slice(
-        0,
-        MAX_DESC_LENGTH,
-      ),
+      id: String(id ?? ref),
+      title,
+      description: description.slice(0, MAX_DESC_LENGTH),
       labels,
       source: "azure-devops",
     };

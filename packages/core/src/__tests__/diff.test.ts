@@ -3,6 +3,7 @@ import { parseDiff } from "../diff/parser.js";
 import { filterFiles, stripDeletionOnlyHunks } from "../diff/filter.js";
 import { compressDiff, countTokens } from "../diff/compress.js";
 import { expandContext } from "../diff/context.js";
+import { detectLanguage, summarizeLanguages } from "../diff/language.js";
 import type { FilePatch } from "../types.js";
 
 const singleFileDiff = `diff --git a/src/index.ts b/src/index.ts
@@ -614,5 +615,77 @@ describe("expandContext", () => {
     expect(result).toHaveLength(2);
     expect(result[0].hunks[0].content).toContain(" line 12");
     expect(result[1].hunks[0].content).toContain(" line 12");
+  });
+});
+
+describe("detectLanguage", () => {
+  it("detects TypeScript", () => {
+    expect(detectLanguage("src/index.ts")).toBe("TypeScript");
+  });
+
+  it("detects TSX", () => {
+    expect(detectLanguage("components/App.tsx")).toBe("TypeScript (React)");
+  });
+
+  it("detects .d.ts as declarations", () => {
+    expect(detectLanguage("types/global.d.ts")).toBe("TypeScript (declarations)");
+  });
+
+  it("detects Python", () => {
+    expect(detectLanguage("app/main.py")).toBe("Python");
+  });
+
+  it("detects Go", () => {
+    expect(detectLanguage("cmd/server.go")).toBe("Go");
+  });
+
+  it("detects Dockerfile by name", () => {
+    expect(detectLanguage("Dockerfile")).toBe("Dockerfile");
+    expect(detectLanguage("docker/Dockerfile.prod")).toBe("Dockerfile");
+  });
+
+  it("detects Makefile by name", () => {
+    expect(detectLanguage("Makefile")).toBe("Makefile");
+  });
+
+  it("returns null for unknown extensions", () => {
+    expect(detectLanguage("data.bin")).toBeNull();
+  });
+
+  it("returns null for files without extension", () => {
+    expect(detectLanguage("LICENSE")).toBeNull();
+  });
+
+  it("is case-insensitive on extension", () => {
+    expect(detectLanguage("App.TSX")).toBe("TypeScript (React)");
+  });
+});
+
+describe("summarizeLanguages", () => {
+  function patch(path: string, additions: number): FilePatch {
+    return { path, additions, deletions: 0, isBinary: false, hunks: [] };
+  }
+
+  it("summarizes single language", () => {
+    const result = summarizeLanguages([patch("a.ts", 100)]);
+    expect(result).toContain("TypeScript (100%)");
+  });
+
+  it("summarizes multiple languages sorted by size", () => {
+    const result = summarizeLanguages([patch("a.ts", 80), patch("b.py", 20)]);
+    expect(result).toMatch(/TypeScript.*Python/);
+  });
+
+  it("returns empty string for no recognized languages", () => {
+    expect(summarizeLanguages([patch("data.bin", 50)])).toBe("");
+  });
+
+  it("returns empty string for empty patches", () => {
+    expect(summarizeLanguages([])).toBe("");
+  });
+
+  it("groups same language from multiple files", () => {
+    const result = summarizeLanguages([patch("a.ts", 50), patch("b.ts", 50)]);
+    expect(result).toContain("TypeScript (100%)");
   });
 });

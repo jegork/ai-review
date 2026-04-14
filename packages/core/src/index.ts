@@ -18,7 +18,7 @@ export type {
   TicketProvider,
 } from "./types.js";
 
-export { mastra, storage } from "./mastra.js";
+export { getMastra, getStorage } from "./mastra.js";
 export * from "./formatter/index.js";
 export * from "./tickets/index.js";
 export * from "./diff/index.js";
