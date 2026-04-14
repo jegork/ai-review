@@ -79,6 +79,11 @@ describe("resolveJudgeConfig", () => {
     expect(resolveJudgeConfig().model).toBe("anthropic/claude-haiku");
   });
 
+  it("falls back to default threshold on non-numeric value", () => {
+    process.env.RUSTY_JUDGE_THRESHOLD = "abc";
+    expect(resolveJudgeConfig().threshold).toBe(6);
+  });
+
   it("treats empty RUSTY_JUDGE_MODEL as undefined", () => {
     process.env.RUSTY_JUDGE_MODEL = "";
     expect(resolveJudgeConfig().model).toBeUndefined();

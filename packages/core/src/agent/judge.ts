@@ -99,7 +99,7 @@ export function resolveJudgeConfig(): JudgeConfig {
 
   return {
     enabled: enabled === "true" || enabled === "1",
-    threshold: threshold ? Number(threshold) : 6,
+    threshold: threshold && !Number.isNaN(Number(threshold)) ? Number(threshold) : 6,
     model: model || undefined,
   };
 }
