@@ -191,7 +191,6 @@ async function runTieredReview(
 
   const tierOptions: RunReviewOptions = { ...resolvedOptions, tier };
 
-  // skim tier uses single-pass runReview (no consensus needed for lightweight review)
   if (tier === "skim") {
     const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
     if (skippedFiles.length === 0) {
@@ -209,7 +208,7 @@ async function runTieredReview(
     return results;
   }
 
-  // deep-review tier uses consensus review + judge pass
+  // deep-review: consensus + ticket compliance
   const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
   if (skippedFiles.length === 0) {
     const result = await runConsensusReview(
@@ -218,7 +217,7 @@ async function runTieredReview(
       prMetadata,
       compressed,
       ticketContext,
-      resolvedOptions,
+      tierOptions,
     );
     return [result];
   }
@@ -233,7 +232,7 @@ async function runTieredReview(
       prMetadata,
       groupCompressed,
       ticketContext,
-      resolvedOptions,
+      tierOptions,
     );
     results.push(groupResult);
   }
@@ -357,11 +356,17 @@ export async function runCascadeReview(
   try {
     const allResults: ReviewResult[] = [];
 
+    // when there are no deep-review files but tickets exist,
+    // pass ticket context to the skim pass so it's at least visible in the prompt
+    const hasDeepFiles = deepPatches.length > 0;
+    const skimTickets = hasDeepFiles ? undefined : ticketContext;
+    const deepTickets = ticketContext;
+
     const skimResults = await runTieredReview(
       skimPatches,
       config,
       prMetadata,
-      undefined,
+      skimTickets,
       resolvedOptions,
       maxTokens,
       "skim",
@@ -372,7 +377,7 @@ export async function runCascadeReview(
       deepPatches,
       config,
       prMetadata,
-      ticketContext,
+      deepTickets,
       resolvedOptions,
       maxTokens,
       "deep-review",
@@ -394,7 +399,6 @@ export async function runCascadeReview(
 
     const merged = mergeResults(allResults, allResults[0]?.modelUsed ?? "unknown");
 
-    // run judge on deep-review findings only (skim findings are lightweight)
     const allPatches = [...skimPatches, ...deepPatches];
     const judgeDiff = compressDiff(allPatches, Infinity).compressed;
     const judgeConfig = resolveJudgeConfig();
