@@ -14,6 +14,7 @@ export interface Finding {
   category: FocusArea;
   message: string;
   suggestedFix?: string;
+  /** number of consensus passes that flagged this finding */
   voteCount?: number;
 }
 
@@ -23,6 +24,7 @@ export interface Observation {
   severity: Severity;
   category: FocusArea;
   message: string;
+  /** number of consensus passes that flagged this observation */
   voteCount?: number;
 }
 

@@ -77,8 +77,8 @@ export async function runConsensusReview(
   const allFiles = new Set(results.flatMap((r) => r.filesReviewed));
   const totalTokens = results.reduce((sum, r) => sum + r.tokenCount, 0);
 
-  const droppedFindings = findingClusters.length - survivingFindings.length;
-  const droppedObservations = observationClusters.length - survivingObservations.length;
+  const totalRawFindings = findingsByPass.reduce((sum, pass) => sum + pass.length, 0);
+  const totalRawObservations = observationsByPass.reduce((sum, pass) => sum + pass.length, 0);
 
   logger.info(
     {
@@ -86,8 +86,8 @@ export async function runConsensusReview(
       threshold,
       totalClusters: findingClusters.length,
       surviving: survivingFindings.length,
-      dropped: droppedFindings,
-      droppedObservations,
+      dropped: totalRawFindings - survivingFindings.length,
+      droppedObservations: totalRawObservations - survivingObservations.length,
     },
     "consensus voting complete",
   );
