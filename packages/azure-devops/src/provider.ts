@@ -6,6 +6,8 @@ import type {
   CodeSearchResult,
 } from "@rusty-bot/core";
 import { formatInlineComment } from "@rusty-bot/core";
+import { structuredPatch } from "diff";
+import type { StructuredPatchHunk } from "diff";
 import type { z } from "zod";
 import {
   AdoPullRequestSchema,
@@ -31,51 +33,36 @@ function buildPatchFromContent(
   oldContent: string | null,
   newContent: string,
 ): FilePatch {
-  const oldLines = oldContent ? oldContent.split("\n") : [];
-  const newLines = newContent.split("\n");
+  const patch = structuredPatch(
+    `a/${path}`,
+    `b/${path}`,
+    oldContent ?? "",
+    newContent,
+    undefined,
+    undefined,
+    { context: 3 },
+  );
 
-  // simple diff: for new files, everything is an addition;
-  // for modified files, show old as deletions and new as additions
-  const hunkLines: string[] = [];
   let additions = 0;
   let deletions = 0;
 
-  if (oldContent === null) {
-    // new file — all lines are additions
-    for (const line of newLines) {
-      hunkLines.push(`+${line}`);
-      additions++;
+  const hunks = patch.hunks.map((h: StructuredPatchHunk) => {
+    const lines: string[] = [];
+    for (const line of h.lines) {
+      if (line.startsWith("+")) additions++;
+      else if (line.startsWith("-")) deletions++;
+      lines.push(line);
     }
-  } else {
-    // modified file — show removed and added lines
-    for (const line of oldLines) {
-      hunkLines.push(`-${line}`);
-      deletions++;
-    }
-    for (const line of newLines) {
-      hunkLines.push(`+${line}`);
-      additions++;
-    }
-  }
+    return {
+      oldStart: h.oldStart,
+      oldLines: h.oldLines,
+      newStart: h.newStart,
+      newLines: h.newLines,
+      content: lines.join("\n"),
+    };
+  });
 
-  return {
-    path,
-    hunks:
-      hunkLines.length > 0
-        ? [
-            {
-              oldStart: 1,
-              oldLines: oldLines.length,
-              newStart: 1,
-              newLines: newLines.length,
-              content: hunkLines.join("\n"),
-            },
-          ]
-        : [],
-    additions,
-    deletions,
-    isBinary: false,
-  };
+  return { path, hunks, additions, deletions, isBinary: false };
 }
 
 export class AzureDevOpsProvider implements GitProvider {
