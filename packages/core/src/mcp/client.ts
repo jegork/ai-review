@@ -3,28 +3,50 @@ import { join } from "node:path";
 import { MCPClient } from "@mastra/mcp";
 import type { ToolsInput } from "@mastra/core/agent";
 import type { McpServerConfig } from "./types.js";
+import { McpServerConfigSchema } from "./types.js";
+import { logger } from "../logger.js";
 
 const DEFAULT_CONFIG_FILE = "mcp-servers.json";
 
 /**
  * Connects to the configured MCP servers, discovers their tools, and returns
  * Mastra-compatible tools plus a cleanup function to disconnect.
+ *
+ * Each server is connected independently — if one server fails, the rest
+ * still contribute their tools.
  */
 export async function connectMcpServers(
   servers: McpServerConfig,
 ): Promise<{ tools: ToolsInput; disconnect: () => Promise<void> }> {
-  if (Object.keys(servers).length === 0) {
+  const names = Object.keys(servers);
+  if (names.length === 0) {
     return { tools: {}, disconnect: async () => {} };
   }
 
-  const mcp = new MCPClient({ servers });
+  const allTools: ToolsInput = {};
+  const connectedClients: MCPClient[] = [];
 
-  const tools = await mcp.listTools();
+  for (const name of names) {
+    const client = new MCPClient({ servers: { [name]: servers[name] } });
+    try {
+      const tools = await client.listTools();
+      Object.assign(allTools, tools);
+      connectedClients.push(client);
+    } catch (err) {
+      logger.warn({ err, server: name }, "failed to connect MCP server; skipping");
+      try {
+        await client.disconnect();
+      } catch {
+        // ignore cleanup errors for failed connections
+      }
+    }
+  }
 
-  return {
-    tools,
-    disconnect: () => mcp.disconnect(),
+  const disconnect = async () => {
+    await Promise.allSettled(connectedClients.map((c) => c.disconnect()));
   };
+
+  return { tools: allTools, disconnect };
 }
 
 /**
@@ -50,22 +72,20 @@ export async function loadMcpServerConfigs(filePath: string): Promise<McpServerC
     throw err;
   }
 
-  const parsed = JSON.parse(raw);
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new Error("MCP servers config must be a JSON object keyed by server name");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`${filePath}: invalid JSON in MCP servers config file`);
   }
 
-  for (const [name, entry] of Object.entries(parsed)) {
-    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
-      throw new Error(`MCP server "${name}": value must be an object`);
-    }
-    const def = entry as Record<string, unknown>;
-    if (!def.command && !def.url) {
-      throw new Error(`MCP server "${name}": must have either "command" (stdio) or "url" (http)`);
-    }
+  const result = McpServerConfigSchema.safeParse(parsed);
+  if (!result.success) {
+    const issues = result.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`).join("\n");
+    throw new Error(`${filePath}: invalid MCP servers config:\n${issues}`);
   }
 
-  return parsed as McpServerConfig;
+  return result.data as McpServerConfig;
 }
 
 /**

@@ -26,43 +26,39 @@ describe("loadMcpServerConfigs", () => {
     expect(result).toEqual(config);
   });
 
-  it("throws on invalid JSON", async () => {
+  it("throws with file path on invalid JSON", async () => {
     const filePath = join(TMP_DIR, "invalid.json");
     await writeFile(filePath, "not json {{{");
 
-    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow();
+    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow(filePath);
   });
 
   it("throws when file contains a JSON array", async () => {
     const filePath = join(TMP_DIR, "array.json");
     await writeFile(filePath, "[]");
 
-    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow("must be a JSON object");
+    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow("invalid MCP servers config");
   });
 
   it("throws when file contains a non-object value", async () => {
     const filePath = join(TMP_DIR, "string.json");
     await writeFile(filePath, '"hello"');
 
-    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow("must be a JSON object");
+    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow("invalid MCP servers config");
   });
 
   it("throws when a server entry is not an object", async () => {
     const filePath = join(TMP_DIR, "bad-entry.json");
     await writeFile(filePath, JSON.stringify({ docs: 42 }));
 
-    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow(
-      'MCP server "docs": value must be an object',
-    );
+    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow("invalid MCP servers config");
   });
 
   it("throws when a server entry has neither command nor url", async () => {
     const filePath = join(TMP_DIR, "no-transport.json");
     await writeFile(filePath, JSON.stringify({ docs: { args: ["--help"] } }));
 
-    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow(
-      'MCP server "docs": must have either "command" (stdio) or "url" (http)',
-    );
+    await expect(loadMcpServerConfigs(filePath)).rejects.toThrow("invalid MCP servers config");
   });
 });
 
