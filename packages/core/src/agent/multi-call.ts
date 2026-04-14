@@ -246,8 +246,10 @@ export async function runMultiCallReview(
 
     // run judge/filter pass on merged findings
     const judgeConfig = resolveJudgeConfig();
-    const fullDiff = compressDiff(patches, Infinity).compressed;
-    return await judgeReviewResult(result, fullDiff, judgeConfig);
+    // reuse the already-compressed diff when nothing was skipped
+    const judgeDiff =
+      skippedFiles.length === 0 ? compressed : compressDiff(patches, Infinity).compressed;
+    return await judgeReviewResult(result, judgeDiff, judgeConfig);
   } finally {
     if (mcpDisconnect) {
       try {
