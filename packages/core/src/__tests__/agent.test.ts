@@ -176,6 +176,7 @@ describe("ReviewOutputSchema", () => {
         {
           file: "src/auth.ts",
           line: 15,
+          endLine: null,
           severity: "warning" as const,
           category: "security" as const,
           message: "Missing rate limiting on login endpoint",
@@ -197,6 +198,7 @@ describe("ReviewOutputSchema", () => {
         {
           file: "src/index.ts",
           line: 10,
+          endLine: null,
           severity: "critical" as const,
           category: "bugs" as const,
           message: "Off-by-one error",

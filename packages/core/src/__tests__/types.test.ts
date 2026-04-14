@@ -16,6 +16,7 @@ describe("types", () => {
     const finding: Finding = {
       file: "src/index.ts",
       line: 42,
+      endLine: null,
       severity: "critical",
       category: "security",
       message: "SQL injection vulnerability",

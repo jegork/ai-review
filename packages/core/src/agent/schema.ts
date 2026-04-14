@@ -5,9 +5,9 @@ export const FindingSchema = z.object({
   line: z.number(),
   endLine: z
     .number()
-    .optional()
+    .nullable()
     .describe(
-      "last line of the range when the fix spans multiple lines; omit for single-line fixes",
+      "last line of the range when the fix spans multiple lines; null for single-line fixes",
     ),
   severity: z.enum(["critical", "warning", "suggestion"]),
   category: z.enum(["security", "performance", "bugs", "style", "tests", "docs"]),
