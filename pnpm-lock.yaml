@@ -38,6 +38,9 @@ importers:
       azure-devops-node-api:
         specifier: ^14.1.0
         version: 14.1.0
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
 
   packages/core:
     dependencies:
