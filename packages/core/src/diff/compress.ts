@@ -24,6 +24,10 @@ function formatHunks(patch: FilePatch): string {
       } else if (line.startsWith("\\")) {
         // no-newline marker, keep in whichever section was last
         continue;
+      } else if (line.startsWith("~")) {
+        // sibling signature annotation: emit without line number, do not advance counters
+        oldLines.push(line);
+        newLines.push(line);
       } else {
         oldLines.push(`${oldLine} ${line}`);
         newLines.push(`${newLine} ${line}`);
