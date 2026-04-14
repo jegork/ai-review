@@ -12,6 +12,8 @@ export interface RunReviewOptions {
   /** Additional tools to provide to the review agent (e.g. from MCP servers). */
   extraTools?: ToolsInput;
   languageSummary?: string;
+  /** Files changed in the PR but not present in the current review chunk. */
+  otherPrFiles?: string[];
 }
 
 function buildTools(options?: RunReviewOptions): ToolsInput {
@@ -33,7 +35,13 @@ export async function runReview(
   options?: RunReviewOptions,
 ): Promise<ReviewResult> {
   const systemPrompt = buildSystemPrompt(config);
-  const userMessage = buildUserMessage(diff, prMetadata, ticketContext, options?.languageSummary);
+  const userMessage = buildUserMessage(
+    diff,
+    prMetadata,
+    ticketContext,
+    options?.languageSummary,
+    options?.otherPrFiles,
+  );
   const modelConfig = resolveModelConfig();
   const model = resolveModel(modelConfig);
   const modelName = getModelDisplayName(modelConfig);

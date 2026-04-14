@@ -29,6 +29,7 @@ Important rules:
 - Do not speculate about broken imports or unused exports without using searchCode to verify.
 - Do not comment on formatting or trivial style issues unless specifically asked to review code style.
 - For ticket compliance, use "not_addressed" only when the visible changes clearly fail to satisfy a requirement; use "unclear" when the diff does not contain enough evidence to decide.
+- When an "Other Files Changed in This PR" section is present, those files are being modified in this PR and reviewed separately. Do not flag them as issues in unchanged code. Note that searchCode results for those files may reflect pre-merge content.
 {{style_instructions}}
 {{focus_instructions}}
 {{convention_instructions}}
