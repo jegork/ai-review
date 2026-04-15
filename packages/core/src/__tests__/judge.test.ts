@@ -341,6 +341,57 @@ describe("judgeReviewResult", () => {
     expect(result.filteredCount).toBe(1);
   });
 
+  it("preserves elevated recommendation from consensus when no findings exist", async () => {
+    const review: ReviewResult = {
+      ...makeReviewResult([]),
+      recommendation: "address_before_merge",
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 1,
+        recommendationElevated: true,
+        passRecommendations: [
+          "address_before_merge",
+          "address_before_merge",
+          "address_before_merge",
+        ],
+      },
+    };
+
+    const result = await judgeReviewResult(review, DIFF, { enabled: true, threshold: 6 });
+    expect(result.findings).toHaveLength(0);
+    expect(result.recommendation).toBe("address_before_merge");
+  });
+
+  it("does not preserve recommendation when not elevated by consensus", async () => {
+    const review: ReviewResult = {
+      ...makeReviewResult([makeFinding({ severity: "warning" })]),
+      recommendation: "address_before_merge",
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 1,
+        recommendationElevated: false,
+        passRecommendations: [
+          "address_before_merge",
+          "address_before_merge",
+          "address_before_merge",
+        ],
+      },
+    };
+
+    generateMock.mockResolvedValueOnce({
+      object: {
+        evaluations: [{ index: 0, confidence: 2, reasoning: "false positive" }],
+      },
+      usage: { totalTokens: 200 },
+    });
+
+    const result = await judgeReviewResult(review, DIFF, { enabled: true, threshold: 6 });
+    expect(result.findings).toHaveLength(0);
+    expect(result.recommendation).toBe("looks_good");
+  });
+
   it("preserves observations, filesReviewed, and other metadata", async () => {
     const review: ReviewResult = {
       ...makeReviewResult([makeFinding()]),

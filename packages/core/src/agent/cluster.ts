@@ -82,7 +82,6 @@ function clusterItems<T extends Clusterable>(
 
         if (similarity >= threshold) {
           cluster.items.push({ item, passIndex });
-          for (const t of tokens) cluster.messageTokens.add(t);
           matched = true;
           break;
         }

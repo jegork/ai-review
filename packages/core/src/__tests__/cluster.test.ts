@@ -239,6 +239,21 @@ describe("clusterFindings", () => {
     result.forEach((c) => expect(c.voteCount).toBe(2));
   });
 
+  it("does not dilute similarity when multiple variants join a cluster", () => {
+    const f1 = makeFinding({
+      message: "potential null pointer dereference in the request handler",
+    });
+    const f2 = makeFinding({
+      message: "possible null pointer dereference in request handler function",
+    });
+    const f3 = makeFinding({
+      message: "null pointer dereference risk in the request handler",
+    });
+    const result = clusterFindings([[f1], [f2], [f3]]);
+    expect(result).toHaveLength(1);
+    expect(result[0].voteCount).toBe(3);
+  });
+
   it("handles findings at line proximity boundary (exactly ±5)", () => {
     const f1 = makeFinding({ line: 10 });
     const f2 = makeFinding({ line: 15 });
