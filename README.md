@@ -14,6 +14,7 @@ Built on [Mastra](https://mastra.ai/) (TypeScript).
 - **Inline code comments** — findings posted directly on PR diff lines
 - **Ticket compliance** — discovers linked tickets from PR description, branch name, and platform APIs (GitHub linked issues, ADO work items), then checks if requirements are addressed
 - **Multi-provider LLM** — OpenAI, Anthropic, Google, or any provider supported by Mastra
+- **PR description generation** — optionally generate a structured PR description from the diff when the description is empty or a placeholder (off by default)
 - **GitHub + Azure DevOps** — webhook server for GitHub, pipeline task for Azure DevOps
 - **Web dashboard** — configure repos, review styles, focus areas, and view history
 
@@ -154,6 +155,7 @@ The task exits with code 1 when critical issues are found (configurable via `RUS
 | `RUSTY_JUDGE_MODEL` | model for the judge (can be cheaper than reviewer) | same as `RUSTY_LLM_MODEL` |
 | `RUSTY_LLM_TRIAGE_MODEL` | LLM model for triage classification (enables cascading) | — |
 | `RUSTY_CASCADE_ENABLED` | explicitly enable/disable cascading (`true`/`false`) | auto (enabled when triage model is set) |
+| `RUSTY_GENERATE_DESCRIPTION` | generate PR description when empty/placeholder | `false` |
 
 ### LLM Provider Configuration
 
@@ -343,6 +345,28 @@ RUSTY_CASCADE_ENABLED=false  # force off even if triage model is set
 
 **Cost:** The triage call itself is cheap (truncated diffs, small output schema). The savings come from skipping context expansion and tool calls for skim-tier files. For a typical PR where ~40% of files are config/docs/tests, expect roughly 30–50% token reduction on the review calls.
 
+### PR Description Generation
+
+When a PR has an empty or placeholder description, Rusty Bot can generate a structured one from the diff before starting the review. This helps reviewers understand the PR at a glance and also gives the review agent better context (the generated description is visible to the reviewer in the same run).
+
+Off by default. Enable via:
+
+```bash
+RUSTY_GENERATE_DESCRIPTION=true
+```
+
+Or per-repo in the dashboard (PR Description checkbox).
+
+**How it works:**
+
+1. Before the review starts, the bot checks the current PR description
+2. If the description is empty, whitespace-only, a short placeholder (e.g. "TODO", "WIP"), or a previously bot-generated description, it proceeds
+3. A dedicated agent produces a structured description: summary, per-file change table, breaking changes, and migration notes (sections are omitted when not applicable)
+4. The description is updated on the PR via the platform API
+5. The review then runs with the generated description visible in the PR metadata
+
+**Safety:** The bot never overwrites a human-written description. The detection is conservative — any description with meaningful prose, issue references, or structured content is left untouched. Bot-generated descriptions (identified by an HTML marker) can be regenerated on subsequent runs.
+
 ### Tree-sitter Context Expansion
 
 By default, when the LLM reviews a diff hunk, the surrounding context is expanded to the enclosing function, method, or class boundary using [tree-sitter](https://tree-sitter.github.io/tree-sitter/) AST parsing. This means the model sees complete semantic units — full functions instead of fragments cut mid-logic — which improves review accuracy and eliminates wasted tokens on unrelated adjacent code.
@@ -386,7 +410,7 @@ pnpm install
 # build all packages
 pnpm -r build
 
-# run tests (325 tests)
+# run tests (375 tests)
 pnpm test
 
 # start dev server

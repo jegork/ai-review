@@ -37,4 +37,5 @@ export * from "./diff/index.js";
 export * from "./agent/index.js";
 export * from "./mcp/index.js";
 export * from "./triage/index.js";
+export * from "./description/index.js";
 export { fetchConventionFile } from "./convention-file.js";
