@@ -101,6 +101,7 @@ export async function runSemgrep(
 
   const config = options?.config ?? "auto";
   const timeout = options?.timeoutMs ?? SEMGREP_TIMEOUT_MS;
+  const workDir = options?.workDir ?? process.cwd();
 
   // write file list to a temp file so we don't blow arg length limits
   let tmpDir: string | undefined;
@@ -115,12 +116,7 @@ export async function runSemgrep(
 
     log.info({ config, fileCount: changedFiles.length }, "running semgrep pre-scan");
 
-    const { stdout, stderr, exitCode } = await runCommand(
-      "semgrep",
-      args,
-      timeout,
-      options?.workDir,
-    );
+    const { stdout, stderr, exitCode } = await runCommand("semgrep", args, timeout, workDir);
 
     if (exitCode > 1) {
       log.warn({ exitCode, stderr: stderr.slice(0, 500) }, "semgrep exited with error");
