@@ -1,7 +1,4 @@
 import { execFile } from "node:child_process";
-import { writeFile, unlink, mkdtemp, rmdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { logger } from "../logger.js";
 import type { FilePatch } from "../types.js";
 import type { OpenGrepFinding, OpenGrepRawOutput, OpenGrepResult } from "./types.js";
@@ -80,11 +77,6 @@ export interface RunOpenGrepOptions {
   workDir?: string;
 }
 
-// swallow errors on cleanup calls where failure is expected (e.g. already deleted)
-function swallowCleanupError(_err: unknown): void {
-  // intentionally ignored
-}
-
 export async function runOpenGrep(
   changedFiles: string[],
   options?: RunOpenGrepOptions,
@@ -103,16 +95,9 @@ export async function runOpenGrep(
   const timeout = options?.timeoutMs ?? OPENGREP_TIMEOUT_MS;
   const workDir = options?.workDir ?? process.cwd();
 
-  // write file list to a temp file so we don't blow arg length limits
-  let tmpDir: string | undefined;
-  let targetListPath: string | undefined;
-
   try {
-    tmpDir = await mkdtemp(join(tmpdir(), "opengrep-"));
-    targetListPath = join(tmpDir, "targets.txt");
-    await writeFile(targetListPath, changedFiles.join("\n"), "utf-8");
-
-    const args = ["scan", "--config", config, "--json", "--quiet", "--target-list", targetListPath];
+    // targets are positional args after the flags
+    const args = ["scan", "--config", config, "--json", "--quiet", ...changedFiles];
 
     log.info({ config, fileCount: changedFiles.length }, "running opengrep pre-scan");
 
@@ -140,13 +125,6 @@ export async function runOpenGrep(
     const message = err instanceof Error ? err.message : String(err);
     log.warn({ err: message }, "opengrep pre-scan failed, continuing without it");
     return { findings: [], rawCount: 0, available: true, error: message };
-  } finally {
-    if (targetListPath) {
-      await unlink(targetListPath).catch(swallowCleanupError);
-    }
-    if (tmpDir) {
-      await rmdir(tmpDir).catch(swallowCleanupError);
-    }
   }
 }
 
