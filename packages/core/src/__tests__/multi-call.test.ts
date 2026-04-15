@@ -29,7 +29,7 @@ vi.mock("../agent/review.js", () => ({
   runReview: vi.fn(async (_config, diff, _prMeta, _tickets, _opts) => makeMockReview(diff)),
 }));
 
-const { runMultiCallReview, filterObservationsForPrFiles, mergeResults } =
+const { runMultiCallReview, runCascadeReview, filterObservationsForPrFiles, mergeResults } =
   await import("../agent/multi-call.js");
 const { runReview } = await import("../agent/review.js");
 const runReviewMock = vi.mocked(runReview);
@@ -486,5 +486,38 @@ describe("mergeResults", () => {
 
     const merged = mergeResults([result1, result2], "test-model");
     expect(merged.recommendation).toBe("looks_good");
+  });
+});
+
+describe("runCascadeReview", () => {
+  beforeEach(() => {
+    runReviewMock.mockReset();
+    runReviewMock.mockImplementation(async (_config, diff) => makeMockReview(diff));
+  });
+
+  it("passes skim file paths as otherPrFiles to the deep-review tier", async () => {
+    const skimPatches = [makePatch("tests/test_auth.py", 20)];
+    const deepPatches = [makePatch("src/auth.ts", 20)];
+
+    await runCascadeReview(skimPatches, deepPatches, config, prMetadata, undefined);
+
+    // find the deep-review call (tier !== "skim")
+    const deepCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier !== "skim");
+    expect(deepCalls.length).toBeGreaterThanOrEqual(1);
+
+    const deepOpts = deepCalls[0][4];
+    expect(deepOpts?.otherPrFiles).toContain("tests/test_auth.py");
+  });
+
+  it("does not inject skim paths when there are no skim files", async () => {
+    const deepPatches = [makePatch("src/auth.ts", 20)];
+
+    await runCascadeReview([], deepPatches, config, prMetadata, undefined);
+
+    const deepCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier !== "skim");
+    expect(deepCalls.length).toBeGreaterThanOrEqual(1);
+
+    const deepOpts = deepCalls[0][4];
+    expect(deepOpts?.otherPrFiles).toBeUndefined();
   });
 });
