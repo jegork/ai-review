@@ -74,13 +74,12 @@ function buildSemgrepStatsSection(stats: SemgrepStats): string {
   const lines: string[] = [];
   if (!stats.available) {
     lines.push("> **Semgrep:** not available (install `semgrep` for deterministic SAST pre-scan)");
+  } else if (stats.error) {
+    lines.push(`> **Semgrep pre-scan:** ⚠️ ${stats.error}`);
   } else if (stats.findingCount === 0) {
     lines.push("> **Semgrep pre-scan:** clean — no findings");
   } else {
     lines.push(`> **Semgrep pre-scan:** ${stats.findingCount} finding(s) fed to LLM for triage`);
-  }
-  if (stats.error) {
-    lines.push(`> ⚠️ Semgrep error: ${stats.error}`);
   }
   lines.push("");
   return lines.join("\n");

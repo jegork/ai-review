@@ -159,13 +159,14 @@ describe("semgrep stats in summary formatter", () => {
     expect(summary).toContain("install `semgrep`");
   });
 
-  it("shows error detail when semgrep failed", () => {
+  it("shows error detail when semgrep failed and does not say clean", () => {
     const review = makeReview({
       semgrepStats: { available: true, findingCount: 0, error: "config parse error" },
     });
 
     const summary = formatSummaryComment(review);
     expect(summary).toContain("config parse error");
+    expect(summary).not.toContain("clean");
   });
 
   it("includes semgrep count in footer stats", () => {
