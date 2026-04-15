@@ -202,7 +202,7 @@ function mergeTicketCompliance(results: ReviewResult[]): TicketComplianceItem[] 
   }));
 }
 
-function mergeMissingTests(results: ReviewResult[]): MissingTestItem[] {
+export function mergeMissingTests(results: ReviewResult[]): MissingTestItem[] {
   const seen = new Set<string>();
   const merged: MissingTestItem[] = [];
 
