@@ -199,6 +199,11 @@ describe("buildUserMessage", () => {
     expect(msg).toContain("Do NOT report observations");
   });
 
+  it("instructs the LLM to consider other PR files for ticket compliance", () => {
+    const msg = buildUserMessage("diff", prMetadata, undefined, undefined, ["tests/test_auth.py"]);
+    expect(msg).toContain("ticket compliance");
+  });
+
   it("omits other PR files section when not provided", () => {
     const msg = buildUserMessage("diff", prMetadata);
     expect(msg).not.toContain("Other Files Changed");

@@ -410,12 +410,24 @@ export async function runCascadeReview(
     );
     allResults.push(...skimResults);
 
+    // pass skim file paths to the deep tier so the LLM knows they exist
+    // (particularly important for ticket compliance — e.g. test files triaged
+    // as skim should still count as evidence when evaluating "add tests" requirements)
+    const skimFilePaths = skimPatches.map((p) => p.path);
+    const deepOptionsWithSkimContext: RunReviewOptions =
+      skimFilePaths.length > 0
+        ? {
+            ...resolvedOptions,
+            otherPrFiles: [...(resolvedOptions.otherPrFiles ?? []), ...skimFilePaths],
+          }
+        : resolvedOptions;
+
     const deepResults = await runTieredReview(
       deepPatches,
       config,
       prMetadata,
       deepTickets,
-      resolvedOptions,
+      deepOptionsWithSkimContext,
       maxTokens,
       "deep-review",
     );
