@@ -55,7 +55,7 @@ function buildSemgrepSection(findings: SemgrepFinding[]): string {
     );
     parts.push(`  ${f.message}`);
     if (f.snippet) {
-      parts.push(`  \`\`\`\n  ${f.snippet.trim()}\n  \`\`\``);
+      parts.push(`  \`\`\`\`\n  ${f.snippet.trim()}\n  \`\`\`\``);
     }
   }
 

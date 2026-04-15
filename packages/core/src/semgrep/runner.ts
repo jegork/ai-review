@@ -38,12 +38,17 @@ interface ExecResult {
   exitCode: number;
 }
 
-function runCommand(cmd: string, args: string[], timeoutMs: number): Promise<ExecResult> {
+function runCommand(
+  cmd: string,
+  args: string[],
+  timeoutMs: number,
+  cwd?: string,
+): Promise<ExecResult> {
   return new Promise((resolve, reject) => {
     const proc = execFile(
       cmd,
       args,
-      { maxBuffer: 10 * 1024 * 1024, timeout: timeoutMs },
+      { maxBuffer: 10 * 1024 * 1024, timeout: timeoutMs, ...(cwd ? { cwd } : {}) },
       (err, stdout, stderr) => {
         // semgrep exits 1 when findings exist, which is still valid
         if (err && proc.exitCode === null) {
@@ -110,7 +115,12 @@ export async function runSemgrep(
 
     log.info({ config, fileCount: changedFiles.length }, "running semgrep pre-scan");
 
-    const { stdout, stderr, exitCode } = await runCommand("semgrep", args, timeout);
+    const { stdout, stderr, exitCode } = await runCommand(
+      "semgrep",
+      args,
+      timeout,
+      options?.workDir,
+    );
 
     if (exitCode > 1) {
       log.warn({ exitCode, stderr: stderr.slice(0, 500) }, "semgrep exited with error");
