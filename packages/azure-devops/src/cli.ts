@@ -18,6 +18,8 @@ import {
   isCascadeEnabled,
   runTriage,
   splitByClassification,
+  runOpenGrep,
+  extractChangedFilePaths,
   generatePRDescription,
   shouldGenerateDescription,
 } from "@rusty-bot/core";
@@ -158,6 +160,14 @@ async function main(): Promise<void> {
   const languageSummary = summarizeLanguages(reviewable);
   const mcpServers = await loadMcpServerConfigsFromEnv();
 
+  const openGrepResult = await runOpenGrep(extractChangedFilePaths(reviewable), {
+    config: process.env.RUSTY_OPENGREP_RULES ?? "auto",
+  });
+  const openGrepFindings = openGrepResult.findings.length > 0 ? openGrepResult.findings : undefined;
+  if (openGrepResult.available) {
+    log.info({ findingCount: openGrepResult.findings.length }, "opengrep pre-scan complete");
+  }
+
   let review;
 
   if (isCascadeEnabled()) {
@@ -193,6 +203,7 @@ async function main(): Promise<void> {
           languageSummary,
           mcpServers,
           maxTokens: MAX_TOKENS,
+          openGrepFindings,
         },
       );
 
@@ -222,9 +233,16 @@ async function main(): Promise<void> {
         languageSummary,
         mcpServers,
         maxTokens: MAX_TOKENS,
+        openGrepFindings,
       },
     );
   }
+
+  review.openGrepStats = {
+    available: openGrepResult.available,
+    findingCount: openGrepResult.rawCount,
+    ...(openGrepResult.error ? { error: openGrepResult.error } : {}),
+  };
 
   const criticalCount = review.findings.filter((f) => f.severity === "critical").length;
   const warningCount = review.findings.filter((f) => f.severity === "warning").length;

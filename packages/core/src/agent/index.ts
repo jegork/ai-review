@@ -20,6 +20,7 @@ export {
   mergeResults,
   mergeMissingTests,
   filterObservationsForPrFiles,
+  filterOpenGrepForFiles,
 } from "./multi-call.js";
 export type { MultiCallReviewOptions } from "./multi-call.js";
 export { runConsensusReview } from "./consensus.js";

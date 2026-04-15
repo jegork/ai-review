@@ -20,6 +20,8 @@ import {
   isCascadeEnabled,
   runTriage,
   splitByClassification,
+  runOpenGrep,
+  extractChangedFilePaths,
   generatePRDescription,
   shouldGenerateDescription,
 } from "@rusty-bot/core";
@@ -147,6 +149,15 @@ export async function orchestrateReview(params: {
     const languageSummary = summarizeLanguages(reviewable);
     const mcpServers = await loadMcpServerConfigsFromEnv();
 
+    const openGrepResult = await runOpenGrep(extractChangedFilePaths(reviewable), {
+      config: process.env.RUSTY_OPENGREP_RULES ?? "auto",
+    });
+    const openGrepFindings =
+      openGrepResult.findings.length > 0 ? openGrepResult.findings : undefined;
+    if (openGrepResult.available) {
+      log.info({ findingCount: openGrepResult.findings.length }, "opengrep pre-scan complete");
+    }
+
     let result;
 
     if (isCascadeEnabled()) {
@@ -177,6 +188,7 @@ export async function orchestrateReview(params: {
           languageSummary,
           mcpServers,
           maxTokens: MAX_DIFF_TOKENS,
+          openGrepFindings,
         });
 
         result.triageStats = {
@@ -201,8 +213,15 @@ export async function orchestrateReview(params: {
         languageSummary,
         mcpServers,
         maxTokens: MAX_DIFF_TOKENS,
+        openGrepFindings,
       });
     }
+
+    result.openGrepStats = {
+      available: openGrepResult.available,
+      findingCount: openGrepResult.rawCount,
+      ...(openGrepResult.error ? { error: openGrepResult.error } : {}),
+    };
 
     const summary = formatSummaryComment(result, { ticketResolution });
     await provider.postSummaryComment(summary);

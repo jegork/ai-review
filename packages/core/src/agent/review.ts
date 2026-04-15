@@ -4,6 +4,7 @@ import { ReviewOutputSchema, SkimReviewOutputSchema } from "./schema.js";
 import { buildSystemPrompt, buildUserMessage } from "./prompts.js";
 import { resolveModelConfig, resolveModel, getModelDisplayName } from "./model.js";
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
+import type { OpenGrepFinding } from "../opengrep/types.js";
 import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
 
 export type ReviewTier = "skim" | "deep-review";
@@ -16,6 +17,8 @@ export interface RunReviewOptions {
   tier?: ReviewTier;
   /** Files changed in the PR but not present in the current review chunk. */
   otherPrFiles?: string[];
+  /** OpenGrep findings to feed to the LLM for triage. */
+  openGrepFindings?: OpenGrepFinding[];
 }
 
 function buildTools(options?: RunReviewOptions): ToolsInput {
@@ -46,6 +49,7 @@ export async function runReview(
     ticketContext,
     options?.languageSummary,
     options?.otherPrFiles,
+    options?.openGrepFindings,
   );
   const modelConfig = resolveModelConfig();
   const model = resolveModel(modelConfig);

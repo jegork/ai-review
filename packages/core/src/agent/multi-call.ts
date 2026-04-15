@@ -11,6 +11,7 @@ import type {
   TicketComplianceStatus,
   MissingTestItem,
 } from "../types.js";
+import type { OpenGrepFinding } from "../opengrep/types.js";
 import { runReview, type RunReviewOptions, type ReviewTier } from "./review.js";
 import { runConsensusReview } from "./consensus.js";
 import { judgeReviewResult, resolveJudgeConfig } from "./judge.js";
@@ -80,6 +81,16 @@ function normalizePath(file: string): string {
     .replace(/\\/g, "/")
     .replace(/^\.\//, "")
     .replace(/:\d+(?::\d+)?$/, "");
+}
+
+export function filterOpenGrepForFiles(
+  findings: OpenGrepFinding[] | undefined,
+  files: Set<string>,
+): OpenGrepFinding[] | undefined {
+  if (!findings || findings.length === 0) return undefined;
+  const normalizedFiles = new Set(Array.from(files, normalizePath));
+  const filtered = findings.filter((f) => normalizedFiles.has(normalizePath(f.file)));
+  return filtered.length > 0 ? filtered : undefined;
 }
 
 export function filterObservationsForPrFiles(
@@ -240,9 +251,14 @@ async function runTieredReview(
     const groups = splitIntoGroups(patches, maxTokens);
     const results: ReviewResult[] = [];
     for (let i = 0; i < groups.length; i++) {
+      const groupPaths = new Set(groups[i].map((p) => p.path));
+      const groupOpenGrep = filterOpenGrepForFiles(resolvedOptions.openGrepFindings, groupPaths);
       const { compressed: groupDiff } = compressDiff(groups[i], maxTokens);
       const groupTickets = i === 0 ? ticketContext : undefined;
-      const result = await runReview(config, groupDiff, prMetadata, groupTickets, tierOptions);
+      const result = await runReview(config, groupDiff, prMetadata, groupTickets, {
+        ...tierOptions,
+        openGrepFindings: groupOpenGrep,
+      });
       results.push(result);
     }
     return results;
@@ -265,6 +281,8 @@ async function runTieredReview(
   const groups = splitIntoGroups(patches, maxTokens);
   const results: ReviewResult[] = [];
   for (const group of groups) {
+    const groupPaths = new Set(group.map((p) => p.path));
+    const groupOpenGrep = filterOpenGrepForFiles(resolvedOptions.openGrepFindings, groupPaths);
     const groupCompressed = compressDiff(group, maxTokens).compressed;
     const groupResult = await runConsensusReview(
       group,
@@ -272,7 +290,7 @@ async function runTieredReview(
       prMetadata,
       groupCompressed,
       ticketContext,
-      tierOptions,
+      { ...tierOptions, openGrepFindings: groupOpenGrep },
     );
     results.push(groupResult);
   }
@@ -340,6 +358,7 @@ export async function runMultiCallReview(
       for (const group of groups) {
         const groupPaths = new Set(group.map((p) => p.path));
         const otherPrFiles = allPaths.filter((f) => !groupPaths.has(f));
+        const groupOpenGrep = filterOpenGrepForFiles(resolvedOptions.openGrepFindings, groupPaths);
         const groupCompressed = compressDiff(group, maxTokens).compressed;
         const groupResult = await runConsensusReview(
           group,
@@ -347,7 +366,7 @@ export async function runMultiCallReview(
           prMetadata,
           groupCompressed,
           ticketContext,
-          { ...resolvedOptions, otherPrFiles },
+          { ...resolvedOptions, otherPrFiles, openGrepFindings: groupOpenGrep },
         );
         results.push(groupResult);
       }

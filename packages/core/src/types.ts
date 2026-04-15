@@ -59,6 +59,15 @@ export interface TriageStats {
   triageTokenCount: number;
 }
 
+export interface OpenGrepStats {
+  /** whether opengrep was available to run */
+  available: boolean;
+  /** total findings from opengrep pre-scan */
+  findingCount: number;
+  /** error message if opengrep failed */
+  error?: string;
+}
+
 export interface ReviewResult extends ReviewOutput {
   findings: Finding[];
   observations: Observation[];
@@ -71,6 +80,7 @@ export interface ReviewResult extends ReviewOutput {
   judgeTokenCount?: number;
   consensusMetadata?: ConsensusMetadata;
   droppedFindings?: DroppedFinding[];
+  openGrepStats?: OpenGrepStats;
 }
 
 export interface ReviewConfig {
