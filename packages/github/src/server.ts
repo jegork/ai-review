@@ -120,6 +120,7 @@ app.put("/api/config/repos/:owner/:repo", async (c) => {
     style?: string;
     focusAreas?: FocusArea[];
     ignorePatterns?: string[];
+    generateDescription?: boolean;
   } = await c.req.json();
 
   const parsedStyle = ReviewStyleSchema.safeParse(body.style);
@@ -133,6 +134,9 @@ app.put("/api/config/repos/:owner/:repo", async (c) => {
     style: parsedStyle.success ? parsedStyle.data : "balanced",
     focusAreas: body.focusAreas ?? ["security", "performance", "bugs", "style", "tests", "docs"],
     ignorePatterns: body.ignorePatterns ?? [],
+    ...(typeof body.generateDescription === "boolean" && {
+      generateDescription: body.generateDescription,
+    }),
   };
 
   await setRepoConfig(owner, repo, config);

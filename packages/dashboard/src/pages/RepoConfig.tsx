@@ -54,12 +54,14 @@ export function RepoConfig() {
   const [style, setStyle] = useState<RepoConfig["style"]>("balanced");
   const [focusAreas, setFocusAreas] = useState<string[]>([]);
   const [ignorePatterns, setIgnorePatterns] = useState("");
+  const [generateDescription, setGenerateDescription] = useState(false);
 
   useEffect(() => {
     if (data) {
       setStyle(data.style);
       setFocusAreas(data.focusAreas);
       setIgnorePatterns(data.ignorePatterns.join("\n"));
+      setGenerateDescription(data.generateDescription ?? false);
     }
   }, [data]);
 
@@ -72,6 +74,7 @@ export function RepoConfig() {
           .split("\n")
           .map((s) => s.trim())
           .filter(Boolean),
+        generateDescription,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["repo", owner, repo] });
@@ -172,6 +175,33 @@ export function RepoConfig() {
           className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-400 font-mono resize-y"
         />
         <p className="text-xs text-slate-500 mt-1">one pattern per line</p>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-3">
+          PR Description
+        </h2>
+        <label
+          className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+            generateDescription
+              ? "border-amber-400 bg-amber-400/5"
+              : "border-slate-700 bg-slate-800 hover:border-slate-500"
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={generateDescription}
+            onChange={(e) => setGenerateDescription(e.target.checked)}
+            className="mt-0.5 accent-amber-400"
+          />
+          <div>
+            <p className="text-sm font-medium text-slate-100">Generate PR Description</p>
+            <p className="text-xs text-slate-500">
+              Automatically generate a structured PR description from the diff when the description
+              is empty or contains a placeholder.
+            </p>
+          </div>
+        </label>
       </section>
 
       {mutation.isSuccess && <p className="text-green-400 text-sm mb-3">Saved successfully.</p>}

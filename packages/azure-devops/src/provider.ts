@@ -353,4 +353,11 @@ export class AzureDevOpsProvider implements GitProvider {
     );
     return data.value.map((item) => item.id);
   }
+
+  async updatePRDescription(description: string): Promise<void> {
+    await this.fetchApi(`${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`, {
+      method: "PATCH",
+      body: JSON.stringify({ description }),
+    });
+  }
 }

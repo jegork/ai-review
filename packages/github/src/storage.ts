@@ -10,6 +10,7 @@ export interface RepoConfig {
   ignorePatterns: string[];
   consensusPasses?: number;
   consensusThreshold?: number | null;
+  generateDescription?: boolean;
 }
 
 export interface RepoConfigWithId extends RepoConfig {
