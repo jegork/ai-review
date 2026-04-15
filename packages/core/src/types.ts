@@ -58,12 +58,12 @@ export interface TriageStats {
   triageTokenCount: number;
 }
 
-export interface SemgrepStats {
-  /** whether semgrep was available to run */
+export interface OpenGrepStats {
+  /** whether opengrep was available to run */
   available: boolean;
-  /** total findings from semgrep pre-scan */
+  /** total findings from opengrep pre-scan */
   findingCount: number;
-  /** error message if semgrep failed */
+  /** error message if opengrep failed */
   error?: string;
 }
 
@@ -79,7 +79,7 @@ export interface ReviewResult extends ReviewOutput {
   judgeTokenCount?: number;
   consensusMetadata?: ConsensusMetadata;
   droppedFindings?: DroppedFinding[];
-  semgrepStats?: SemgrepStats;
+  openGrepStats?: OpenGrepStats;
 }
 
 export interface ReviewConfig {

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ReviewConfig, PRMetadata, TicketInfo, FocusArea, ReviewStyle } from "../types.js";
-import type { SemgrepFinding } from "../semgrep/types.js";
+import type { OpenGrepFinding } from "../opengrep/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const promptsDir = resolve(__dirname, "../prompts");
@@ -36,16 +36,16 @@ export function buildSystemPrompt(config: ReviewConfig): string {
     .replace("{{convention_instructions}}", conventionInstructions);
 }
 
-function buildSemgrepSection(findings: SemgrepFinding[]): string {
+function buildOpenGrepSection(findings: OpenGrepFinding[]): string {
   const parts: string[] = [];
-  parts.push("## Semgrep Pre-scan Findings");
+  parts.push("## OpenGrep Pre-scan Findings");
   parts.push("");
   parts.push(
-    "The following issues were detected by Semgrep static analysis before your review. " +
+    "The following issues were detected by OpenGrep static analysis before your review. " +
       "For each finding, decide whether to **confirm** (include in your findings with the appropriate severity) " +
       "or **dismiss** (explain briefly in your summary why it is a false positive). " +
-      "Confirmed Semgrep findings should be reported as structured findings with exact file/line references. " +
-      "You may also find additional issues that Semgrep cannot detect (logic bugs, auth flaws, design problems).",
+      "Confirmed OpenGrep findings should be reported as structured findings with exact file/line references. " +
+      "You may also find additional issues that OpenGrep cannot detect (logic bugs, auth flaws, design problems).",
   );
   parts.push("");
 
@@ -68,7 +68,7 @@ export function buildUserMessage(
   ticketContext?: TicketInfo[],
   languageSummary?: string,
   otherPrFiles?: string[],
-  semgrepFindings?: SemgrepFinding[],
+  openGrepFindings?: OpenGrepFinding[],
 ): string {
   const parts: string[] = [];
 
@@ -121,9 +121,9 @@ export function buildUserMessage(
     parts.push(otherPrFiles.map((f) => `- \`${f}\``).join("\n"));
   }
 
-  if (semgrepFindings && semgrepFindings.length > 0) {
+  if (openGrepFindings && openGrepFindings.length > 0) {
     parts.push("");
-    parts.push(buildSemgrepSection(semgrepFindings));
+    parts.push(buildOpenGrepSection(openGrepFindings));
   }
 
   parts.push("\n## Diff\n");

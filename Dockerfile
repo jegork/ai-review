@@ -21,6 +21,15 @@ FROM node:22-slim AS runtime
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash \
+    && ln -sf "$HOME/.opengrep/cli/latest/opengrep" /usr/local/bin/opengrep \
+    && apt-get purge -y curl \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

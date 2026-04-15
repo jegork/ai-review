@@ -10,7 +10,7 @@ import type {
   TicketComplianceItem,
   TicketComplianceStatus,
 } from "../types.js";
-import type { SemgrepFinding } from "../semgrep/types.js";
+import type { OpenGrepFinding } from "../opengrep/types.js";
 import { runReview, type RunReviewOptions, type ReviewTier } from "./review.js";
 import { runConsensusReview } from "./consensus.js";
 import { judgeReviewResult, resolveJudgeConfig } from "./judge.js";
@@ -82,10 +82,10 @@ function normalizePath(file: string): string {
     .replace(/:\d+(?::\d+)?$/, "");
 }
 
-function filterSemgrepForFiles(
-  findings: SemgrepFinding[] | undefined,
+function filterOpenGrepForFiles(
+  findings: OpenGrepFinding[] | undefined,
   files: Set<string>,
-): SemgrepFinding[] | undefined {
+): OpenGrepFinding[] | undefined {
   if (!findings || findings.length === 0) return undefined;
   const normalizedFiles = new Set(Array.from(files, normalizePath));
   const filtered = findings.filter((f) => normalizedFiles.has(normalizePath(f.file)));
@@ -227,12 +227,12 @@ async function runTieredReview(
     const results: ReviewResult[] = [];
     for (let i = 0; i < groups.length; i++) {
       const groupPaths = new Set(groups[i].map((p) => p.path));
-      const groupSemgrep = filterSemgrepForFiles(resolvedOptions.semgrepFindings, groupPaths);
+      const groupOpenGrep = filterOpenGrepForFiles(resolvedOptions.openGrepFindings, groupPaths);
       const { compressed: groupDiff } = compressDiff(groups[i], maxTokens);
       const groupTickets = i === 0 ? ticketContext : undefined;
       const result = await runReview(config, groupDiff, prMetadata, groupTickets, {
         ...tierOptions,
-        semgrepFindings: groupSemgrep,
+        openGrepFindings: groupOpenGrep,
       });
       results.push(result);
     }
@@ -257,7 +257,7 @@ async function runTieredReview(
   const results: ReviewResult[] = [];
   for (const group of groups) {
     const groupPaths = new Set(group.map((p) => p.path));
-    const groupSemgrep = filterSemgrepForFiles(resolvedOptions.semgrepFindings, groupPaths);
+    const groupOpenGrep = filterOpenGrepForFiles(resolvedOptions.openGrepFindings, groupPaths);
     const groupCompressed = compressDiff(group, maxTokens).compressed;
     const groupResult = await runConsensusReview(
       group,
@@ -265,7 +265,7 @@ async function runTieredReview(
       prMetadata,
       groupCompressed,
       ticketContext,
-      { ...tierOptions, semgrepFindings: groupSemgrep },
+      { ...tierOptions, openGrepFindings: groupOpenGrep },
     );
     results.push(groupResult);
   }
@@ -333,7 +333,7 @@ export async function runMultiCallReview(
       for (const group of groups) {
         const groupPaths = new Set(group.map((p) => p.path));
         const otherPrFiles = allPaths.filter((f) => !groupPaths.has(f));
-        const groupSemgrep = filterSemgrepForFiles(resolvedOptions.semgrepFindings, groupPaths);
+        const groupOpenGrep = filterOpenGrepForFiles(resolvedOptions.openGrepFindings, groupPaths);
         const groupCompressed = compressDiff(group, maxTokens).compressed;
         const groupResult = await runConsensusReview(
           group,
@@ -341,7 +341,7 @@ export async function runMultiCallReview(
           prMetadata,
           groupCompressed,
           ticketContext,
-          { ...resolvedOptions, otherPrFiles, semgrepFindings: groupSemgrep },
+          { ...resolvedOptions, otherPrFiles, openGrepFindings: groupOpenGrep },
         );
         results.push(groupResult);
       }

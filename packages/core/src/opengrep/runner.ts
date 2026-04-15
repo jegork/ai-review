@@ -4,21 +4,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { logger } from "../logger.js";
 import type { FilePatch } from "../types.js";
-import type { SemgrepFinding, SemgrepRawOutput, SemgrepResult } from "./types.js";
+import type { OpenGrepFinding, OpenGrepRawOutput, OpenGrepResult } from "./types.js";
 
-const log = logger.child({ module: "semgrep" });
+const log = logger.child({ module: "opengrep" });
 
-const SEMGREP_TIMEOUT_MS = 120_000;
+const OPENGREP_TIMEOUT_MS = 120_000;
 
-function normalizeSeverity(raw: string): SemgrepFinding["severity"] {
+function normalizeSeverity(raw: string): OpenGrepFinding["severity"] {
   const lower = raw.toLowerCase();
   if (lower === "error") return "error";
   if (lower === "warning") return "warning";
   return "info";
 }
 
-function parseRawOutput(json: string): SemgrepFinding[] {
-  const raw = JSON.parse(json) as SemgrepRawOutput;
+function parseRawOutput(json: string): OpenGrepFinding[] {
+  const raw = JSON.parse(json) as OpenGrepRawOutput;
 
   return raw.results.map((r) => ({
     ruleId: r.check_id,
@@ -50,7 +50,7 @@ function runCommand(
       args,
       { maxBuffer: 10 * 1024 * 1024, timeout: timeoutMs, ...(cwd ? { cwd } : {}) },
       (err, stdout, stderr) => {
-        // semgrep exits 1 when findings exist, which is still valid
+        // opengrep exits 1 when findings exist, which is still valid
         if (err && proc.exitCode === null) {
           reject(err as Error);
           return;
@@ -62,17 +62,17 @@ function runCommand(
   });
 }
 
-async function isSemgrepAvailable(): Promise<boolean> {
+async function isOpenGrepAvailable(): Promise<boolean> {
   try {
-    await runCommand("semgrep", ["--version"], 10_000);
+    await runCommand("opengrep", ["--version"], 10_000);
     return true;
   } catch {
     return false;
   }
 }
 
-export interface RunSemgrepOptions {
-  /** semgrep config string, defaults to "auto" */
+export interface RunOpenGrepOptions {
+  /** opengrep config string, defaults to "auto" */
   config?: string;
   /** timeout in ms, defaults to 120_000 */
   timeoutMs?: number;
@@ -85,22 +85,22 @@ function swallowCleanupError(_err: unknown): void {
   // intentionally ignored
 }
 
-export async function runSemgrep(
+export async function runOpenGrep(
   changedFiles: string[],
-  options?: RunSemgrepOptions,
-): Promise<SemgrepResult> {
+  options?: RunOpenGrepOptions,
+): Promise<OpenGrepResult> {
   if (changedFiles.length === 0) {
     return { findings: [], rawCount: 0, available: true };
   }
 
-  const available = await isSemgrepAvailable();
+  const available = await isOpenGrepAvailable();
   if (!available) {
-    log.info("semgrep not found in PATH, skipping pre-scan");
-    return { findings: [], rawCount: 0, available: false, error: "semgrep not installed" };
+    log.info("opengrep not found in PATH, skipping pre-scan");
+    return { findings: [], rawCount: 0, available: false, error: "opengrep not installed" };
   }
 
   const config = options?.config ?? "auto";
-  const timeout = options?.timeoutMs ?? SEMGREP_TIMEOUT_MS;
+  const timeout = options?.timeoutMs ?? OPENGREP_TIMEOUT_MS;
   const workDir = options?.workDir ?? process.cwd();
 
   // write file list to a temp file so we don't blow arg length limits
@@ -108,23 +108,23 @@ export async function runSemgrep(
   let targetListPath: string | undefined;
 
   try {
-    tmpDir = await mkdtemp(join(tmpdir(), "semgrep-"));
+    tmpDir = await mkdtemp(join(tmpdir(), "opengrep-"));
     targetListPath = join(tmpDir, "targets.txt");
     await writeFile(targetListPath, changedFiles.join("\n"), "utf-8");
 
     const args = ["scan", "--config", config, "--json", "--quiet", "--target-list", targetListPath];
 
-    log.info({ config, fileCount: changedFiles.length }, "running semgrep pre-scan");
+    log.info({ config, fileCount: changedFiles.length }, "running opengrep pre-scan");
 
-    const { stdout, stderr, exitCode } = await runCommand("semgrep", args, timeout, workDir);
+    const { stdout, stderr, exitCode } = await runCommand("opengrep", args, timeout, workDir);
 
     if (exitCode > 1) {
-      log.warn({ exitCode, stderr: stderr.slice(0, 500) }, "semgrep exited with error");
+      log.warn({ exitCode, stderr: stderr.slice(0, 500) }, "opengrep exited with error");
       return {
         findings: [],
         rawCount: 0,
         available: true,
-        error: `semgrep exited with code ${exitCode}: ${stderr.slice(0, 200)}`,
+        error: `opengrep exited with code ${exitCode}: ${stderr.slice(0, 200)}`,
       };
     }
 
@@ -133,12 +133,12 @@ export async function runSemgrep(
     }
 
     const findings = parseRawOutput(stdout);
-    log.info({ findingCount: findings.length }, "semgrep pre-scan complete");
+    log.info({ findingCount: findings.length }, "opengrep pre-scan complete");
 
     return { findings, rawCount: findings.length, available: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    log.warn({ err: message }, "semgrep pre-scan failed, continuing without it");
+    log.warn({ err: message }, "opengrep pre-scan failed, continuing without it");
     return { findings: [], rawCount: 0, available: true, error: message };
   } finally {
     if (targetListPath) {

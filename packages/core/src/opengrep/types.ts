@@ -1,4 +1,4 @@
-export interface SemgrepRawFinding {
+export interface OpenGrepRawFinding {
   check_id: string;
   path: string;
   start: { line: number; col: number };
@@ -11,12 +11,12 @@ export interface SemgrepRawFinding {
   };
 }
 
-export interface SemgrepRawOutput {
-  results: SemgrepRawFinding[];
+export interface OpenGrepRawOutput {
+  results: OpenGrepRawFinding[];
   errors: unknown[];
 }
 
-export interface SemgrepFinding {
+export interface OpenGrepFinding {
   ruleId: string;
   file: string;
   startLine: number;
@@ -27,12 +27,12 @@ export interface SemgrepFinding {
   metadata?: Record<string, unknown>;
 }
 
-export interface SemgrepResult {
-  findings: SemgrepFinding[];
+export interface OpenGrepResult {
+  findings: OpenGrepFinding[];
   /** total number of findings before any dedup */
   rawCount: number;
-  /** whether semgrep was available and ran successfully */
+  /** whether opengrep was available and ran successfully */
   available: boolean;
-  /** error message when semgrep failed or was unavailable */
+  /** error message when opengrep failed or was unavailable */
   error?: string;
 }

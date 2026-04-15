@@ -20,7 +20,7 @@ import {
   isCascadeEnabled,
   runTriage,
   splitByClassification,
-  runSemgrep,
+  runOpenGrep,
   extractChangedFilePaths,
 } from "@rusty-bot/core";
 import { GitHubProvider } from "./provider.js";
@@ -124,12 +124,13 @@ export async function orchestrateReview(params: {
     const languageSummary = summarizeLanguages(reviewable);
     const mcpServers = await loadMcpServerConfigsFromEnv();
 
-    const semgrepResult = await runSemgrep(extractChangedFilePaths(reviewable), {
-      config: process.env.RUSTY_SEMGREP_RULES ?? "auto",
+    const openGrepResult = await runOpenGrep(extractChangedFilePaths(reviewable), {
+      config: process.env.RUSTY_OPENGREP_RULES ?? "auto",
     });
-    const semgrepFindings = semgrepResult.findings.length > 0 ? semgrepResult.findings : undefined;
-    if (semgrepResult.available) {
-      log.info({ findingCount: semgrepResult.findings.length }, "semgrep pre-scan complete");
+    const openGrepFindings =
+      openGrepResult.findings.length > 0 ? openGrepResult.findings : undefined;
+    if (openGrepResult.available) {
+      log.info({ findingCount: openGrepResult.findings.length }, "opengrep pre-scan complete");
     }
 
     let result;
@@ -162,7 +163,7 @@ export async function orchestrateReview(params: {
           languageSummary,
           mcpServers,
           maxTokens: MAX_DIFF_TOKENS,
-          semgrepFindings,
+          openGrepFindings,
         });
 
         result.triageStats = {
@@ -187,14 +188,14 @@ export async function orchestrateReview(params: {
         languageSummary,
         mcpServers,
         maxTokens: MAX_DIFF_TOKENS,
-        semgrepFindings,
+        openGrepFindings,
       });
     }
 
-    result.semgrepStats = {
-      available: semgrepResult.available,
-      findingCount: semgrepResult.rawCount,
-      ...(semgrepResult.error ? { error: semgrepResult.error } : {}),
+    result.openGrepStats = {
+      available: openGrepResult.available,
+      findingCount: openGrepResult.rawCount,
+      ...(openGrepResult.error ? { error: openGrepResult.error } : {}),
     };
 
     const summary = formatSummaryComment(result, { ticketResolution });

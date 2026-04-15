@@ -13,7 +13,7 @@ Built on [Mastra](https://mastra.ai/) (TypeScript).
 - **Structured summary comments** — severity table, collapsible issue details, files reviewed
 - **Inline code comments** — findings posted directly on PR diff lines
 - **Ticket compliance** — discovers linked tickets from PR description, branch name, and platform APIs (GitHub linked issues, ADO work items), then checks if requirements are addressed
-- **Semgrep pre-scan** — runs Semgrep SAST on changed files before LLM review, feeds findings for triage (gracefully skipped when Semgrep is not installed)
+- **OpenGrep pre-scan** — runs [OpenGrep](https://opengrep.dev/) SAST on changed files before LLM review, feeds findings for triage (gracefully skipped when not installed)
 - **Multi-provider LLM** — OpenAI, Anthropic, Google, or any provider supported by Mastra
 - **GitHub + Azure DevOps** — webhook server for GitHub, pipeline task for Azure DevOps
 - **Web dashboard** — configure repos, review styles, focus areas, and view history
@@ -57,7 +57,7 @@ packages/
 │   │   ├── formatter/  # summary comment + inline comment markdown renderers
 │   │   ├── triage/     # file classification for cascading review (skip/skim/deep-review)
 │   │   ├── tickets/    # ticket ref extraction, providers (GitHub/Jira/Linear/ADO)
-│   │   ├── semgrep/    # Semgrep SAST runner and JSON output parser
+│   │   ├── opengrep/   # OpenGrep SAST runner and JSON output parser
 │   │   └── types.ts    # shared type definitions
 │   └── src/prompts/    # externalized prompt templates (styles + focus areas)
 ├── github/         # GitHub App webhook server + config API
@@ -156,7 +156,7 @@ The task exits with code 1 when critical issues are found (configurable via `RUS
 | `RUSTY_JUDGE_MODEL` | model for the judge (can be cheaper than reviewer) | same as `RUSTY_LLM_MODEL` |
 | `RUSTY_LLM_TRIAGE_MODEL` | LLM model for triage classification (enables cascading) | — |
 | `RUSTY_CASCADE_ENABLED` | explicitly enable/disable cascading (`true`/`false`) | auto (enabled when triage model is set) |
-| `RUSTY_SEMGREP_RULES` | Semgrep config string (ruleset or path to `.semgrep.yml`) | `auto` |
+| `RUSTY_OPENGREP_RULES` | OpenGrep config string (ruleset or path to rule file) | `auto` |
 
 ### LLM Provider Configuration
 
@@ -274,39 +274,45 @@ RUSTY_JUDGE_MODEL=anthropic/claude-3-5-haiku-20241022  # optional, cheaper model
 
 When the judge is disabled (default), the pipeline behaves exactly as before with zero overhead.
 
-### Semgrep Pre-scan
+### OpenGrep Pre-scan
 
-Rusty Bot can run [Semgrep](https://semgrep.dev/) on changed files before the LLM review. Semgrep findings are fed to the LLM as structured context so the model can **confirm** true positives (emitting them as findings) or **dismiss** false positives (explaining why in the summary). This combines deterministic SAST coverage with LLM-powered triage — catching patterns LLMs inconsistently detect (hardcoded secrets, SQL injection, XSS) while avoiding Semgrep's typical false positive noise.
+Rusty Bot can run [OpenGrep](https://opengrep.dev/) (LGPL-2.1 fork of Semgrep) on changed files before the LLM review. OpenGrep findings are fed to the LLM as structured context so the model can **confirm** true positives (emitting them as findings) or **dismiss** false positives (explaining why in the summary). This combines deterministic SAST coverage with LLM-powered triage — catching patterns LLMs inconsistently detect (hardcoded secrets, SQL injection, XSS) while filtering out false positive noise.
 
-**Requirements:** `semgrep` must be available in `PATH`. If it's not installed, the review continues LLM-only with a logged notice — no action required.
+**Requirements:** `opengrep` must be available in `PATH`. The Docker image includes it by default. If it's not installed, the review continues LLM-only with a logged notice — no action required.
+
+**Installation (outside Docker):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash
+```
 
 **Configuration:**
 
 ```bash
-# use Semgrep's curated ruleset (default)
-RUSTY_SEMGREP_RULES=auto
+# use curated ruleset (default)
+RUSTY_OPENGREP_RULES=auto
 
 # use a custom config file from the repo
-RUSTY_SEMGREP_RULES=.semgrep.yml
+RUSTY_OPENGREP_RULES=.semgrep.yml
 
 # use a specific registry ruleset
-RUSTY_SEMGREP_RULES=p/security-audit
+RUSTY_OPENGREP_RULES=p/security-audit
 ```
 
 **How it works:**
 
 1. Changed file paths (excluding binaries) are written to a temp file
-2. `semgrep scan --config <rules> --json --quiet --target-list <file>` runs with a 2-minute timeout
+2. `opengrep scan --config <rules> --json --quiet --target-list <file>` runs with a 2-minute timeout
 3. JSON output is parsed into structured findings (rule ID, file, line range, message, severity, snippet)
 4. Findings are injected into the LLM user prompt before the diff, with instructions to confirm or dismiss each one
-5. When the diff is split into token-aware chunks, Semgrep findings are filtered to only files in each chunk
-6. The summary comment shows Semgrep stats (finding count, availability, errors)
+5. When the diff is split into token-aware chunks, OpenGrep findings are filtered to only files in each chunk
+6. The summary comment shows OpenGrep stats (finding count, availability, errors)
 
-**Summary comment:** When Semgrep runs, the PR comment includes a line like:
+**Summary comment:** When OpenGrep runs, the PR comment includes a line like:
 
-> **Semgrep pre-scan:** 5 finding(s) fed to LLM for triage
+> **OpenGrep pre-scan:** 5 finding(s) fed to LLM for triage
 
-**Cost:** Semgrep runs locally in seconds with zero LLM cost. The only added token cost is the Semgrep findings injected into the prompt (~50–200 tokens per finding).
+**Cost:** OpenGrep runs locally in seconds with zero LLM cost. The only added token cost is the findings injected into the prompt (~50–200 tokens per finding).
 
 ### Consensus Voting
 

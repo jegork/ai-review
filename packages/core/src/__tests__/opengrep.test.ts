@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildUserMessage } from "../agent/prompts.js";
 import { formatSummaryComment } from "../formatter/summary.js";
 import type { PRMetadata, ReviewResult } from "../types.js";
-import type { SemgrepFinding, SemgrepRawOutput } from "../semgrep/types.js";
+import type { OpenGrepFinding, OpenGrepRawOutput } from "../opengrep/types.js";
 
 const prMetadata: PRMetadata = {
   id: "42",
@@ -28,7 +28,7 @@ function makeReview(overrides: Partial<ReviewResult> = {}): ReviewResult {
   };
 }
 
-function makeSemgrepFinding(overrides: Partial<SemgrepFinding> = {}): SemgrepFinding {
+function makeOpenGrepFinding(overrides: Partial<OpenGrepFinding> = {}): OpenGrepFinding {
   return {
     ruleId: "javascript.express.security.audit.xss.mustache-escape",
     file: "src/auth.ts",
@@ -40,9 +40,9 @@ function makeSemgrepFinding(overrides: Partial<SemgrepFinding> = {}): SemgrepFin
   };
 }
 
-describe("semgrep prompt integration", () => {
-  it("includes semgrep section when findings are provided", () => {
-    const findings = [makeSemgrepFinding()];
+describe("opengrep prompt integration", () => {
+  it("includes opengrep section when findings are provided", () => {
+    const findings = [makeOpenGrepFinding()];
 
     const message = buildUserMessage(
       "diff content",
@@ -53,14 +53,14 @@ describe("semgrep prompt integration", () => {
       findings,
     );
 
-    expect(message).toContain("## Semgrep Pre-scan Findings");
+    expect(message).toContain("## OpenGrep Pre-scan Findings");
     expect(message).toContain("javascript.express.security.audit.xss.mustache-escape");
     expect(message).toContain("Potential XSS: unescaped user input");
     expect(message).toContain("`src/auth.ts`");
     expect(message).toContain("L42–42");
   });
 
-  it("omits semgrep section when no findings", () => {
+  it("omits opengrep section when no findings", () => {
     const message = buildUserMessage(
       "diff content",
       prMetadata,
@@ -69,19 +69,19 @@ describe("semgrep prompt integration", () => {
       undefined,
       [],
     );
-    expect(message).not.toContain("Semgrep Pre-scan");
+    expect(message).not.toContain("OpenGrep Pre-scan");
   });
 
-  it("omits semgrep section when undefined", () => {
+  it("omits opengrep section when undefined", () => {
     const message = buildUserMessage("diff content", prMetadata);
-    expect(message).not.toContain("Semgrep Pre-scan");
+    expect(message).not.toContain("OpenGrep Pre-scan");
   });
 
   it("renders multiple findings with different severities", () => {
     const findings = [
-      makeSemgrepFinding({ ruleId: "rule-a", severity: "error", file: "a.ts", startLine: 10 }),
-      makeSemgrepFinding({ ruleId: "rule-b", severity: "warning", file: "b.ts", startLine: 20 }),
-      makeSemgrepFinding({ ruleId: "rule-c", severity: "info", file: "c.ts", startLine: 30 }),
+      makeOpenGrepFinding({ ruleId: "rule-a", severity: "error", file: "a.ts", startLine: 10 }),
+      makeOpenGrepFinding({ ruleId: "rule-b", severity: "warning", file: "b.ts", startLine: 20 }),
+      makeOpenGrepFinding({ ruleId: "rule-c", severity: "info", file: "c.ts", startLine: 30 }),
     ];
 
     const message = buildUserMessage("diff", prMetadata, undefined, undefined, undefined, findings);
@@ -95,15 +95,15 @@ describe("semgrep prompt integration", () => {
   });
 
   it("includes code snippet when provided", () => {
-    const findings = [makeSemgrepFinding({ snippet: 'const token = "hardcoded-secret";' })];
+    const findings = [makeOpenGrepFinding({ snippet: 'const token = "hardcoded-secret";' })];
 
     const message = buildUserMessage("diff", prMetadata, undefined, undefined, undefined, findings);
 
     expect(message).toContain('const token = "hardcoded-secret";');
   });
 
-  it("renders semgrep section before diff", () => {
-    const findings = [makeSemgrepFinding()];
+  it("renders opengrep section before diff", () => {
+    const findings = [makeOpenGrepFinding()];
     const message = buildUserMessage(
       "the-diff",
       prMetadata,
@@ -113,13 +113,13 @@ describe("semgrep prompt integration", () => {
       findings,
     );
 
-    const semgrepIdx = message.indexOf("## Semgrep Pre-scan Findings");
+    const openGrepIdx = message.indexOf("## OpenGrep Pre-scan Findings");
     const diffIdx = message.indexOf("## Diff");
-    expect(semgrepIdx).toBeLessThan(diffIdx);
+    expect(openGrepIdx).toBeLessThan(diffIdx);
   });
 
-  it("includes triage instructions in semgrep section", () => {
-    const findings = [makeSemgrepFinding()];
+  it("includes triage instructions in opengrep section", () => {
+    const findings = [makeOpenGrepFinding()];
     const message = buildUserMessage("diff", prMetadata, undefined, undefined, undefined, findings);
 
     expect(message).toContain("confirm");
@@ -128,40 +128,40 @@ describe("semgrep prompt integration", () => {
   });
 });
 
-describe("semgrep stats in summary formatter", () => {
-  it("shows semgrep finding count when available and has findings", () => {
+describe("opengrep stats in summary formatter", () => {
+  it("shows opengrep finding count when available and has findings", () => {
     const review = makeReview({
-      semgrepStats: { available: true, findingCount: 5 },
+      openGrepStats: { available: true, findingCount: 5 },
     });
 
     const summary = formatSummaryComment(review);
 
-    expect(summary).toContain("Semgrep pre-scan");
+    expect(summary).toContain("OpenGrep pre-scan");
     expect(summary).toContain("5 finding(s) fed to LLM for triage");
   });
 
-  it("shows clean message when semgrep found nothing", () => {
+  it("shows clean message when opengrep found nothing", () => {
     const review = makeReview({
-      semgrepStats: { available: true, findingCount: 0 },
+      openGrepStats: { available: true, findingCount: 0 },
     });
 
     const summary = formatSummaryComment(review);
     expect(summary).toContain("clean — no findings");
   });
 
-  it("shows not-available message when semgrep is missing", () => {
+  it("shows not-available message when opengrep is missing", () => {
     const review = makeReview({
-      semgrepStats: { available: false, findingCount: 0, error: "semgrep not installed" },
+      openGrepStats: { available: false, findingCount: 0, error: "opengrep not installed" },
     });
 
     const summary = formatSummaryComment(review);
     expect(summary).toContain("not available");
-    expect(summary).toContain("install `semgrep`");
+    expect(summary).toContain("install `opengrep`");
   });
 
-  it("shows error detail when semgrep failed and does not say clean", () => {
+  it("shows error detail when opengrep failed and does not say clean", () => {
     const review = makeReview({
-      semgrepStats: { available: true, findingCount: 0, error: "config parse error" },
+      openGrepStats: { available: true, findingCount: 0, error: "config parse error" },
     });
 
     const summary = formatSummaryComment(review);
@@ -169,38 +169,37 @@ describe("semgrep stats in summary formatter", () => {
     expect(summary).not.toContain("clean");
   });
 
-  it("includes semgrep count in footer stats", () => {
+  it("includes opengrep count in footer stats", () => {
     const review = makeReview({
-      semgrepStats: { available: true, findingCount: 3 },
+      openGrepStats: { available: true, findingCount: 3 },
     });
 
     const summary = formatSummaryComment(review);
-    expect(summary).toContain("semgrep: 3 pre-scan findings");
+    expect(summary).toContain("opengrep: 3 pre-scan findings");
   });
 
-  it("omits semgrep from footer when no findings", () => {
+  it("omits opengrep from footer when no findings", () => {
     const review = makeReview({
-      semgrepStats: { available: true, findingCount: 0 },
+      openGrepStats: { available: true, findingCount: 0 },
     });
 
     const summary = formatSummaryComment(review);
-    // footer line should not mention semgrep count
     const footerLine = summary.split("\n").find((l) => l.includes("Reviewed by"));
-    expect(footerLine).not.toContain("semgrep");
+    expect(footerLine).not.toContain("opengrep");
   });
 
-  it("does not render semgrep section when stats are absent", () => {
+  it("does not render opengrep section when stats are absent", () => {
     const review = makeReview();
 
     const summary = formatSummaryComment(review);
-    expect(summary).not.toContain("Semgrep");
-    expect(summary).not.toContain("semgrep");
+    expect(summary).not.toContain("OpenGrep");
+    expect(summary).not.toContain("opengrep");
   });
 });
 
-describe("semgrep runner types", () => {
-  it("SemgrepRawOutput shape is parseable", () => {
-    const raw: SemgrepRawOutput = {
+describe("opengrep runner types", () => {
+  it("OpenGrepRawOutput shape is parseable", () => {
+    const raw: OpenGrepRawOutput = {
       results: [
         {
           check_id: "rule-1",
@@ -221,7 +220,7 @@ describe("semgrep runner types", () => {
   });
 
   it("extractChangedFilePaths filters binary files", async () => {
-    const { extractChangedFilePaths } = await import("../semgrep/runner.js");
+    const { extractChangedFilePaths } = await import("../opengrep/runner.js");
     const patches = [
       { path: "src/a.ts", hunks: [], additions: 5, deletions: 0, isBinary: false },
       { path: "image.png", hunks: [], additions: 0, deletions: 0, isBinary: true },
@@ -233,26 +232,26 @@ describe("semgrep runner types", () => {
   });
 
   it("extractChangedFilePaths returns empty for empty patches", async () => {
-    const { extractChangedFilePaths } = await import("../semgrep/runner.js");
+    const { extractChangedFilePaths } = await import("../opengrep/runner.js");
     expect(extractChangedFilePaths([])).toEqual([]);
   });
 });
 
-describe("semgrep runner - runSemgrep", () => {
+describe("opengrep runner - runOpenGrep", () => {
   it("returns empty result for empty file list", async () => {
-    const { runSemgrep } = await import("../semgrep/runner.js");
-    const result = await runSemgrep([]);
+    const { runOpenGrep } = await import("../opengrep/runner.js");
+    const result = await runOpenGrep([]);
 
     expect(result.findings).toEqual([]);
     expect(result.rawCount).toBe(0);
     expect(result.available).toBe(true);
   });
 
-  it("gracefully handles semgrep not being installed", async () => {
-    // this test relies on semgrep not being in PATH in the test environment
-    // if semgrep IS installed, the test still passes because we just check the shape
-    const { runSemgrep } = await import("../semgrep/runner.js");
-    const result = await runSemgrep(["nonexistent-file.ts"]);
+  it("gracefully handles opengrep not being installed", async () => {
+    // this test relies on opengrep not being in PATH in the test environment
+    // if opengrep IS installed, the test still passes because we just check the shape
+    const { runOpenGrep } = await import("../opengrep/runner.js");
+    const result = await runOpenGrep(["nonexistent-file.ts"]);
 
     expect(result).toHaveProperty("findings");
     expect(result).toHaveProperty("rawCount");

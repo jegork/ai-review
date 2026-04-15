@@ -5,7 +5,7 @@ import type {
   Observation,
   DroppedFinding,
   TriageStats,
-  SemgrepStats,
+  OpenGrepStats,
   TicketComplianceStatus,
   TicketResolutionStatus,
 } from "../types.js";
@@ -70,16 +70,18 @@ function buildTriageSection(stats: TriageStats): string {
   return lines.join("\n");
 }
 
-function buildSemgrepStatsSection(stats: SemgrepStats): string {
+function buildOpenGrepStatsSection(stats: OpenGrepStats): string {
   const lines: string[] = [];
   if (!stats.available) {
-    lines.push("> **Semgrep:** not available (install `semgrep` for deterministic SAST pre-scan)");
+    lines.push(
+      "> **OpenGrep:** not available (install `opengrep` for deterministic SAST pre-scan)",
+    );
   } else if (stats.error) {
-    lines.push(`> **Semgrep pre-scan:** ⚠️ ${stats.error}`);
+    lines.push(`> **OpenGrep pre-scan:** ⚠️ ${stats.error}`);
   } else if (stats.findingCount === 0) {
-    lines.push("> **Semgrep pre-scan:** clean — no findings");
+    lines.push("> **OpenGrep pre-scan:** clean — no findings");
   } else {
-    lines.push(`> **Semgrep pre-scan:** ${stats.findingCount} finding(s) fed to LLM for triage`);
+    lines.push(`> **OpenGrep pre-scan:** ${stats.findingCount} finding(s) fed to LLM for triage`);
   }
   lines.push("");
   return lines.join("\n");
@@ -161,8 +163,8 @@ export function formatSummaryComment(
     lines.push(buildTriageSection(review.triageStats));
   }
 
-  if (review.semgrepStats) {
-    lines.push(buildSemgrepStatsSection(review.semgrepStats));
+  if (review.openGrepStats) {
+    lines.push(buildOpenGrepStatsSection(review.openGrepStats));
   }
 
   lines.push("## Overview");
@@ -280,8 +282,8 @@ export function formatSummaryComment(
       parts.push("recommendation elevated from pass votes");
     }
   }
-  if (review.semgrepStats?.available && review.semgrepStats.findingCount > 0) {
-    parts.push(`semgrep: ${review.semgrepStats.findingCount} pre-scan findings`);
+  if (review.openGrepStats?.available && review.openGrepStats.findingCount > 0) {
+    parts.push(`opengrep: ${review.openGrepStats.findingCount} pre-scan findings`);
   }
   lines.push(parts.join(" · "));
   lines.push("");
