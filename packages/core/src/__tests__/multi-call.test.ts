@@ -19,6 +19,7 @@ function makeMockReview(diff: string): ReviewResult {
     ],
     observations: [],
     ticketCompliance: [],
+    missingTests: [],
     filesReviewed: ["a.ts"],
     modelUsed: "test-model",
     tokenCount: countTokens(diff),
@@ -29,7 +30,8 @@ vi.mock("../agent/review.js", () => ({
   runReview: vi.fn(async (_config, diff, _prMeta, _tickets, _opts) => makeMockReview(diff)),
 }));
 
-const { runMultiCallReview, filterObservationsForPrFiles } = await import("../agent/multi-call.js");
+const { runMultiCallReview, runCascadeReview, filterObservationsForPrFiles, mergeResults } =
+  await import("../agent/multi-call.js");
 const { runReview } = await import("../agent/review.js");
 const runReviewMock = vi.mocked(runReview);
 
@@ -259,6 +261,61 @@ describe("runMultiCallReview", () => {
     ]);
   });
 
+  it("merges and deduplicates missing tests across chunks", async () => {
+    runReviewMock
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-1"),
+        missingTests: [
+          { file: "src/auth.ts", description: "edge case: empty token string" },
+          { file: "src/db.ts", description: "error path: connection refused" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-2"),
+        missingTests: [
+          { file: "src/auth.ts", description: "edge case: empty token string" },
+          { file: "src/auth.ts", description: "boundary: token with 0 expiry" },
+        ],
+      });
+
+    const patches = [makePatch("big1.ts", 1000), makePatch("big2.ts", 1000)];
+    const result = await runMultiCallReview(patches, config, prMetadata, undefined, {
+      maxTokens: 3000,
+    });
+
+    expect(result.missingTests).toHaveLength(3);
+    expect(result.missingTests).toEqual([
+      { file: "src/auth.ts", description: "edge case: empty token string" },
+      { file: "src/db.ts", description: "error path: connection refused" },
+      { file: "src/auth.ts", description: "boundary: token with 0 expiry" },
+    ]);
+  });
+
+  it("deduplicates missing tests case-insensitively", async () => {
+    runReviewMock
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-1"),
+        missingTests: [{ file: "src/Auth.ts", description: "Edge case: empty token" }],
+      })
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-2"),
+        missingTests: [{ file: "src/auth.ts", description: "edge case: empty token" }],
+      });
+
+    const patches = [makePatch("big1.ts", 1000), makePatch("big2.ts", 1000)];
+    const result = await runMultiCallReview(patches, config, prMetadata, undefined, {
+      maxTokens: 3000,
+    });
+
+    expect(result.missingTests).toHaveLength(1);
+  });
+
+  it("returns empty missing tests when no chunks produce them", async () => {
+    const patches = [makePatch("small.ts", 10)];
+    const result = await runMultiCallReview(patches, config, prMetadata);
+    expect(result.missingTests).toEqual([]);
+  });
+
   it("handles empty patches", async () => {
     runReviewMock.mockResolvedValueOnce({
       summary: "Nothing to review",
@@ -266,6 +323,7 @@ describe("runMultiCallReview", () => {
       findings: [],
       observations: [],
       ticketCompliance: [],
+      missingTests: [],
       filesReviewed: [],
       modelUsed: "test",
       tokenCount: 0,
@@ -417,5 +475,110 @@ describe("filterObservationsForPrFiles", () => {
     const prFiles = new Set(["src/config.ts"]);
     const filtered = filterObservationsForPrFiles(observations, prFiles);
     expect(filtered).toHaveLength(0);
+  });
+});
+
+describe("mergeResults", () => {
+  it("preserves elevated recommendation from consensus pass when merging with skim results", () => {
+    const skimResult: ReviewResult = {
+      summary: "Skim pass looks fine",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      missingTests: [],
+      filesReviewed: ["a.ts"],
+      modelUsed: "test-model",
+      tokenCount: 100,
+    };
+
+    const deepResult: ReviewResult = {
+      summary: "Deep pass found an issue described in prose",
+      recommendation: "address_before_merge",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      missingTests: [],
+      filesReviewed: ["b.ts"],
+      modelUsed: "test-model",
+      tokenCount: 500,
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 0,
+        recommendationElevated: true,
+        passRecommendations: [
+          "address_before_merge",
+          "address_before_merge",
+          "address_before_merge",
+        ],
+      },
+    };
+
+    const merged = mergeResults([skimResult, deepResult], "test-model");
+    expect(merged.recommendation).toBe("address_before_merge");
+    expect(merged.consensusMetadata?.recommendationElevated).toBe(true);
+  });
+
+  it("does not elevate when no consensus pass has recommendationElevated", () => {
+    const result1: ReviewResult = {
+      summary: "Pass 1",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      missingTests: [],
+      filesReviewed: ["a.ts"],
+      modelUsed: "test-model",
+      tokenCount: 100,
+    };
+
+    const result2: ReviewResult = {
+      summary: "Pass 2",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      missingTests: [],
+      filesReviewed: ["b.ts"],
+      modelUsed: "test-model",
+      tokenCount: 100,
+    };
+
+    const merged = mergeResults([result1, result2], "test-model");
+    expect(merged.recommendation).toBe("looks_good");
+  });
+});
+
+describe("runCascadeReview", () => {
+  beforeEach(() => {
+    runReviewMock.mockReset();
+    runReviewMock.mockImplementation(async (_config, diff) => makeMockReview(diff));
+  });
+
+  it("passes skim file paths as otherPrFiles to the deep-review tier", async () => {
+    const skimPatches = [makePatch("tests/test_auth.py", 20)];
+    const deepPatches = [makePatch("src/auth.ts", 20)];
+
+    await runCascadeReview(skimPatches, deepPatches, config, prMetadata, undefined);
+
+    // find the deep-review call (tier !== "skim")
+    const deepCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier !== "skim");
+    expect(deepCalls.length).toBeGreaterThanOrEqual(1);
+
+    const deepOpts = deepCalls[0][4];
+    expect(deepOpts?.otherPrFiles).toContain("tests/test_auth.py");
+  });
+
+  it("does not inject skim paths when there are no skim files", async () => {
+    const deepPatches = [makePatch("src/auth.ts", 20)];
+
+    await runCascadeReview([], deepPatches, config, prMetadata, undefined);
+
+    const deepCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier !== "skim");
+    expect(deepCalls.length).toBeGreaterThanOrEqual(1);
+
+    const deepOpts = deepCalls[0][4];
+    expect(deepOpts?.otherPrFiles).toBeUndefined();
   });
 });

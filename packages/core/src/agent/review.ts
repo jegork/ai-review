@@ -86,6 +86,10 @@ export async function runReview(
       "ticketCompliance" in parsed
         ? ((parsed as Record<string, unknown>).ticketCompliance as ReviewResult["ticketCompliance"])
         : [],
+    missingTests:
+      "missingTests" in parsed
+        ? ((parsed as Record<string, unknown>).missingTests as ReviewResult["missingTests"])
+        : [],
     filesReviewed: parsed.filesReviewed,
     modelUsed: modelName,
     tokenCount: response.usage.totalTokens ?? 0,

@@ -7,6 +7,7 @@ export type {
   Finding,
   Observation,
   TicketComplianceItem,
+  MissingTestItem,
   ReviewOutput,
 } from "./agent/schema.js";
 
@@ -89,6 +90,7 @@ export interface ReviewConfig {
   conventionFile?: string;
   consensusPasses?: number;
   consensusThreshold?: number | null;
+  generateDescription?: boolean;
 }
 
 export interface PRMetadata {
@@ -163,6 +165,7 @@ export interface GitProvider {
   postSummaryComment(markdown: string): Promise<void>;
   postInlineComments(findings: Finding[]): Promise<void>;
   deleteExistingBotComments(): Promise<void>;
+  updatePRDescription(description: string): Promise<void>;
 }
 
 export interface TicketProvider {

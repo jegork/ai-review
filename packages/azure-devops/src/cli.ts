@@ -20,6 +20,8 @@ import {
   splitByClassification,
   runOpenGrep,
   extractChangedFilePaths,
+  generatePRDescription,
+  shouldGenerateDescription,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
@@ -105,6 +107,22 @@ async function main(): Promise<void> {
     { total: rawPatches.length, reviewed: reviewable.length, skipped: skippedCount },
     "files changed",
   );
+
+  if (process.env.RUSTY_GENERATE_DESCRIPTION === "true") {
+    try {
+      if (shouldGenerateDescription(metadata.description)) {
+        const descResult = await generatePRDescription(reviewable, metadata, metadata.description);
+        await provider.updatePRDescription(descResult.markdown);
+        metadata.description = descResult.markdown;
+        log.info(
+          { model: descResult.modelUsed, tokens: descResult.tokenCount },
+          "generated PR description",
+        );
+      }
+    } catch (err) {
+      log.warn({ err }, "failed to generate PR description, continuing with review");
+    }
+  }
 
   const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
 

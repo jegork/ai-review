@@ -6,6 +6,7 @@ export interface RepoConfig {
   style: "strict" | "balanced" | "lenient" | "roast" | "thorough";
   focusAreas: string[];
   ignorePatterns: string[];
+  generateDescription?: boolean;
 }
 
 export interface Settings {
@@ -57,7 +58,7 @@ export const api = {
   updateRepo: (
     owner: string,
     repo: string,
-    body: Pick<RepoConfig, "style" | "focusAreas" | "ignorePatterns">,
+    body: Pick<RepoConfig, "style" | "focusAreas" | "ignorePatterns" | "generateDescription">,
   ) =>
     request<RepoConfig>(`/api/config/repos/${owner}/${repo}`, {
       method: "PUT",

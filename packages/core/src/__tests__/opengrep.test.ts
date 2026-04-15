@@ -22,6 +22,7 @@ function makeReview(overrides: Partial<ReviewResult> = {}): ReviewResult {
     findings: [],
     observations: [],
     ticketCompliance: [],
+    missingTests: [],
     filesReviewed: [],
     modelUsed: "gpt-4o",
     tokenCount: 1000,

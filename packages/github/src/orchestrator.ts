@@ -22,6 +22,8 @@ import {
   splitByClassification,
   runOpenGrep,
   extractChangedFilePaths,
+  generatePRDescription,
+  shouldGenerateDescription,
 } from "@rusty-bot/core";
 import { GitHubProvider } from "./provider.js";
 import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./storage.js";
@@ -95,6 +97,29 @@ export async function orchestrateReview(params: {
     const patches = parseDiff(rawDiff);
     const filtered = filterFiles(patches, config.ignorePatterns);
     const reviewable = stripDeletionOnlyHunks(filtered);
+
+    const shouldGenerate =
+      repoConfig?.generateDescription ?? process.env.RUSTY_GENERATE_DESCRIPTION === "true";
+
+    if (shouldGenerate) {
+      try {
+        if (shouldGenerateDescription(metadata.description)) {
+          const descResult = await generatePRDescription(
+            reviewable,
+            metadata,
+            metadata.description,
+          );
+          await provider.updatePRDescription(descResult.markdown);
+          metadata.description = descResult.markdown;
+          log.info(
+            { model: descResult.modelUsed, tokens: descResult.tokenCount },
+            "generated PR description",
+          );
+        }
+      } catch (err) {
+        log.warn({ err }, "failed to generate PR description, continuing with review");
+      }
+    }
 
     const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
 

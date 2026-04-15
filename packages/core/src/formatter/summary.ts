@@ -241,6 +241,22 @@ export function formatSummaryComment(
     lines.push("");
   }
 
+  if (review.missingTests.length > 0) {
+    lines.push("<details>");
+    lines.push(
+      `<summary>Missing Tests (${review.missingTests.length} suggested test cases)</summary>`,
+    );
+    lines.push("");
+    lines.push("| File | Suggested Test Case |");
+    lines.push("|------|---------------------|");
+    for (const item of review.missingTests) {
+      lines.push(`| \`${item.file}\` | ${sanitizeTableCell(item.description)} |`);
+    }
+    lines.push("");
+    lines.push("</details>");
+    lines.push("");
+  }
+
   const fileIssueCounts = new Map<string, number>();
   for (const file of review.filesReviewed) {
     fileIssueCounts.set(file, 0);

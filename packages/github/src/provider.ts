@@ -265,4 +265,13 @@ export class GitHubProvider implements GitProvider {
       ),
     );
   }
+
+  async updatePRDescription(description: string): Promise<void> {
+    await this.octokit.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", {
+      owner: this.owner,
+      repo: this.repo,
+      pull_number: this.pullNumber,
+      body: description,
+    });
+  }
 }

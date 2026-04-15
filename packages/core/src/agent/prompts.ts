@@ -115,7 +115,9 @@ export function buildUserMessage(
     parts.push(
       "The following files are also being modified in this PR but are not included in this review chunk. " +
         'Do NOT report observations about these files as issues in "unchanged code" — they are actively changed in this PR ' +
-        "and will be reviewed in a separate chunk. If searchCode returns results in these files, " +
+        "and will be reviewed in a separate chunk. However, DO consider their presence when evaluating ticket compliance — " +
+        "for example, if a ticket requires tests and test files appear in this list, that requirement is likely addressed " +
+        "even though the test diffs are not shown here. If searchCode returns results in these files, " +
         "note that the search results may be stale (pre-merge content).\n",
     );
     parts.push(otherPrFiles.map((f) => `- \`${f}\``).join("\n"));

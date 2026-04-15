@@ -9,6 +9,7 @@ import type {
   Observation,
   TicketComplianceItem,
   TicketComplianceStatus,
+  MissingTestItem,
 } from "../types.js";
 import type { OpenGrepFinding } from "../opengrep/types.js";
 import { runReview, type RunReviewOptions, type ReviewTier } from "./review.js";
@@ -122,12 +123,6 @@ export function mergeResults(results: ReviewResult[], modelUsed: string): Review
   });
 
   const criticalCount = dedupedFindings.filter((f) => f.severity === "critical").length;
-  const recommendation =
-    criticalCount > 0
-      ? ("critical_issues" as const)
-      : dedupedFindings.length > 0
-        ? ("address_before_merge" as const)
-        : ("looks_good" as const);
 
   const summaries = results.map((r) => r.summary).filter(Boolean);
   const summary =
@@ -136,7 +131,20 @@ export function mergeResults(results: ReviewResult[], modelUsed: string): Review
       : `Reviewed in ${results.length} passes.\n\n${summaries.join("\n\n")}`;
 
   const triageStats = results.find((r) => r.triageStats)?.triageStats;
-  const consensusMetadata = results[0]?.consensusMetadata;
+  const consensusMetadata = results.find((r) => r.consensusMetadata)?.consensusMetadata;
+
+  // preserve elevated recommendations from consensus passes even after merging
+  const elevatedRecommendation = consensusMetadata?.recommendationElevated
+    ? results.find((r) => r.consensusMetadata?.recommendationElevated)?.recommendation
+    : undefined;
+
+  const recommendation =
+    elevatedRecommendation ??
+    (criticalCount > 0
+      ? ("critical_issues" as const)
+      : dedupedFindings.length > 0
+        ? ("address_before_merge" as const)
+        : ("looks_good" as const));
 
   return {
     summary,
@@ -144,6 +152,7 @@ export function mergeResults(results: ReviewResult[], modelUsed: string): Review
     findings: dedupedFindings,
     observations: allObservations,
     ticketCompliance: mergeTicketCompliance(results),
+    missingTests: mergeMissingTests(results),
     filesReviewed: [...allFiles],
     modelUsed,
     tokenCount: totalTokens,
@@ -202,6 +211,22 @@ function mergeTicketCompliance(results: ReviewResult[]): TicketComplianceItem[] 
     ...item,
     evidence: evidenceParts.length > 0 ? evidenceParts.join(" | ") : null,
   }));
+}
+
+export function mergeMissingTests(results: ReviewResult[]): MissingTestItem[] {
+  const seen = new Set<string>();
+  const merged: MissingTestItem[] = [];
+
+  for (const result of results) {
+    for (const item of result.missingTests) {
+      const key = `${item.file.toLowerCase()}:${item.description.toLowerCase().trim()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(item);
+    }
+  }
+
+  return merged;
 }
 
 async function runTieredReview(
@@ -422,12 +447,24 @@ export async function runCascadeReview(
     );
     allResults.push(...skimResults);
 
+    // pass skim file paths to the deep tier so the LLM knows they exist
+    // (particularly important for ticket compliance — e.g. test files triaged
+    // as skim should still count as evidence when evaluating "add tests" requirements)
+    const skimFilePaths = skimPatches.map((p) => p.path);
+    const deepOptionsWithSkimContext: RunReviewOptions =
+      skimFilePaths.length > 0
+        ? {
+            ...resolvedOptions,
+            otherPrFiles: [...(resolvedOptions.otherPrFiles ?? []), ...skimFilePaths],
+          }
+        : resolvedOptions;
+
     const deepResults = await runTieredReview(
       deepPatches,
       config,
       prMetadata,
       deepTickets,
-      resolvedOptions,
+      deepOptionsWithSkimContext,
       maxTokens,
       "deep-review",
     );
@@ -440,6 +477,7 @@ export async function runCascadeReview(
         findings: [],
         observations: [],
         ticketCompliance: [],
+        missingTests: [],
         filesReviewed: [],
         modelUsed: "unknown",
         tokenCount: 0,
