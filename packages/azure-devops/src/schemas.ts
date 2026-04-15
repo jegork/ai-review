@@ -64,3 +64,12 @@ export const AdoSearchResultSchema = z.object({
     )
     .optional(),
 });
+
+export const AdoPrWorkItemsSchema = z.object({
+  value: z.array(
+    z.object({
+      id: z.string(),
+      url: z.string().optional(),
+    }),
+  ),
+});

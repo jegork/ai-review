@@ -282,12 +282,37 @@ describe("resolveTickets", () => {
 
     expect(result.tickets).toHaveLength(1);
     expect(result.status).toEqual({
-      refsFound: 3,
+      totalRefsFound: 3,
       refsConsidered: 3,
+      refsSkippedByLimit: 0,
       fetched: 1,
-      missingProvider: 1,
-      fetchFailed: 1,
+      consideredMissingProvider: 1,
+      consideredFetchFailed: 1,
     });
+  });
+
+  it("reports refsSkippedByLimit when refs exceed MAX_TICKETS", async () => {
+    const mockProvider: TicketProvider = {
+      fetchTicket: vi.fn().mockResolvedValue({
+        id: "1",
+        title: "ok",
+        description: "",
+        labels: [],
+        source: "github",
+      }),
+    };
+    const providers = new Map([["github", mockProvider]]);
+    const refs: TicketRef[] = Array.from({ length: 5 }, (_, i) => ({
+      id: String(i),
+      source: "github" as const,
+    }));
+
+    const result = await resolveTicketsWithStatus(refs, providers);
+
+    expect(result.status.totalRefsFound).toBe(5);
+    expect(result.status.refsConsidered).toBe(3);
+    expect(result.status.refsSkippedByLimit).toBe(2);
+    expect(result.status.fetched).toBe(3);
   });
 });
 

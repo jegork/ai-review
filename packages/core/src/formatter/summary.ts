@@ -90,35 +90,37 @@ function buildDroppedFindingsSection(dropped: DroppedFinding[], passes: number):
 }
 
 function buildTicketFetchMessage(status: TicketResolutionStatus): string {
-  if (status.refsFound === 0) {
+  if (status.totalRefsFound === 0) {
     return "No linked ticket references detected.";
   }
 
-  const consideredSuffix =
-    status.refsFound > status.refsConsidered ? ` (reviewed first ${status.refsConsidered})` : "";
+  const cappedSuffix =
+    status.refsSkippedByLimit > 0
+      ? ` (found ${status.totalRefsFound}, reviewed first ${status.refsConsidered})`
+      : "";
 
   const detailParts: string[] = [];
-  if (status.missingProvider > 0) {
-    detailParts.push(`${status.missingProvider} skipped due to missing provider`);
+  if (status.consideredMissingProvider > 0) {
+    detailParts.push(`${status.consideredMissingProvider} skipped due to missing provider`);
   }
-  if (status.fetchFailed > 0) {
-    detailParts.push(`${status.fetchFailed} failed to fetch`);
+  if (status.consideredFetchFailed > 0) {
+    detailParts.push(`${status.consideredFetchFailed} failed to fetch`);
   }
 
   if (status.fetched > 0) {
     const detailSuffix = detailParts.length > 0 ? ` ${detailParts.join(", ")}.` : "";
-    return `Fetched ${status.fetched} of ${status.refsConsidered} linked ticket(s)${consideredSuffix}.${detailSuffix}`;
+    return `Fetched ${status.fetched} of ${status.refsConsidered} linked ticket(s)${cappedSuffix}.${detailSuffix}`;
   }
 
-  if (status.missingProvider > 0 && status.fetchFailed === 0) {
-    return `Found ${status.refsConsidered} linked ticket reference(s)${consideredSuffix}, but no matching ticket provider was configured.`;
+  if (status.consideredMissingProvider > 0 && status.consideredFetchFailed === 0) {
+    return `Found ${status.refsConsidered} linked ticket reference(s)${cappedSuffix}, but no matching ticket provider was configured.`;
   }
 
-  if (status.fetchFailed > 0 && status.missingProvider === 0) {
-    return `Found ${status.refsConsidered} linked ticket reference(s)${consideredSuffix}, but ${status.fetchFailed} fetch${status.fetchFailed === 1 ? " failed" : "es failed"}.`;
+  if (status.consideredFetchFailed > 0 && status.consideredMissingProvider === 0) {
+    return `Found ${status.refsConsidered} linked ticket reference(s)${cappedSuffix}, but ${status.consideredFetchFailed} fetch${status.consideredFetchFailed === 1 ? " failed" : "es failed"}.`;
   }
 
-  return `Found ${status.refsConsidered} linked ticket reference(s)${consideredSuffix}, but could not fetch ticket details. ${detailParts.join(", ")}.`;
+  return `Found ${status.refsConsidered} linked ticket reference(s)${cappedSuffix}, but could not fetch ticket details. ${detailParts.join(", ")}.`;
 }
 
 export function formatSummaryComment(
@@ -180,7 +182,7 @@ export function formatSummaryComment(
     );
   }
 
-  if (options?.ticketResolution && options.ticketResolution.refsFound > 0) {
+  if (options?.ticketResolution && options.ticketResolution.totalRefsFound > 0) {
     lines.push("## Ticket Fetch");
     lines.push("");
     lines.push(buildTicketFetchMessage(options.ticketResolution));

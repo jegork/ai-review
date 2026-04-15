@@ -15,6 +15,7 @@ import {
   AdoChangesSchema,
   AdoThreadsSchema,
   AdoSearchResultSchema,
+  AdoPrWorkItemsSchema,
 } from "./schemas.js";
 
 const BOT_MARKER = "<!-- rusty-bot-review -->";
@@ -343,5 +344,13 @@ export class AzureDevOpsProvider implements GitProvider {
         },
       );
     }
+  }
+
+  async getLinkedWorkItemIds(): Promise<string[]> {
+    const data = await this.request(
+      `${this.baseUrl}/pullRequests/${this.pullRequestId}/workitems?${API_VERSION}`,
+      AdoPrWorkItemsSchema,
+    );
+    return data.value.map((item) => item.id);
   }
 }
