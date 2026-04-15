@@ -6,7 +6,11 @@ import type { Finding } from "@rusty-bot/core";
 function createMockOctokit() {
   return {
     request: vi.fn(),
-  } as unknown as Octokit & { request: ReturnType<typeof vi.fn> };
+    graphql: vi.fn(),
+  } as unknown as Octokit & {
+    request: ReturnType<typeof vi.fn>;
+    graphql: ReturnType<typeof vi.fn>;
+  };
 }
 
 const OWNER = "test-owner";
@@ -218,6 +222,66 @@ describe("GitHubProvider", () => {
       await provider.postInlineComments([]);
 
       expect(octokit.request).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getLinkedIssueNumbers", () => {
+    it("returns issue numbers from closingIssuesReferences", async () => {
+      octokit.graphql.mockResolvedValueOnce({
+        repository: {
+          pullRequest: {
+            closingIssuesReferences: {
+              nodes: [{ number: 16 }, { number: 42 }],
+            },
+          },
+        },
+      });
+
+      const numbers = await provider.getLinkedIssueNumbers();
+
+      expect(numbers).toEqual([16, 42]);
+      expect(octokit.graphql).toHaveBeenCalledWith(
+        expect.stringContaining("closingIssuesReferences"),
+        { owner: OWNER, repo: REPO, pr: PULL_NUMBER },
+      );
+    });
+
+    it("returns empty array when no issues are linked", async () => {
+      octokit.graphql.mockResolvedValueOnce({
+        repository: {
+          pullRequest: {
+            closingIssuesReferences: { nodes: [] },
+          },
+        },
+      });
+
+      const numbers = await provider.getLinkedIssueNumbers();
+      expect(numbers).toEqual([]);
+    });
+
+    it("returns empty array when pullRequest is null", async () => {
+      octokit.graphql.mockResolvedValueOnce({
+        repository: { pullRequest: null },
+      });
+
+      const numbers = await provider.getLinkedIssueNumbers();
+      expect(numbers).toEqual([]);
+    });
+
+    it("returns empty array when repository is null", async () => {
+      octokit.graphql.mockResolvedValueOnce({ repository: null });
+
+      const numbers = await provider.getLinkedIssueNumbers();
+      expect(numbers).toEqual([]);
+    });
+
+    it("returns empty array when closingIssuesReferences is missing", async () => {
+      octokit.graphql.mockResolvedValueOnce({
+        repository: { pullRequest: {} },
+      });
+
+      const numbers = await provider.getLinkedIssueNumbers();
+      expect(numbers).toEqual([]);
     });
   });
 

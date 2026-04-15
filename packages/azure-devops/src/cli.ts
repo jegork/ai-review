@@ -1,4 +1,4 @@
-import type { FocusArea, ReviewConfig } from "@rusty-bot/core";
+import type { FocusArea, ReviewConfig, TicketRef } from "@rusty-bot/core";
 import { ReviewStyleSchema } from "@rusty-bot/core";
 import {
   filterFiles,
@@ -104,10 +104,24 @@ async function main(): Promise<void> {
     "files changed",
   );
 
-  const ticketRefs = extractTicketRefs(metadata.title, metadata.description);
-  const ticketProviders = new Map<string, AzureDevOpsTicketProvider>();
+  const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
 
-  if (ticketRefs.some((r) => r.source === "azure-devops")) {
+  let linkedRefs: TicketRef[] = [];
+  try {
+    const linkedIds = await provider.getLinkedWorkItemIds();
+    const existingIds = new Set(
+      ticketRefs.filter((r) => r.source === "azure-devops").map((r) => r.id),
+    );
+    linkedRefs = linkedIds
+      .filter((id) => !existingIds.has(id))
+      .map((id) => ({ id, source: "azure-devops" }));
+  } catch (err) {
+    log.warn({ err }, "failed to fetch linked work items from ADO, continuing with extracted refs");
+  }
+  const allRefs = [...ticketRefs, ...linkedRefs];
+
+  const ticketProviders = new Map<string, AzureDevOpsTicketProvider>();
+  if (allRefs.some((r) => r.source === "azure-devops")) {
     ticketProviders.set(
       "azure-devops",
       new AzureDevOpsTicketProvider({
@@ -119,7 +133,7 @@ async function main(): Promise<void> {
   }
 
   const { tickets, status: ticketResolution } = await resolveTicketsWithStatus(
-    ticketRefs,
+    allRefs,
     ticketProviders,
   );
 
