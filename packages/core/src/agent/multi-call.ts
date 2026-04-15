@@ -111,12 +111,6 @@ export function mergeResults(results: ReviewResult[], modelUsed: string): Review
   });
 
   const criticalCount = dedupedFindings.filter((f) => f.severity === "critical").length;
-  const recommendation =
-    criticalCount > 0
-      ? ("critical_issues" as const)
-      : dedupedFindings.length > 0
-        ? ("address_before_merge" as const)
-        : ("looks_good" as const);
 
   const summaries = results.map((r) => r.summary).filter(Boolean);
   const summary =
@@ -125,7 +119,20 @@ export function mergeResults(results: ReviewResult[], modelUsed: string): Review
       : `Reviewed in ${results.length} passes.\n\n${summaries.join("\n\n")}`;
 
   const triageStats = results.find((r) => r.triageStats)?.triageStats;
-  const consensusMetadata = results[0]?.consensusMetadata;
+  const consensusMetadata = results.find((r) => r.consensusMetadata)?.consensusMetadata;
+
+  // preserve elevated recommendations from consensus passes even after merging
+  const elevatedRecommendation = consensusMetadata?.recommendationElevated
+    ? results.find((r) => r.consensusMetadata?.recommendationElevated)?.recommendation
+    : undefined;
+
+  const recommendation =
+    elevatedRecommendation ??
+    (criticalCount > 0
+      ? ("critical_issues" as const)
+      : dedupedFindings.length > 0
+        ? ("address_before_merge" as const)
+        : ("looks_good" as const));
 
   return {
     summary,

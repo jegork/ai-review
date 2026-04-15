@@ -29,7 +29,8 @@ vi.mock("../agent/review.js", () => ({
   runReview: vi.fn(async (_config, diff, _prMeta, _tickets, _opts) => makeMockReview(diff)),
 }));
 
-const { runMultiCallReview, filterObservationsForPrFiles } = await import("../agent/multi-call.js");
+const { runMultiCallReview, filterObservationsForPrFiles, mergeResults } =
+  await import("../agent/multi-call.js");
 const { runReview } = await import("../agent/review.js");
 const runReviewMock = vi.mocked(runReview);
 
@@ -417,5 +418,73 @@ describe("filterObservationsForPrFiles", () => {
     const prFiles = new Set(["src/config.ts"]);
     const filtered = filterObservationsForPrFiles(observations, prFiles);
     expect(filtered).toHaveLength(0);
+  });
+});
+
+describe("mergeResults", () => {
+  it("preserves elevated recommendation from consensus pass when merging with skim results", () => {
+    const skimResult: ReviewResult = {
+      summary: "Skim pass looks fine",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      filesReviewed: ["a.ts"],
+      modelUsed: "test-model",
+      tokenCount: 100,
+    };
+
+    const deepResult: ReviewResult = {
+      summary: "Deep pass found an issue described in prose",
+      recommendation: "address_before_merge",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      filesReviewed: ["b.ts"],
+      modelUsed: "test-model",
+      tokenCount: 500,
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 0,
+        recommendationElevated: true,
+        passRecommendations: [
+          "address_before_merge",
+          "address_before_merge",
+          "address_before_merge",
+        ],
+      },
+    };
+
+    const merged = mergeResults([skimResult, deepResult], "test-model");
+    expect(merged.recommendation).toBe("address_before_merge");
+    expect(merged.consensusMetadata?.recommendationElevated).toBe(true);
+  });
+
+  it("does not elevate when no consensus pass has recommendationElevated", () => {
+    const result1: ReviewResult = {
+      summary: "Pass 1",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      filesReviewed: ["a.ts"],
+      modelUsed: "test-model",
+      tokenCount: 100,
+    };
+
+    const result2: ReviewResult = {
+      summary: "Pass 2",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      filesReviewed: ["b.ts"],
+      modelUsed: "test-model",
+      tokenCount: 100,
+    };
+
+    const merged = mergeResults([result1, result2], "test-model");
+    expect(merged.recommendation).toBe("looks_good");
   });
 });
