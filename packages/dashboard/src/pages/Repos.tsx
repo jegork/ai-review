@@ -8,6 +8,7 @@ const styleBadgeColor: Record<RepoConfig["style"], string> = {
   balanced: "bg-blue-900 text-blue-300",
   lenient: "bg-green-900 text-green-300",
   roast: "bg-orange-900 text-orange-300",
+  thorough: "bg-purple-900 text-purple-300",
 };
 
 function AddRepoForm({ onClose }: { onClose: () => void }) {

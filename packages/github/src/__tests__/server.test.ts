@@ -263,6 +263,28 @@ describe("server", () => {
       expect((created.focusAreas as string[]).length).toBe(6);
       expect(created.ignorePatterns).toEqual([]);
     });
+
+    it("rejects invalid review style with 400", async () => {
+      const putRes = await app.request("/api/config/repos/org/repo", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ style: "yolo" }),
+      });
+      expect(putRes.status).toBe(400);
+      const body = (await putRes.json()) as Record<string, unknown>;
+      expect(body.error).toContain("invalid review style");
+    });
+
+    it("accepts the thorough review style", async () => {
+      const putRes = await app.request("/api/config/repos/org/repo", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ style: "thorough" }),
+      });
+      expect(putRes.status).toBe(200);
+      const created = (await putRes.json()) as Record<string, unknown>;
+      expect(created.style).toBe("thorough");
+    });
   });
 
   describe("settings", () => {

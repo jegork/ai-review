@@ -20,6 +20,11 @@ const STYLES: { value: RepoConfig["style"]; label: string; description: string }
     description: "Only surface critical bugs and security issues",
   },
   { value: "roast", label: "Roast", description: "Brutally honest with dark humour" },
+  {
+    value: "thorough",
+    label: "Thorough",
+    description: "Structured reasoning with deep execution path analysis",
+  },
 ];
 
 const FOCUS_AREAS: { value: string; label: string; subtitle: string }[] = [

@@ -1,6 +1,7 @@
 export type {
   Severity,
   FocusArea,
+  ReviewStyle,
   Recommendation,
   TicketComplianceStatus,
   Finding,
@@ -13,6 +14,7 @@ import type {
   Finding,
   Observation,
   FocusArea,
+  ReviewStyle,
   Recommendation,
   Severity,
   ReviewOutput,
@@ -33,8 +35,6 @@ export interface ConsensusMetadata {
   recommendationElevated: boolean;
   passRecommendations: Recommendation[];
 }
-
-export type ReviewStyle = "strict" | "balanced" | "lenient" | "roast";
 
 export type TriageClassification = "skip" | "skim" | "deep-review";
 

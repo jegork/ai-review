@@ -13,6 +13,9 @@ export const FocusAreaSchema = z.enum([
 ]);
 export type FocusArea = z.infer<typeof FocusAreaSchema>;
 
+export const ReviewStyleSchema = z.enum(["strict", "balanced", "lenient", "roast", "thorough"]);
+export type ReviewStyle = z.infer<typeof ReviewStyleSchema>;
+
 export const RecommendationSchema = z.enum([
   "looks_good",
   "address_before_merge",

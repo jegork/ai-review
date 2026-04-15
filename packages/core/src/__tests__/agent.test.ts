@@ -50,8 +50,26 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("witty");
   });
 
-  it("all 4 styles produce distinct prompts", () => {
-    const styles = ["strict", "balanced", "lenient", "roast"] as const;
+  it("includes thorough style instructions", () => {
+    const prompt = buildSystemPrompt({ ...baseConfig, style: "thorough" });
+    expect(prompt).toContain("THOROUGH");
+    expect(prompt).toContain("Summarize intent");
+    expect(prompt).toContain("Trace execution paths");
+    expect(prompt).toContain("Check invariants");
+    expect(prompt).toContain("Evaluate edge cases");
+    expect(prompt).toContain("Assess blast radius");
+  });
+
+  it("thorough style enforces reasoning before findings", () => {
+    const prompt = buildSystemPrompt({ ...baseConfig, style: "thorough" });
+    const reasoningIdx = prompt.indexOf("Step 1: Summarize intent");
+    const findingsIdx = prompt.indexOf("Step 7: Produce findings");
+    expect(reasoningIdx).toBeGreaterThan(-1);
+    expect(findingsIdx).toBeGreaterThan(reasoningIdx);
+  });
+
+  it("all 5 styles produce distinct prompts", () => {
+    const styles = ["strict", "balanced", "lenient", "roast", "thorough"] as const;
     const prompts = styles.map((style) => buildSystemPrompt({ ...baseConfig, style }));
     for (let i = 0; i < prompts.length; i++) {
       for (let j = i + 1; j < prompts.length; j++) {

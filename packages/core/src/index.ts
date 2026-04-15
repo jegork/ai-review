@@ -1,3 +1,4 @@
+export { ReviewStyleSchema } from "./agent/schema.js";
 export type {
   ReviewStyle,
   FocusArea,
