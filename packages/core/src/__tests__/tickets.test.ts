@@ -385,6 +385,130 @@ describe("provider normalization", () => {
     });
   });
 
+  describe("GitHubTicketProvider with issueFetcher", () => {
+    it("uses the injected fetcher instead of global fetch", async () => {
+      const issueFetcher = vi.fn().mockResolvedValue({
+        number: 7,
+        title: "From octokit",
+        body: "fetched via installation token",
+        labels: [{ name: "enhancement" }],
+      });
+
+      const provider = new GitHubTicketProvider({
+        owner: "acme",
+        repo: "widgets",
+        issueFetcher,
+      });
+
+      const result = await provider.fetchTicket("7");
+      expect(issueFetcher).toHaveBeenCalledWith("acme", "widgets", 7);
+      expect(result).toEqual({
+        id: "7",
+        title: "From octokit",
+        description: "fetched via installation token",
+        labels: ["enhancement"],
+        source: "github",
+      });
+    });
+
+    it("returns null when fetcher returns null", async () => {
+      const provider = new GitHubTicketProvider({
+        owner: "o",
+        repo: "r",
+        issueFetcher: vi.fn().mockResolvedValue(null),
+      });
+
+      expect(await provider.fetchTicket("1")).toBeNull();
+    });
+
+    it("returns null when fetcher throws", async () => {
+      const provider = new GitHubTicketProvider({
+        owner: "o",
+        repo: "r",
+        issueFetcher: vi.fn().mockRejectedValue(new Error("network error")),
+      });
+
+      expect(await provider.fetchTicket("1")).toBeNull();
+    });
+
+    it("returns null when fetcher returns invalid schema", async () => {
+      const provider = new GitHubTicketProvider({
+        owner: "o",
+        repo: "r",
+        issueFetcher: vi.fn().mockResolvedValue({ unexpected: "shape" }),
+      });
+
+      expect(await provider.fetchTicket("1")).toBeNull();
+    });
+
+    it("strips # prefix from ref before passing to fetcher", async () => {
+      const issueFetcher = vi.fn().mockResolvedValue({
+        number: 55,
+        title: "t",
+        body: null,
+        labels: [],
+      });
+
+      const provider = new GitHubTicketProvider({
+        owner: "o",
+        repo: "r",
+        issueFetcher,
+      });
+
+      await provider.fetchTicket("#55");
+      expect(issueFetcher).toHaveBeenCalledWith("o", "r", 55);
+    });
+
+    it("parses cross-repo ref and passes parsed number to fetcher", async () => {
+      const issueFetcher = vi.fn().mockResolvedValue({
+        number: 99,
+        title: "t",
+        body: null,
+        labels: [],
+      });
+
+      const provider = new GitHubTicketProvider({
+        owner: "o",
+        repo: "r",
+        issueFetcher,
+      });
+
+      await provider.fetchTicket("acme/widgets#99");
+      expect(issueFetcher).toHaveBeenCalledWith("o", "r", 99);
+    });
+
+    it("truncates long description from fetcher", async () => {
+      const provider = new GitHubTicketProvider({
+        owner: "o",
+        repo: "r",
+        issueFetcher: vi.fn().mockResolvedValue({
+          number: 1,
+          title: "t",
+          body: "x".repeat(20_000),
+          labels: [],
+        }),
+      });
+
+      const result = await provider.fetchTicket("1");
+      expect(result!.description.length).toBe(10_000);
+    });
+
+    it.each(["#", "abc", "repo#not-a-number", "", "owner/repo#"])(
+      "returns null without calling fetcher for malformed ref: %s",
+      async (ref) => {
+        const issueFetcher = vi.fn();
+        const provider = new GitHubTicketProvider({
+          owner: "o",
+          repo: "r",
+          issueFetcher,
+        });
+
+        expect(await provider.fetchTicket(ref)).toBeNull();
+        expect(issueFetcher).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   describe("JiraTicketProvider", () => {
     it("normalizes jira response with string description", async () => {
       const provider = new JiraTicketProvider({

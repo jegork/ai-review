@@ -1,7 +1,7 @@
 export { GitHubProvider } from "./provider.js";
 export { createAppOctokit } from "./auth.js";
 export { app } from "./server.js";
-export { orchestrateReview } from "./orchestrator.js";
+export { orchestrateReview, createOctokitIssueFetcher } from "./orchestrator.js";
 export {
   getRepoConfig,
   setRepoConfig,

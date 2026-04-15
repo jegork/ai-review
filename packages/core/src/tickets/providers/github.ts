@@ -3,33 +3,54 @@ import { GitHubIssueSchema } from "../schemas.js";
 
 const MAX_DESC_LENGTH = 10_000;
 
-interface GitHubTicketProviderConfig {
-  token: string;
+export type IssueFetcher = (owner: string, repo: string, issueNumber: number) => Promise<unknown>;
+
+export type GitHubTicketProviderConfig = {
   owner: string;
   repo: string;
-}
+} & ({ token: string } | { issueFetcher: IssueFetcher });
 
 export class GitHubTicketProvider implements TicketProvider {
-  private config: GitHubTicketProviderConfig;
+  private readonly owner: string;
+  private readonly repo: string;
+  private readonly fetcher: IssueFetcher;
 
   constructor(config: GitHubTicketProviderConfig) {
-    this.config = config;
+    this.owner = config.owner;
+    this.repo = config.repo;
+
+    if ("issueFetcher" in config) {
+      this.fetcher = config.issueFetcher;
+    } else {
+      const token = config.token;
+      this.fetcher = async (owner, repo, issueNumber) => {
+        const url = `https://api.github.com/repos/${owner}/${repo}/issues/${issueNumber}`;
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+          },
+        });
+        if (!res.ok) return null;
+        return res.json();
+      };
+    }
   }
 
   async fetchTicket(ref: string): Promise<TicketInfo | null> {
-    const number = ref.includes("#") ? ref.split("#").pop() : ref;
-    const url = `https://api.github.com/repos/${this.config.owner}/${this.config.repo}/issues/${number}`;
+    const raw_number = ref.includes("#") ? ref.split("#").pop() : ref;
+    const issueNumber = Number(raw_number);
+    if (!Number.isInteger(issueNumber) || issueNumber <= 0) return null;
 
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${this.config.token}`,
-        Accept: "application/vnd.github+json",
-      },
-    });
+    let raw: unknown;
+    try {
+      raw = await this.fetcher(this.owner, this.repo, issueNumber);
+    } catch {
+      return null;
+    }
+    if (raw == null) return null;
 
-    if (!res.ok) return null;
-
-    const parsed = GitHubIssueSchema.safeParse(await res.json());
+    const parsed = GitHubIssueSchema.safeParse(raw);
     if (!parsed.success) return null;
 
     const data = parsed.data;

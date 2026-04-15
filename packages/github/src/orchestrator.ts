@@ -1,5 +1,5 @@
 import type { Octokit } from "octokit";
-import type { FocusArea, TicketProvider, TicketRef } from "@rusty-bot/core";
+import type { FocusArea, IssueFetcher, TicketProvider, TicketRef } from "@rusty-bot/core";
 import {
   parseDiff,
   filterFiles,
@@ -29,10 +29,29 @@ import { GitHubProvider } from "./provider.js";
 import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./storage.js";
 
 const log = logger.child({ package: "github" });
+
+export function createOctokitIssueFetcher(octokit: Octokit): IssueFetcher {
+  return async (owner, repo, issueNumber) => {
+    try {
+      const { data } = await octokit.request("GET /repos/{owner}/{repo}/issues/{issue_number}", {
+        owner,
+        repo,
+        issue_number: issueNumber,
+      });
+      return data;
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (status === 404) return null;
+      log.warn({ err, owner, repo, issueNumber }, "installation token issue fetch failed");
+      return null;
+    }
+  };
+}
 const MAX_DIFF_TOKENS = 60_000;
 const ALL_FOCUS_AREAS: FocusArea[] = ["security", "performance", "bugs", "style", "tests", "docs"];
 
 async function buildTicketProviders(
+  octokit: Octokit,
   owner: string,
   repo: string,
 ): Promise<Map<string, TicketProvider>> {
@@ -41,6 +60,15 @@ async function buildTicketProviders(
   const ghToken = await getSetting("github_token");
   if (ghToken) {
     providers.set("github", new GitHubTicketProvider({ token: ghToken, owner, repo }));
+  } else {
+    providers.set(
+      "github",
+      new GitHubTicketProvider({
+        owner,
+        repo,
+        issueFetcher: createOctokitIssueFetcher(octokit),
+      }),
+    );
   }
 
   const jiraUrl = await getSetting("jira_base_url");
@@ -140,7 +168,7 @@ export async function orchestrateReview(params: {
     }
     const allRefs = [...ticketRefs, ...linkedRefs];
 
-    const ticketProviders = await buildTicketProviders(owner, repo);
+    const ticketProviders = await buildTicketProviders(octokit, owner, repo);
     const { tickets, status: ticketResolution } = await resolveTicketsWithStatus(
       allRefs,
       ticketProviders,
