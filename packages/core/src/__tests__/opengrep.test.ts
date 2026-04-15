@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildUserMessage } from "../agent/prompts.js";
+import { filterOpenGrepForFiles } from "../agent/multi-call.js";
 import { formatSummaryComment } from "../formatter/summary.js";
 import type { PRMetadata, ReviewResult } from "../types.js";
 import type { OpenGrepFinding, OpenGrepRawOutput } from "../opengrep/types.js";
@@ -257,30 +258,12 @@ describe("opengrep runner types", () => {
 });
 
 describe("filterOpenGrepForFiles", () => {
-  // filterOpenGrepForFiles is not exported, so we test it indirectly
-  // through the multi-call module. Instead we replicate the logic here
-  // to validate the filtering behavior in isolation.
-  function filterForFiles(
-    findings: OpenGrepFinding[] | undefined,
-    files: Set<string>,
-  ): OpenGrepFinding[] | undefined {
-    if (!findings || findings.length === 0) return undefined;
-    const normalize = (f: string) =>
-      f
-        .replace(/\\/g, "/")
-        .replace(/^\.\//, "")
-        .replace(/:\d+(?::\d+)?$/, "");
-    const normalizedFiles = new Set(Array.from(files, normalize));
-    const filtered = findings.filter((f) => normalizedFiles.has(normalize(f.file)));
-    return filtered.length > 0 ? filtered : undefined;
-  }
-
   it("returns undefined for undefined input", () => {
-    expect(filterForFiles(undefined, new Set(["a.ts"]))).toBeUndefined();
+    expect(filterOpenGrepForFiles(undefined, new Set(["a.ts"]))).toBeUndefined();
   });
 
   it("returns undefined for empty findings", () => {
-    expect(filterForFiles([], new Set(["a.ts"]))).toBeUndefined();
+    expect(filterOpenGrepForFiles([], new Set(["a.ts"]))).toBeUndefined();
   });
 
   it("filters findings to only matching files", () => {
@@ -290,7 +273,7 @@ describe("filterOpenGrepForFiles", () => {
       makeOpenGrepFinding({ file: "src/c.ts" }),
     ];
 
-    const result = filterForFiles(findings, new Set(["src/a.ts", "src/c.ts"]));
+    const result = filterOpenGrepForFiles(findings, new Set(["src/a.ts", "src/c.ts"]));
 
     expect(result).toHaveLength(2);
     expect(result!.map((f) => f.file)).toEqual(["src/a.ts", "src/c.ts"]);
@@ -298,18 +281,18 @@ describe("filterOpenGrepForFiles", () => {
 
   it("returns undefined when no findings match", () => {
     const findings = [makeOpenGrepFinding({ file: "src/a.ts" })];
-    expect(filterForFiles(findings, new Set(["src/z.ts"]))).toBeUndefined();
+    expect(filterOpenGrepForFiles(findings, new Set(["src/z.ts"]))).toBeUndefined();
   });
 
   it("normalizes leading ./ in paths", () => {
     const findings = [makeOpenGrepFinding({ file: "./src/a.ts" })];
-    const result = filterForFiles(findings, new Set(["src/a.ts"]));
+    const result = filterOpenGrepForFiles(findings, new Set(["src/a.ts"]));
     expect(result).toHaveLength(1);
   });
 
   it("normalizes backslashes in paths", () => {
     const findings = [makeOpenGrepFinding({ file: "src\\a.ts" })];
-    const result = filterForFiles(findings, new Set(["src/a.ts"]));
+    const result = filterOpenGrepForFiles(findings, new Set(["src/a.ts"]));
     expect(result).toHaveLength(1);
   });
 });

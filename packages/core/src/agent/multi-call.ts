@@ -82,7 +82,7 @@ function normalizePath(file: string): string {
     .replace(/:\d+(?::\d+)?$/, "");
 }
 
-function filterOpenGrepForFiles(
+export function filterOpenGrepForFiles(
   findings: OpenGrepFinding[] | undefined,
   files: Set<string>,
 ): OpenGrepFinding[] | undefined {
