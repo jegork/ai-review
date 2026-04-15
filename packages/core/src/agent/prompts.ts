@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ReviewConfig, PRMetadata, TicketInfo, FocusArea, ReviewStyle } from "../types.js";
+import type { SemgrepFinding } from "../semgrep/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const promptsDir = resolve(__dirname, "../prompts");
@@ -35,12 +36,39 @@ export function buildSystemPrompt(config: ReviewConfig): string {
     .replace("{{convention_instructions}}", conventionInstructions);
 }
 
+function buildSemgrepSection(findings: SemgrepFinding[]): string {
+  const parts: string[] = [];
+  parts.push("## Semgrep Pre-scan Findings");
+  parts.push("");
+  parts.push(
+    "The following issues were detected by Semgrep static analysis before your review. " +
+      "For each finding, decide whether to **confirm** (include in your findings with the appropriate severity) " +
+      "or **dismiss** (explain briefly in your summary why it is a false positive). " +
+      "Confirmed Semgrep findings should be reported as structured findings with exact file/line references. " +
+      "You may also find additional issues that Semgrep cannot detect (logic bugs, auth flaws, design problems).",
+  );
+  parts.push("");
+
+  for (const f of findings) {
+    parts.push(
+      `- **${f.ruleId}** [\`${f.severity}\`] in \`${f.file}\` L${f.startLine}–${f.endLine}`,
+    );
+    parts.push(`  ${f.message}`);
+    if (f.snippet) {
+      parts.push(`  \`\`\`\n  ${f.snippet.trim()}\n  \`\`\``);
+    }
+  }
+
+  return parts.join("\n");
+}
+
 export function buildUserMessage(
   diff: string,
   prMetadata: PRMetadata,
   ticketContext?: TicketInfo[],
   languageSummary?: string,
   otherPrFiles?: string[],
+  semgrepFindings?: SemgrepFinding[],
 ): string {
   const parts: string[] = [];
 
@@ -91,6 +119,11 @@ export function buildUserMessage(
         "note that the search results may be stale (pre-merge content).\n",
     );
     parts.push(otherPrFiles.map((f) => `- \`${f}\``).join("\n"));
+  }
+
+  if (semgrepFindings && semgrepFindings.length > 0) {
+    parts.push("");
+    parts.push(buildSemgrepSection(semgrepFindings));
   }
 
   parts.push("\n## Diff\n");

@@ -7,3 +7,8 @@ Pay special attention to SECURITY VULNERABILITIES:
 - Missing input validation and sanitization at trust boundaries
 - Insecure cryptography (weak algorithms, hardcoded IVs, ECB mode)
 - Race conditions that could lead to privilege escalation
+
+When Semgrep pre-scan findings are provided, treat them as high-signal leads:
+- Confirm findings that are true positives by including them in your findings array with the exact file and line
+- Dismiss false positives with a brief explanation in your summary
+- Look for additional issues Semgrep cannot detect: logic bugs, broken auth flows, TOCTOU races, business logic flaws

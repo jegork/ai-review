@@ -20,6 +20,8 @@ import {
   isCascadeEnabled,
   runTriage,
   splitByClassification,
+  runSemgrep,
+  extractChangedFilePaths,
 } from "@rusty-bot/core";
 import { GitHubProvider } from "./provider.js";
 import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./storage.js";
@@ -104,6 +106,14 @@ export async function orchestrateReview(params: {
     const languageSummary = summarizeLanguages(reviewable);
     const mcpServers = await loadMcpServerConfigsFromEnv();
 
+    const semgrepResult = await runSemgrep(extractChangedFilePaths(reviewable), {
+      config: process.env.RUSTY_SEMGREP_RULES ?? "auto",
+    });
+    const semgrepFindings = semgrepResult.findings.length > 0 ? semgrepResult.findings : undefined;
+    if (semgrepResult.available) {
+      log.info({ findingCount: semgrepResult.findings.length }, "semgrep pre-scan complete");
+    }
+
     let result;
 
     if (isCascadeEnabled()) {
@@ -134,6 +144,7 @@ export async function orchestrateReview(params: {
           languageSummary,
           mcpServers,
           maxTokens: MAX_DIFF_TOKENS,
+          semgrepFindings,
         });
 
         result.triageStats = {
@@ -158,8 +169,15 @@ export async function orchestrateReview(params: {
         languageSummary,
         mcpServers,
         maxTokens: MAX_DIFF_TOKENS,
+        semgrepFindings,
       });
     }
+
+    result.semgrepStats = {
+      available: semgrepResult.available,
+      findingCount: semgrepResult.rawCount,
+      ...(semgrepResult.error ? { error: semgrepResult.error } : {}),
+    };
 
     const summary = formatSummaryComment(result, { ticketResolution });
     await provider.postSummaryComment(summary);

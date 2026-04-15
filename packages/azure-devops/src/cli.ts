@@ -17,6 +17,8 @@ import {
   isCascadeEnabled,
   runTriage,
   splitByClassification,
+  runSemgrep,
+  extractChangedFilePaths,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
@@ -125,6 +127,14 @@ async function main(): Promise<void> {
   const languageSummary = summarizeLanguages(reviewable);
   const mcpServers = await loadMcpServerConfigsFromEnv();
 
+  const semgrepResult = await runSemgrep(extractChangedFilePaths(reviewable), {
+    config: process.env.RUSTY_SEMGREP_RULES ?? "auto",
+  });
+  const semgrepFindings = semgrepResult.findings.length > 0 ? semgrepResult.findings : undefined;
+  if (semgrepResult.available) {
+    log.info({ findingCount: semgrepResult.findings.length }, "semgrep pre-scan complete");
+  }
+
   let review;
 
   if (isCascadeEnabled()) {
@@ -160,6 +170,7 @@ async function main(): Promise<void> {
           languageSummary,
           mcpServers,
           maxTokens: MAX_TOKENS,
+          semgrepFindings,
         },
       );
 
@@ -189,9 +200,16 @@ async function main(): Promise<void> {
         languageSummary,
         mcpServers,
         maxTokens: MAX_TOKENS,
+        semgrepFindings,
       },
     );
   }
+
+  review.semgrepStats = {
+    available: semgrepResult.available,
+    findingCount: semgrepResult.rawCount,
+    ...(semgrepResult.error ? { error: semgrepResult.error } : {}),
+  };
 
   const criticalCount = review.findings.filter((f) => f.severity === "critical").length;
   const warningCount = review.findings.filter((f) => f.severity === "warning").length;

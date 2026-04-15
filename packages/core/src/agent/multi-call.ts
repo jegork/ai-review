@@ -10,6 +10,7 @@ import type {
   TicketComplianceItem,
   TicketComplianceStatus,
 } from "../types.js";
+import type { SemgrepFinding } from "../semgrep/types.js";
 import { runReview, type RunReviewOptions, type ReviewTier } from "./review.js";
 import { runConsensusReview } from "./consensus.js";
 import { judgeReviewResult, resolveJudgeConfig } from "./judge.js";
@@ -79,6 +80,16 @@ function normalizePath(file: string): string {
     .replace(/\\/g, "/")
     .replace(/^\.\//, "")
     .replace(/:\d+(?::\d+)?$/, "");
+}
+
+function filterSemgrepForFiles(
+  findings: SemgrepFinding[] | undefined,
+  files: Set<string>,
+): SemgrepFinding[] | undefined {
+  if (!findings || findings.length === 0) return undefined;
+  const normalizedFiles = new Set(Array.from(files, normalizePath));
+  const filtered = findings.filter((f) => normalizedFiles.has(normalizePath(f.file)));
+  return filtered.length > 0 ? filtered : undefined;
 }
 
 export function filterObservationsForPrFiles(
@@ -215,9 +226,14 @@ async function runTieredReview(
     const groups = splitIntoGroups(patches, maxTokens);
     const results: ReviewResult[] = [];
     for (let i = 0; i < groups.length; i++) {
+      const groupPaths = new Set(groups[i].map((p) => p.path));
+      const groupSemgrep = filterSemgrepForFiles(resolvedOptions.semgrepFindings, groupPaths);
       const { compressed: groupDiff } = compressDiff(groups[i], maxTokens);
       const groupTickets = i === 0 ? ticketContext : undefined;
-      const result = await runReview(config, groupDiff, prMetadata, groupTickets, tierOptions);
+      const result = await runReview(config, groupDiff, prMetadata, groupTickets, {
+        ...tierOptions,
+        semgrepFindings: groupSemgrep,
+      });
       results.push(result);
     }
     return results;
@@ -240,6 +256,8 @@ async function runTieredReview(
   const groups = splitIntoGroups(patches, maxTokens);
   const results: ReviewResult[] = [];
   for (const group of groups) {
+    const groupPaths = new Set(group.map((p) => p.path));
+    const groupSemgrep = filterSemgrepForFiles(resolvedOptions.semgrepFindings, groupPaths);
     const groupCompressed = compressDiff(group, maxTokens).compressed;
     const groupResult = await runConsensusReview(
       group,
@@ -247,7 +265,7 @@ async function runTieredReview(
       prMetadata,
       groupCompressed,
       ticketContext,
-      tierOptions,
+      { ...tierOptions, semgrepFindings: groupSemgrep },
     );
     results.push(groupResult);
   }
@@ -315,6 +333,7 @@ export async function runMultiCallReview(
       for (const group of groups) {
         const groupPaths = new Set(group.map((p) => p.path));
         const otherPrFiles = allPaths.filter((f) => !groupPaths.has(f));
+        const groupSemgrep = filterSemgrepForFiles(resolvedOptions.semgrepFindings, groupPaths);
         const groupCompressed = compressDiff(group, maxTokens).compressed;
         const groupResult = await runConsensusReview(
           group,
@@ -322,7 +341,7 @@ export async function runMultiCallReview(
           prMetadata,
           groupCompressed,
           ticketContext,
-          { ...resolvedOptions, otherPrFiles },
+          { ...resolvedOptions, otherPrFiles, semgrepFindings: groupSemgrep },
         );
         results.push(groupResult);
       }

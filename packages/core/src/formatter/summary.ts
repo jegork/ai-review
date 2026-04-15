@@ -5,6 +5,7 @@ import type {
   Observation,
   DroppedFinding,
   TriageStats,
+  SemgrepStats,
   TicketComplianceStatus,
   TicketResolutionStatus,
 } from "../types.js";
@@ -65,6 +66,22 @@ function buildTriageSection(stats: TriageStats): string {
   lines.push(`Triage model: \`${stats.triageModelUsed}\` · ${stats.triageTokenCount} tokens`);
   lines.push("");
   lines.push("</details>");
+  lines.push("");
+  return lines.join("\n");
+}
+
+function buildSemgrepStatsSection(stats: SemgrepStats): string {
+  const lines: string[] = [];
+  if (!stats.available) {
+    lines.push("> **Semgrep:** not available (install `semgrep` for deterministic SAST pre-scan)");
+  } else if (stats.findingCount === 0) {
+    lines.push("> **Semgrep pre-scan:** clean — no findings");
+  } else {
+    lines.push(`> **Semgrep pre-scan:** ${stats.findingCount} finding(s) fed to LLM for triage`);
+  }
+  if (stats.error) {
+    lines.push(`> ⚠️ Semgrep error: ${stats.error}`);
+  }
   lines.push("");
   return lines.join("\n");
 }
@@ -141,6 +158,10 @@ export function formatSummaryComment(
 
   if (review.triageStats) {
     lines.push(buildTriageSection(review.triageStats));
+  }
+
+  if (review.semgrepStats) {
+    lines.push(buildSemgrepStatsSection(review.semgrepStats));
   }
 
   lines.push("## Overview");
@@ -257,6 +278,9 @@ export function formatSummaryComment(
     if (cm.recommendationElevated) {
       parts.push("recommendation elevated from pass votes");
     }
+  }
+  if (review.semgrepStats?.available && review.semgrepStats.findingCount > 0) {
+    parts.push(`semgrep: ${review.semgrepStats.findingCount} pre-scan findings`);
   }
   lines.push(parts.join(" · "));
   lines.push("");

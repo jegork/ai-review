@@ -58,6 +58,15 @@ export interface TriageStats {
   triageTokenCount: number;
 }
 
+export interface SemgrepStats {
+  /** whether semgrep was available to run */
+  available: boolean;
+  /** total findings from semgrep pre-scan */
+  findingCount: number;
+  /** error message if semgrep failed */
+  error?: string;
+}
+
 export interface ReviewResult extends ReviewOutput {
   findings: Finding[];
   observations: Observation[];
@@ -70,6 +79,7 @@ export interface ReviewResult extends ReviewOutput {
   judgeTokenCount?: number;
   consensusMetadata?: ConsensusMetadata;
   droppedFindings?: DroppedFinding[];
+  semgrepStats?: SemgrepStats;
 }
 
 export interface ReviewConfig {
