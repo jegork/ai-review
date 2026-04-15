@@ -6,7 +6,7 @@ Built on [Mastra](https://mastra.ai/) (TypeScript).
 
 ## Features
 
-- **4 review styles** — Strict, Balanced, Lenient, Roast
+- **5 review styles** — Strict, Balanced, Lenient, Roast, Thorough
 - **6 focus areas** — Security, Performance, Bugs, Code Style, Test Coverage, Documentation
 - **Tree-sitter context expansion** — hunks expand to enclosing function/class boundaries instead of fixed line counts (TS, JS, Python, Go, Java, Rust)
 - **Structured summary comments** — severity table, collapsible issue details, files reviewed
@@ -232,6 +232,7 @@ Example `.rusty-bot.md`:
 | **Balanced** | Focuses on confidence, balances thoroughness with practicality |
 | **Lenient** | Only critical bugs and security issues, encouraging tone |
 | **Roast** | Technically accurate feedback wrapped in sharp, witty commentary |
+| **Thorough** | Structured reasoning (intent → components → execution paths → invariants → edge cases → blast radius) before producing findings |
 
 ### Judge / Filter Pass
 

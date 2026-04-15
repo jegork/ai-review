@@ -3,7 +3,7 @@ const API_BASE: string = (import.meta.env.VITE_API_BASE as string | undefined) ?
 export interface RepoConfig {
   owner: string;
   repo: string;
-  style: "strict" | "balanced" | "lenient" | "roast";
+  style: "strict" | "balanced" | "lenient" | "roast" | "thorough";
   focusAreas: string[];
   ignorePatterns: string[];
 }

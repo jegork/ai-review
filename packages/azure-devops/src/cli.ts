@@ -22,7 +22,7 @@ import { AzureDevOpsProvider } from "./provider.js";
 
 const log = logger.child({ package: "azure-devops" });
 
-const VALID_STYLES = new Set(["strict", "balanced", "lenient", "roast"]);
+const VALID_STYLES = new Set(["strict", "balanced", "lenient", "roast", "thorough"]);
 const MAX_TOKENS = 120_000;
 
 export function parseConfig(): {

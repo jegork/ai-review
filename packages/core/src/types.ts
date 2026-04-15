@@ -11,7 +11,7 @@ export type {
 
 import type { Finding, Observation, FocusArea, ReviewOutput } from "./agent/schema.js";
 
-export type ReviewStyle = "strict" | "balanced" | "lenient" | "roast";
+export type ReviewStyle = "strict" | "balanced" | "lenient" | "roast" | "thorough";
 
 export type TriageClassification = "skip" | "skim" | "deep-review";
 
