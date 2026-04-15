@@ -258,6 +258,31 @@ describe("GitHubProvider", () => {
       const numbers = await provider.getLinkedIssueNumbers();
       expect(numbers).toEqual([]);
     });
+
+    it("returns empty array when pullRequest is null", async () => {
+      octokit.graphql.mockResolvedValueOnce({
+        repository: { pullRequest: null },
+      });
+
+      const numbers = await provider.getLinkedIssueNumbers();
+      expect(numbers).toEqual([]);
+    });
+
+    it("returns empty array when repository is null", async () => {
+      octokit.graphql.mockResolvedValueOnce({ repository: null });
+
+      const numbers = await provider.getLinkedIssueNumbers();
+      expect(numbers).toEqual([]);
+    });
+
+    it("returns empty array when closingIssuesReferences is missing", async () => {
+      octokit.graphql.mockResolvedValueOnce({
+        repository: { pullRequest: {} },
+      });
+
+      const numbers = await provider.getLinkedIssueNumbers();
+      expect(numbers).toEqual([]);
+    });
   });
 
   describe("getDiff", () => {
