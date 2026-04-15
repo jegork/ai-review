@@ -205,10 +205,15 @@ export async function judgeReviewResult(
 
   const { accepted, rejected, tokenCount } = await judgeFindings(result.findings, diff, config);
 
-  // recalculate recommendation based on surviving findings
+  // when consensus elevated the recommendation based on pass votes (not findings),
+  // and there are no findings for the judge to evaluate, preserve it
+  const shouldPreserveElevated =
+    accepted.length === 0 && result.consensusMetadata?.recommendationElevated === true;
+
   const criticalCount = accepted.filter((f) => f.severity === "critical").length;
-  const recommendation =
-    criticalCount > 0
+  const recommendation = shouldPreserveElevated
+    ? result.recommendation
+    : criticalCount > 0
       ? ("critical_issues" as const)
       : accepted.length > 0
         ? ("address_before_merge" as const)
