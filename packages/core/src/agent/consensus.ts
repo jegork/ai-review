@@ -7,6 +7,7 @@ import type {
   Finding,
   Observation,
   Recommendation,
+  DroppedFinding,
 } from "../types.js";
 import { compressDiff } from "../diff/compress.js";
 import { shufflePatches } from "../diff/shuffle.js";
@@ -89,9 +90,21 @@ export async function runConsensusReview(
   const findingClusters = clusterFindings(findingsByPass);
   const observationClusters = clusterObservations(observationsByPass);
 
-  const survivingFindings: Finding[] = findingClusters
-    .filter((c) => c.voteCount >= threshold)
-    .map((c) => ({ ...c.representative, voteCount: c.voteCount }));
+  const survivingClusters = findingClusters.filter((c) => c.voteCount >= threshold);
+  const droppedClusters = findingClusters.filter((c) => c.voteCount < threshold);
+
+  const survivingFindings: Finding[] = survivingClusters.map((c) => ({
+    ...c.representative,
+    voteCount: c.voteCount,
+  }));
+
+  const droppedFindings: DroppedFinding[] = droppedClusters.map((c) => ({
+    file: c.representative.file,
+    line: c.representative.line,
+    severity: c.representative.severity,
+    message: c.representative.message,
+    voteCount: c.voteCount,
+  }));
 
   const survivingObservations: Observation[] = observationClusters
     .filter((c) => c.voteCount >= threshold)
@@ -100,8 +113,13 @@ export async function runConsensusReview(
   const allFiles = new Set(results.flatMap((r) => r.filesReviewed));
   const totalTokens = results.reduce((sum, r) => sum + r.tokenCount, 0);
 
-  const totalRawFindings = findingsByPass.reduce((sum, pass) => sum + pass.length, 0);
   const totalRawObservations = observationsByPass.reduce((sum, pass) => sum + pass.length, 0);
+
+  const recommendation = deriveRecommendation(survivingFindings, passRecommendations, threshold);
+  const recommendationElevated = survivingFindings.length === 0 && recommendation !== "looks_good";
+
+  const agreementRate =
+    findingClusters.length > 0 ? survivingClusters.length / findingClusters.length : 1;
 
   logger.info(
     {
@@ -109,8 +127,9 @@ export async function runConsensusReview(
       threshold,
       totalClusters: findingClusters.length,
       surviving: survivingFindings.length,
-      dropped: totalRawFindings - survivingFindings.length,
+      dropped: droppedFindings.length,
       droppedObservations: totalRawObservations - survivingObservations.length,
+      agreementRate,
       passRecommendations,
     },
     "consensus voting complete",
@@ -118,19 +137,26 @@ export async function runConsensusReview(
 
   const summaries = results.map((r) => r.summary).filter(Boolean);
   const summary =
-    summaries.length === 1
-      ? summaries[0]
-      : `Consensus review (${passes} passes, threshold ${threshold}).\n\n${summaries.join("\n\n")}`;
+    summaries.length <= 1
+      ? (summaries[0] ?? "")
+      : `Consensus review (${passes} passes, threshold ${threshold}).\n\n${summaries.map((s, i) => `${i + 1}. ${s}`).join("\n")}`;
 
   return {
     summary,
-    recommendation: deriveRecommendation(survivingFindings, passRecommendations, threshold),
+    recommendation,
     findings: survivingFindings,
     observations: survivingObservations,
     ticketCompliance: results[0]?.ticketCompliance ?? [],
     filesReviewed: [...allFiles],
     modelUsed: results[0]?.modelUsed ?? "unknown",
     tokenCount: totalTokens,
-    consensusMetadata: { passes, threshold },
+    consensusMetadata: {
+      passes,
+      threshold,
+      agreementRate,
+      recommendationElevated,
+      passRecommendations,
+    },
+    droppedFindings: droppedFindings.length > 0 ? droppedFindings : undefined,
   };
 }

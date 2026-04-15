@@ -106,10 +106,17 @@ describe("runConsensusReview", () => {
     expect(result.findings).toHaveLength(0);
   });
 
-  it("includes consensus metadata", async () => {
+  it("includes consensus metadata with agreement rate and pass recommendations", async () => {
     const consensusConfig = { ...config, consensusPasses: 3 };
     const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
-    expect(result.consensusMetadata).toEqual({ passes: 3, threshold: 2 });
+    expect(result.consensusMetadata).toMatchObject({
+      passes: 3,
+      threshold: 2,
+      recommendationElevated: false,
+    });
+    expect(result.consensusMetadata?.agreementRate).toBeGreaterThanOrEqual(0);
+    expect(result.consensusMetadata?.agreementRate).toBeLessThanOrEqual(1);
+    expect(result.consensusMetadata?.passRecommendations).toHaveLength(3);
   });
 
   it("derives recommendation from filtered findings only", async () => {
@@ -129,6 +136,77 @@ describe("runConsensusReview", () => {
     const { runReview } = await import("../agent/review.js");
     expect(runReview).toHaveBeenCalledTimes(3);
     expect(result.consensusMetadata?.passes).toBe(3);
+  });
+
+  it("populates droppedFindings for clusters below threshold", async () => {
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    // uniqueFinding only appears in 1/3 passes → dropped
+    expect(result.droppedFindings).toBeDefined();
+    expect(result.droppedFindings).toHaveLength(1);
+    expect(result.droppedFindings![0].file).toBe("src/other.ts");
+    expect(result.droppedFindings![0].voteCount).toBe(1);
+  });
+
+  it("omits droppedFindings when all clusters meet threshold", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }));
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    expect(result.droppedFindings).toBeUndefined();
+  });
+
+  it("produces numbered summaries for multi-pass reviews", async () => {
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    expect(result.summary).toContain("1. ");
+    expect(result.summary).toContain("2. ");
+    expect(result.summary).toContain("3. ");
+    expect(result.summary).toMatch(/^Consensus review \(3 passes, threshold 2\)\./);
+  });
+
+  it("sets recommendationElevated when recommendation comes from pass votes not findings", async () => {
+    mockBehavior = "no-findings-but-flagged";
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    expect(result.consensusMetadata?.recommendationElevated).toBe(true);
+  });
+
+  it("sets recommendationElevated=false when recommendation is derived from findings", async () => {
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    expect(result.consensusMetadata?.recommendationElevated).toBe(false);
+  });
+
+  it("agreement rate is 1 when all clusters survive", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }));
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    expect(result.consensusMetadata?.agreementRate).toBe(1);
+  });
+
+  it("agreement rate is 0 when no clusters survive strict threshold", async () => {
+    const strictConfig = { ...config, consensusPasses: 3, consensusThreshold: 3 };
+    const result = await runConsensusReview([], strictConfig, prMetadata, "diff content");
+    expect(result.consensusMetadata?.agreementRate).toBe(0);
+  });
+
+  it("agreement rate is 1 when there are zero finding clusters", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ findings: [], tokenCount: 100 }))
+      .mockResolvedValueOnce(makeResult({ findings: [], tokenCount: 100 }))
+      .mockResolvedValueOnce(makeResult({ findings: [], tokenCount: 100 }));
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    expect(result.consensusMetadata?.agreementRate).toBe(1);
   });
 
   it("uses per-pass recommendations when findings are empty but majority flags issues", async () => {
