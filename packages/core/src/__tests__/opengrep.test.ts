@@ -158,14 +158,24 @@ describe("opengrep stats in summary formatter", () => {
     expect(summary).toContain("clean — no findings");
   });
 
-  it("shows not-available message when opengrep is missing", () => {
+  it("shows not-available message when opengrep is missing without error", () => {
     const review = makeReview({
-      openGrepStats: { available: false, findingCount: 0, error: "opengrep not installed" },
+      openGrepStats: { available: false, findingCount: 0 },
     });
 
     const summary = formatSummaryComment(review);
     expect(summary).toContain("not available");
     expect(summary).toContain("install `opengrep`");
+  });
+
+  it("shows error over not-available when both are set", () => {
+    const review = makeReview({
+      openGrepStats: { available: false, findingCount: 0, error: "opengrep not installed" },
+    });
+
+    const summary = formatSummaryComment(review);
+    expect(summary).toContain("opengrep not installed");
+    expect(summary).not.toContain("install `opengrep`");
   });
 
   it("shows error detail when opengrep failed and does not say clean", () => {

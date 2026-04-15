@@ -72,12 +72,12 @@ function buildTriageSection(stats: TriageStats): string {
 
 function buildOpenGrepStatsSection(stats: OpenGrepStats): string {
   const lines: string[] = [];
-  if (!stats.available) {
+  if (stats.error) {
+    lines.push(`> **OpenGrep pre-scan:** ⚠️ ${stats.error}`);
+  } else if (!stats.available) {
     lines.push(
       "> **OpenGrep:** not available (install `opengrep` for deterministic SAST pre-scan)",
     );
-  } else if (stats.error) {
-    lines.push(`> **OpenGrep pre-scan:** ⚠️ ${stats.error}`);
   } else if (stats.findingCount === 0) {
     lines.push("> **OpenGrep pre-scan:** clean — no findings");
   } else {
