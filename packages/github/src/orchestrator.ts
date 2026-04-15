@@ -1,5 +1,5 @@
 import type { Octokit } from "octokit";
-import type { FocusArea, TicketProvider, TicketRef } from "@rusty-bot/core";
+import type { FocusArea, IssueFetcher, TicketProvider, TicketRef } from "@rusty-bot/core";
 import {
   parseDiff,
   filterFiles,
@@ -29,6 +29,24 @@ import { GitHubProvider } from "./provider.js";
 import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./storage.js";
 
 const log = logger.child({ package: "github" });
+
+export function createOctokitIssueFetcher(octokit: Octokit): IssueFetcher {
+  return async (owner, repo, issueNumber) => {
+    try {
+      const { data } = await octokit.request("GET /repos/{owner}/{repo}/issues/{issue_number}", {
+        owner,
+        repo,
+        issue_number: issueNumber,
+      });
+      return data;
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      if (status === 404) return null;
+      log.warn({ err, owner, repo, issueNumber }, "installation token issue fetch failed");
+      return null;
+    }
+  };
+}
 const MAX_DIFF_TOKENS = 60_000;
 const ALL_FOCUS_AREAS: FocusArea[] = ["security", "performance", "bugs", "style", "tests", "docs"];
 
@@ -48,17 +66,7 @@ async function buildTicketProviders(
       new GitHubTicketProvider({
         owner,
         repo,
-        issueFetcher: async (o, r, num) => {
-          try {
-            const { data } = await octokit.request(
-              "GET /repos/{owner}/{repo}/issues/{issue_number}",
-              { owner: o, repo: r, issue_number: num },
-            );
-            return data;
-          } catch {
-            return null;
-          }
-        },
+        issueFetcher: createOctokitIssueFetcher(octokit),
       }),
     );
   }

@@ -38,11 +38,13 @@ export class GitHubTicketProvider implements TicketProvider {
   }
 
   async fetchTicket(ref: string): Promise<TicketInfo | null> {
-    const number = ref.includes("#") ? ref.split("#").pop() : ref;
+    const raw_number = ref.includes("#") ? ref.split("#").pop() : ref;
+    const issueNumber = Number(raw_number);
+    if (!Number.isInteger(issueNumber) || issueNumber <= 0) return null;
 
     let raw: unknown;
     try {
-      raw = await this.fetcher(this.owner, this.repo, Number(number));
+      raw = await this.fetcher(this.owner, this.repo, issueNumber);
     } catch {
       return null;
     }

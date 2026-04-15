@@ -492,6 +492,21 @@ describe("provider normalization", () => {
       const result = await provider.fetchTicket("1");
       expect(result!.description.length).toBe(10_000);
     });
+
+    it.each(["#", "abc", "repo#not-a-number", "", "owner/repo#"])(
+      "returns null without calling fetcher for malformed ref: %s",
+      async (ref) => {
+        const issueFetcher = vi.fn();
+        const provider = new GitHubTicketProvider({
+          owner: "o",
+          repo: "r",
+          issueFetcher,
+        });
+
+        expect(await provider.fetchTicket(ref)).toBeNull();
+        expect(issueFetcher).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe("JiraTicketProvider", () => {
