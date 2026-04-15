@@ -4,9 +4,9 @@ import type { Finding, ReviewResult } from "../types.js";
 const generateMock = vi.fn();
 
 vi.mock("@mastra/core/agent", () => ({
-  Agent: vi.fn().mockImplementation(() => ({
-    generate: generateMock,
-  })),
+  Agent: vi.fn().mockImplementation(function () {
+    return { generate: generateMock };
+  }),
 }));
 
 vi.mock("../agent/model.js", () => ({
