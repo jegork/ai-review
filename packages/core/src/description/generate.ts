@@ -42,8 +42,9 @@ export function formatDescription(output: PRDescriptionOutput): string {
     lines.push("| File | Description |");
     lines.push("|------|-------------|");
     for (const change of output.fileChanges) {
+      const path = change.path.replace(/\|/g, "\\|");
       const desc = change.description.replace(/\|/g, "\\|").replace(/\n+/g, " ");
-      lines.push(`| \`${change.path}\` | ${desc} |`);
+      lines.push(`| \`${path}\` | ${desc} |`);
     }
     lines.push("");
   }

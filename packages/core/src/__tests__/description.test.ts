@@ -109,6 +109,14 @@ describe("shouldGenerateDescription", () => {
     expect(shouldGenerateDescription("no description")).toBe(true);
   });
 
+  it("returns true for 'update' standalone placeholder", () => {
+    expect(shouldGenerateDescription("update")).toBe(true);
+  });
+
+  it("returns false for 'update' as part of a longer description", () => {
+    expect(shouldGenerateDescription("update login flow to use OAuth2")).toBe(false);
+  });
+
   it("returns false for a meaningful multi-sentence description", () => {
     const description =
       "This PR adds JWT authentication to all API endpoints. " +
@@ -220,6 +228,16 @@ describe("formatDescription", () => {
       migrationNotes: null,
     });
     expect(result).not.toContain("## Migration Notes");
+  });
+
+  it("sanitizes pipe characters in file paths", () => {
+    const result = formatDescription({
+      summary: "Test.",
+      fileChanges: [{ path: "src/a|b.ts", description: "renamed" }],
+      breakingChanges: [],
+      migrationNotes: null,
+    });
+    expect(result).toContain("a\\|b.ts");
   });
 
   it("sanitizes pipe characters in file descriptions", () => {

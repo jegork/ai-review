@@ -134,7 +134,7 @@ app.put("/api/config/repos/:owner/:repo", async (c) => {
     style: parsedStyle.success ? parsedStyle.data : "balanced",
     focusAreas: body.focusAreas ?? ["security", "performance", "bugs", "style", "tests", "docs"],
     ignorePatterns: body.ignorePatterns ?? [],
-    ...(body.generateDescription !== undefined && {
+    ...(typeof body.generateDescription === "boolean" && {
       generateDescription: body.generateDescription,
     }),
   };
