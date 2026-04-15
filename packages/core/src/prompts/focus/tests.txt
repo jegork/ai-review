@@ -6,3 +6,12 @@ Pay special attention to TEST COVERAGE:
 - Test quality (are tests actually asserting meaningful behavior, or just that code runs?)
 - Missing integration tests for code that interacts with external systems
 - Flaky test patterns (time-dependent, order-dependent, network-dependent)
+
+For each test gap you identify, add an entry to the `missingTests` array with:
+- `file`: the source file that needs test coverage (not the test file)
+- `description`: a concrete, specific test scenario — name the exact edge case, boundary condition, error path, or integration scenario. Examples:
+  - "edge case: calling processItems with an empty array should return empty result without throwing"
+  - "error path: network timeout in fetchUser should propagate a typed error, not hang"
+  - "boundary: maxRetries=0 should skip retry logic entirely"
+  - "integration: database rollback when insertOrder fails mid-transaction"
+Do NOT add vague entries like "add unit tests" or "improve test coverage".

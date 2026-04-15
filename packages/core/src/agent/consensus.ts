@@ -13,6 +13,7 @@ import { compressDiff } from "../diff/compress.js";
 import { shufflePatches } from "../diff/shuffle.js";
 import { clusterFindings, clusterObservations } from "./cluster.js";
 import { runReview, type RunReviewOptions } from "./review.js";
+import { mergeMissingTests } from "./multi-call.js";
 import { logger } from "../logger.js";
 
 const DEFAULT_CONSENSUS_PASSES = 3;
@@ -147,6 +148,7 @@ export async function runConsensusReview(
     findings: survivingFindings,
     observations: survivingObservations,
     ticketCompliance: results[0]?.ticketCompliance ?? [],
+    missingTests: mergeMissingTests(results),
     filesReviewed: [...allFiles],
     modelUsed: results[0]?.modelUsed ?? "unknown",
     tokenCount: totalTokens,

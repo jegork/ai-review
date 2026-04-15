@@ -199,6 +199,11 @@ describe("buildUserMessage", () => {
     expect(msg).toContain("Do NOT report observations");
   });
 
+  it("instructs the LLM to consider other PR files for ticket compliance", () => {
+    const msg = buildUserMessage("diff", prMetadata, undefined, undefined, ["tests/test_auth.py"]);
+    expect(msg).toContain("ticket compliance");
+  });
+
   it("omits other PR files section when not provided", () => {
     const msg = buildUserMessage("diff", prMetadata);
     expect(msg).not.toContain("Other Files Changed");
@@ -236,6 +241,7 @@ describe("ReviewOutputSchema", () => {
         },
       ],
       ticketCompliance: [],
+      missingTests: [],
       observations: [],
       filesReviewed: ["src/auth.ts"],
     };
@@ -266,6 +272,7 @@ describe("ReviewOutputSchema", () => {
           evidence: "Comparison now uses <=",
         },
       ],
+      missingTests: [],
       observations: [],
       filesReviewed: ["src/index.ts"],
     };
@@ -289,6 +296,7 @@ describe("ReviewOutputSchema", () => {
         },
       ],
       ticketCompliance: [],
+      missingTests: [],
       observations: [],
       filesReviewed: ["src/parser.ts"],
     };
@@ -362,6 +370,7 @@ describe("ReviewOutputSchema", () => {
       recommendation: "looks_good" as const,
       findings: [],
       ticketCompliance: [],
+      missingTests: [],
       observations: [],
       filesReviewed: ["src/index.ts"],
     };

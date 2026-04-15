@@ -7,6 +7,7 @@ export type {
   Finding,
   Observation,
   TicketComplianceItem,
+  MissingTestItem,
   ReviewOutput,
 } from "./agent/schema.js";
 

@@ -39,6 +39,7 @@ function makeReviewResult(findings: Finding[]): ReviewResult {
     findings,
     observations: [],
     ticketCompliance: [],
+    missingTests: [],
     filesReviewed: ["src/app.ts"],
     modelUsed: "test-model",
     tokenCount: 100,
