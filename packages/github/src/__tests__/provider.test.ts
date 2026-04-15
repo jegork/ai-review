@@ -103,7 +103,7 @@ describe("GitHubProvider", () => {
 
   describe("deleteExistingBotComments", () => {
     it("deletes only comments containing the bot marker", async () => {
-      octokit.request.mockImplementation(async (route: string) => {
+      octokit.request.mockImplementation((route: string) => {
         if (route.startsWith("GET")) {
           return {
             data: [
