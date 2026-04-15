@@ -106,13 +106,18 @@ async function main(): Promise<void> {
 
   const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
 
-  const linkedIds = await provider.getLinkedWorkItemIds();
-  const existingIds = new Set(
-    ticketRefs.filter((r) => r.source === "azure-devops").map((r) => r.id),
-  );
-  const linkedRefs: TicketRef[] = linkedIds
-    .filter((id) => !existingIds.has(id))
-    .map((id) => ({ id, source: "azure-devops" }));
+  let linkedRefs: TicketRef[] = [];
+  try {
+    const linkedIds = await provider.getLinkedWorkItemIds();
+    const existingIds = new Set(
+      ticketRefs.filter((r) => r.source === "azure-devops").map((r) => r.id),
+    );
+    linkedRefs = linkedIds
+      .filter((id) => !existingIds.has(id))
+      .map((id) => ({ id, source: "azure-devops" }));
+  } catch (err) {
+    log.warn({ err }, "failed to fetch linked work items from ADO, continuing with extracted refs");
+  }
   const allRefs = [...ticketRefs, ...linkedRefs];
 
   const ticketProviders = new Map<string, AzureDevOpsTicketProvider>();
