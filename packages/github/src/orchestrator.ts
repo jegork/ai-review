@@ -33,6 +33,7 @@ const MAX_DIFF_TOKENS = 60_000;
 const ALL_FOCUS_AREAS: FocusArea[] = ["security", "performance", "bugs", "style", "tests", "docs"];
 
 async function buildTicketProviders(
+  octokit: Octokit,
   owner: string,
   repo: string,
 ): Promise<Map<string, TicketProvider>> {
@@ -41,6 +42,25 @@ async function buildTicketProviders(
   const ghToken = await getSetting("github_token");
   if (ghToken) {
     providers.set("github", new GitHubTicketProvider({ token: ghToken, owner, repo }));
+  } else {
+    providers.set(
+      "github",
+      new GitHubTicketProvider({
+        owner,
+        repo,
+        issueFetcher: async (o, r, num) => {
+          try {
+            const { data } = await octokit.request(
+              "GET /repos/{owner}/{repo}/issues/{issue_number}",
+              { owner: o, repo: r, issue_number: num },
+            );
+            return data;
+          } catch {
+            return null;
+          }
+        },
+      }),
+    );
   }
 
   const jiraUrl = await getSetting("jira_base_url");
@@ -140,7 +160,7 @@ export async function orchestrateReview(params: {
     }
     const allRefs = [...ticketRefs, ...linkedRefs];
 
-    const ticketProviders = await buildTicketProviders(owner, repo);
+    const ticketProviders = await buildTicketProviders(octokit, owner, repo);
     const { tickets, status: ticketResolution } = await resolveTicketsWithStatus(
       allRefs,
       ticketProviders,
