@@ -10,6 +10,7 @@ function makeReview(overrides: Partial<ReviewResult> = {}): ReviewResult {
     findings: [],
     observations: [],
     ticketCompliance: [],
+    missingTests: [],
     filesReviewed: [],
     modelUsed: "gpt-4o",
     tokenCount: 12345,
@@ -381,6 +382,90 @@ describe("formatInlineComment", () => {
   });
 });
 
+describe("formatSummaryComment with missing tests", () => {
+  it("renders a collapsible missing tests section", () => {
+    const review = makeReview({
+      missingTests: [
+        {
+          file: "src/auth.ts",
+          description: "edge case: empty credentials object should throw ValidationError",
+        },
+        {
+          file: "src/db.ts",
+          description: "error path: connection timeout should propagate a typed error",
+        },
+        {
+          file: "src/auth.ts",
+          description: "boundary: maxRetries=0 should skip retry logic entirely",
+        },
+      ],
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).toContain("Missing Tests (3 suggested test cases)");
+    expect(result).toContain("| File | Suggested Test Case |");
+    expect(result).toContain(
+      "| `src/auth.ts` | edge case: empty credentials object should throw ValidationError |",
+    );
+    expect(result).toContain(
+      "| `src/db.ts` | error path: connection timeout should propagate a typed error |",
+    );
+    expect(result).toContain(
+      "| `src/auth.ts` | boundary: maxRetries=0 should skip retry logic entirely |",
+    );
+  });
+
+  it("omits missing tests section when array is empty", () => {
+    const review = makeReview({ missingTests: [] });
+    const result = formatSummaryComment(review);
+    expect(result).not.toContain("Missing Tests");
+  });
+
+  it("sanitizes pipe characters in test descriptions", () => {
+    const review = makeReview({
+      missingTests: [
+        {
+          file: "src/parser.ts",
+          description: "union type A | B should be handled without narrowing error",
+        },
+      ],
+    });
+
+    const result = formatSummaryComment(review);
+    expect(result).toContain("union type A \\| B should be handled without narrowing error");
+  });
+
+  it("renders missing tests section after ticket compliance and before files reviewed", () => {
+    const review = makeReview({
+      ticketCompliance: [
+        {
+          ticketId: "FEAT-1",
+          requirement: "Add login",
+          status: "addressed",
+          evidence: "login.ts implemented",
+        },
+      ],
+      missingTests: [
+        {
+          file: "src/login.ts",
+          description: "error path: invalid password returns 401",
+        },
+      ],
+      filesReviewed: ["src/login.ts"],
+    });
+
+    const result = formatSummaryComment(review);
+
+    const complianceIdx = result.indexOf("Ticket Compliance");
+    const missingTestsIdx = result.indexOf("Missing Tests");
+    const filesIdx = result.indexOf("Files Reviewed");
+
+    expect(complianceIdx).toBeLessThan(missingTestsIdx);
+    expect(missingTestsIdx).toBeLessThan(filesIdx);
+  });
+});
+
 describe("formatSummaryComment with dropped findings", () => {
   it("renders a collapsible dropped findings section", () => {
     const review = makeReview({
@@ -518,6 +603,7 @@ describe("formatSummaryComment with triage stats", () => {
       findings: [],
       observations: [],
       ticketCompliance: [],
+      missingTests: [],
       filesReviewed: ["src/index.ts"],
       modelUsed: "claude-sonnet-4",
       tokenCount: 5000,
@@ -549,6 +635,7 @@ describe("formatSummaryComment with triage stats", () => {
       findings: [],
       observations: [],
       ticketCompliance: [],
+      missingTests: [],
       filesReviewed: [],
       modelUsed: "gpt-4o",
       tokenCount: 1000,
@@ -565,6 +652,7 @@ describe("formatSummaryComment with triage stats", () => {
       findings: [],
       observations: [],
       ticketCompliance: [],
+      missingTests: [],
       filesReviewed: [],
       modelUsed: "test",
       tokenCount: 100,

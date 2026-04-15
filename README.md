@@ -10,7 +10,7 @@ Built on [Mastra](https://mastra.ai/) (TypeScript).
 - **6 focus areas** — Security, Performance, Bugs, Code Style, Test Coverage, Documentation
 - **Triage-driven cascading review** — cheap model classifies files as skip/skim/deep-review, each tier gets an appropriate level of scrutiny
 - **Tree-sitter context expansion** — hunks expand to enclosing function/class boundaries instead of fixed line counts (TS, JS, Python, Go, Java, Rust)
-- **Structured summary comments** — severity table, collapsible issue details, files reviewed
+- **Structured summary comments** — severity table, collapsible issue details, missing tests list, files reviewed
 - **Inline code comments** — findings posted directly on PR diff lines
 - **Ticket compliance** — discovers linked tickets from PR description, branch name, and platform APIs (GitHub linked issues, ADO work items), then checks if requirements are addressed
 - **Multi-provider LLM** — OpenAI, Anthropic, Google, or any provider supported by Mastra
@@ -386,7 +386,7 @@ pnpm install
 # build all packages
 pnpm -r build
 
-# run tests (325 tests)
+# run tests (426 tests)
 pnpm test
 
 # start dev server

@@ -7,6 +7,7 @@ export {
   SkimFindingSchema,
   ObservationSchema,
   TicketComplianceSchema,
+  MissingTestSchema,
   ReviewOutputSchema,
   SkimReviewOutputSchema,
 } from "./schema.js";
@@ -17,6 +18,7 @@ export {
   runMultiCallReview,
   runCascadeReview,
   mergeResults,
+  mergeMissingTests,
   filterObservationsForPrFiles,
 } from "./multi-call.js";
 export type { MultiCallReviewOptions } from "./multi-call.js";

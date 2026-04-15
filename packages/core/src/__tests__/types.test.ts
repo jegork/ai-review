@@ -32,6 +32,7 @@ describe("types", () => {
       findings: [],
       observations: [],
       ticketCompliance: [],
+      missingTests: [],
       filesReviewed: ["src/index.ts"],
       modelUsed: "anthropic/claude-sonnet-4-20250514",
       tokenCount: 1500,
