@@ -9,6 +9,7 @@ import type {
   Observation,
   TicketComplianceItem,
   TicketComplianceStatus,
+  MissingTestItem,
 } from "../types.js";
 import { runReview, type RunReviewOptions, type ReviewTier } from "./review.js";
 import { runConsensusReview } from "./consensus.js";
@@ -140,6 +141,7 @@ export function mergeResults(results: ReviewResult[], modelUsed: string): Review
     findings: dedupedFindings,
     observations: allObservations,
     ticketCompliance: mergeTicketCompliance(results),
+    missingTests: mergeMissingTests(results),
     filesReviewed: [...allFiles],
     modelUsed,
     tokenCount: totalTokens,
@@ -198,6 +200,22 @@ function mergeTicketCompliance(results: ReviewResult[]): TicketComplianceItem[] 
     ...item,
     evidence: evidenceParts.length > 0 ? evidenceParts.join(" | ") : null,
   }));
+}
+
+function mergeMissingTests(results: ReviewResult[]): MissingTestItem[] {
+  const seen = new Set<string>();
+  const merged: MissingTestItem[] = [];
+
+  for (const result of results) {
+    for (const item of result.missingTests) {
+      const key = `${item.file.toLowerCase()}:${item.description.toLowerCase().trim()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(item);
+    }
+  }
+
+  return merged;
 }
 
 async function runTieredReview(
@@ -428,6 +446,7 @@ export async function runCascadeReview(
         findings: [],
         observations: [],
         ticketCompliance: [],
+        missingTests: [],
         filesReviewed: [],
         modelUsed: "unknown",
         tokenCount: 0,

@@ -15,6 +15,7 @@ Your review must include:
 - Specific findings tied to exact file paths and line numbers in the diff
 - Observations about issues in referenced but unchanged code (these cannot receive inline comments)
 - When linked tickets are provided, a ticketCompliance checklist that evaluates each requirement with one of: "addressed", "partially_addressed", "not_addressed", or "unclear"
+- A missingTests list identifying concrete test cases that should exist for the changed code. Each entry should describe a specific, actionable scenario (e.g. "edge case: empty input array causes crash", "error path: database connection timeout is unhandled") rather than vague suggestions like "add more tests". Only include entries when test gaps are actually present — leave the array empty when coverage appears adequate.
 
 For each finding, provide:
 - The exact file path and line number (and `endLine` when the fix spans multiple lines)

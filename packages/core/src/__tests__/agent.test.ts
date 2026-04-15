@@ -236,6 +236,7 @@ describe("ReviewOutputSchema", () => {
         },
       ],
       ticketCompliance: [],
+      missingTests: [],
       observations: [],
       filesReviewed: ["src/auth.ts"],
     };
@@ -266,6 +267,7 @@ describe("ReviewOutputSchema", () => {
           evidence: "Comparison now uses <=",
         },
       ],
+      missingTests: [],
       observations: [],
       filesReviewed: ["src/index.ts"],
     };
@@ -289,6 +291,7 @@ describe("ReviewOutputSchema", () => {
         },
       ],
       ticketCompliance: [],
+      missingTests: [],
       observations: [],
       filesReviewed: ["src/parser.ts"],
     };
@@ -362,6 +365,7 @@ describe("ReviewOutputSchema", () => {
       recommendation: "looks_good" as const,
       findings: [],
       ticketCompliance: [],
+      missingTests: [],
       observations: [],
       filesReviewed: ["src/index.ts"],
     };

@@ -104,6 +104,17 @@ export const TicketComplianceSchema = z.object({
 
 export type TicketComplianceItem = z.infer<typeof TicketComplianceSchema>;
 
+export const MissingTestSchema = z.object({
+  file: z.string().describe("source file that lacks test coverage"),
+  description: z
+    .string()
+    .describe(
+      "concrete test case or scenario that should be added, e.g. 'edge case: empty input array' or 'error path: API returns 500'",
+    ),
+});
+
+export type MissingTestItem = z.infer<typeof MissingTestSchema>;
+
 export const ReviewOutputSchema = z.object({
   summary: z.string().describe("concise summary of the PR and overall assessment"),
   recommendation: RecommendationSchema.describe("merge recommendation based on findings"),
@@ -117,6 +128,11 @@ export const ReviewOutputSchema = z.object({
     .array(TicketComplianceSchema)
     .describe(
       "requirement-by-requirement compliance checklist for linked tickets; empty when no linked tickets are available",
+    ),
+  missingTests: z
+    .array(MissingTestSchema)
+    .describe(
+      "concrete test cases that should be added for the changed code; each entry describes a specific scenario, not a vague 'add tests' suggestion. Empty when test coverage appears adequate.",
     ),
   filesReviewed: z.array(z.string()).describe("list of file paths that were reviewed"),
 });

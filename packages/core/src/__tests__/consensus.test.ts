@@ -21,6 +21,7 @@ function makeResult(overrides: Partial<ReviewResult> = {}): ReviewResult {
     findings: [],
     observations: [],
     ticketCompliance: [],
+    missingTests: [],
     filesReviewed: ["src/index.ts"],
     modelUsed: "test-model",
     tokenCount: 100,

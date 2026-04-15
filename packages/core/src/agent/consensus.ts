@@ -147,6 +147,7 @@ export async function runConsensusReview(
     findings: survivingFindings,
     observations: survivingObservations,
     ticketCompliance: results[0]?.ticketCompliance ?? [],
+    missingTests: results.flatMap((r) => r.missingTests),
     filesReviewed: [...allFiles],
     modelUsed: results[0]?.modelUsed ?? "unknown",
     tokenCount: totalTokens,

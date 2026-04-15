@@ -19,6 +19,7 @@ function makeMockReview(diff: string): ReviewResult {
     ],
     observations: [],
     ticketCompliance: [],
+    missingTests: [],
     filesReviewed: ["a.ts"],
     modelUsed: "test-model",
     tokenCount: countTokens(diff),
@@ -260,6 +261,61 @@ describe("runMultiCallReview", () => {
     ]);
   });
 
+  it("merges and deduplicates missing tests across chunks", async () => {
+    runReviewMock
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-1"),
+        missingTests: [
+          { file: "src/auth.ts", description: "edge case: empty token string" },
+          { file: "src/db.ts", description: "error path: connection refused" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-2"),
+        missingTests: [
+          { file: "src/auth.ts", description: "edge case: empty token string" },
+          { file: "src/auth.ts", description: "boundary: token with 0 expiry" },
+        ],
+      });
+
+    const patches = [makePatch("big1.ts", 1000), makePatch("big2.ts", 1000)];
+    const result = await runMultiCallReview(patches, config, prMetadata, undefined, {
+      maxTokens: 3000,
+    });
+
+    expect(result.missingTests).toHaveLength(3);
+    expect(result.missingTests).toEqual([
+      { file: "src/auth.ts", description: "edge case: empty token string" },
+      { file: "src/db.ts", description: "error path: connection refused" },
+      { file: "src/auth.ts", description: "boundary: token with 0 expiry" },
+    ]);
+  });
+
+  it("deduplicates missing tests case-insensitively", async () => {
+    runReviewMock
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-1"),
+        missingTests: [{ file: "src/Auth.ts", description: "Edge case: empty token" }],
+      })
+      .mockResolvedValueOnce({
+        ...makeMockReview("chunk-2"),
+        missingTests: [{ file: "src/auth.ts", description: "edge case: empty token" }],
+      });
+
+    const patches = [makePatch("big1.ts", 1000), makePatch("big2.ts", 1000)];
+    const result = await runMultiCallReview(patches, config, prMetadata, undefined, {
+      maxTokens: 3000,
+    });
+
+    expect(result.missingTests).toHaveLength(1);
+  });
+
+  it("returns empty missing tests when no chunks produce them", async () => {
+    const patches = [makePatch("small.ts", 10)];
+    const result = await runMultiCallReview(patches, config, prMetadata);
+    expect(result.missingTests).toEqual([]);
+  });
+
   it("handles empty patches", async () => {
     runReviewMock.mockResolvedValueOnce({
       summary: "Nothing to review",
@@ -267,6 +323,7 @@ describe("runMultiCallReview", () => {
       findings: [],
       observations: [],
       ticketCompliance: [],
+      missingTests: [],
       filesReviewed: [],
       modelUsed: "test",
       tokenCount: 0,
@@ -429,6 +486,7 @@ describe("mergeResults", () => {
       findings: [],
       observations: [],
       ticketCompliance: [],
+      missingTests: [],
       filesReviewed: ["a.ts"],
       modelUsed: "test-model",
       tokenCount: 100,
@@ -440,6 +498,7 @@ describe("mergeResults", () => {
       findings: [],
       observations: [],
       ticketCompliance: [],
+      missingTests: [],
       filesReviewed: ["b.ts"],
       modelUsed: "test-model",
       tokenCount: 500,
@@ -468,6 +527,7 @@ describe("mergeResults", () => {
       findings: [],
       observations: [],
       ticketCompliance: [],
+      missingTests: [],
       filesReviewed: ["a.ts"],
       modelUsed: "test-model",
       tokenCount: 100,
@@ -479,6 +539,7 @@ describe("mergeResults", () => {
       findings: [],
       observations: [],
       ticketCompliance: [],
+      missingTests: [],
       filesReviewed: ["b.ts"],
       modelUsed: "test-model",
       tokenCount: 100,

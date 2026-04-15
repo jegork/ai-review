@@ -7,6 +7,7 @@ export {
   SkimFindingSchema,
   ObservationSchema,
   TicketComplianceSchema,
+  MissingTestSchema,
   ReviewOutputSchema,
   SkimReviewOutputSchema,
 } from "./schema.js";
