@@ -1,5 +1,5 @@
 import type { Octokit } from "octokit";
-import type { FocusArea, TicketProvider } from "@rusty-bot/core";
+import type { FocusArea, TicketProvider, TicketRef } from "@rusty-bot/core";
 import {
   parseDiff,
   filterFiles,
@@ -97,9 +97,27 @@ export async function orchestrateReview(params: {
     const reviewable = stripDeletionOnlyHunks(filtered);
 
     const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
+
+    let linkedRefs: TicketRef[] = [];
+    try {
+      const linkedIssueNumbers = await provider.getLinkedIssueNumbers();
+      const existingGhIds = new Set(
+        ticketRefs.filter((r) => r.source === "github").map((r) => r.id),
+      );
+      linkedRefs = linkedIssueNumbers
+        .filter((n) => !existingGhIds.has(String(n)))
+        .map((n) => ({ id: String(n), source: "github" }));
+    } catch (err) {
+      log.warn(
+        { err },
+        "failed to fetch linked issues from GitHub, continuing with extracted refs",
+      );
+    }
+    const allRefs = [...ticketRefs, ...linkedRefs];
+
     const ticketProviders = await buildTicketProviders(owner, repo);
     const { tickets, status: ticketResolution } = await resolveTicketsWithStatus(
-      ticketRefs,
+      allRefs,
       ticketProviders,
     );
 

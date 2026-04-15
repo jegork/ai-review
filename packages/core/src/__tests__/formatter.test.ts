@@ -196,11 +196,12 @@ describe("formatSummaryComment", () => {
     const review = makeReview();
     const result = formatSummaryComment(review, {
       ticketResolution: {
-        refsFound: 2,
+        totalRefsFound: 2,
         refsConsidered: 2,
+        refsSkippedByLimit: 0,
         fetched: 1,
-        missingProvider: 0,
-        fetchFailed: 1,
+        consideredMissingProvider: 0,
+        consideredFetchFailed: 1,
       },
     });
 
@@ -212,11 +213,12 @@ describe("formatSummaryComment", () => {
     const review = makeReview();
     const result = formatSummaryComment(review, {
       ticketResolution: {
-        refsFound: 1,
+        totalRefsFound: 1,
         refsConsidered: 1,
+        refsSkippedByLimit: 0,
         fetched: 0,
-        missingProvider: 1,
-        fetchFailed: 0,
+        consideredMissingProvider: 1,
+        consideredFetchFailed: 0,
       },
     });
 
@@ -229,16 +231,17 @@ describe("formatSummaryComment", () => {
     const review = makeReview();
     const result = formatSummaryComment(review, {
       ticketResolution: {
-        refsFound: 4,
+        totalRefsFound: 4,
         refsConsidered: 3,
+        refsSkippedByLimit: 1,
         fetched: 1,
-        missingProvider: 1,
-        fetchFailed: 1,
+        consideredMissingProvider: 1,
+        consideredFetchFailed: 1,
       },
     });
 
     expect(result).toContain(
-      "Fetched 1 of 3 linked ticket(s) (reviewed first 3). 1 skipped due to missing provider, 1 failed to fetch.",
+      "Fetched 1 of 3 linked ticket(s) (found 4, reviewed first 3). 1 skipped due to missing provider, 1 failed to fetch.",
     );
   });
 
@@ -246,11 +249,12 @@ describe("formatSummaryComment", () => {
     const review = makeReview();
     const result = formatSummaryComment(review, {
       ticketResolution: {
-        refsFound: 2,
+        totalRefsFound: 2,
         refsConsidered: 2,
+        refsSkippedByLimit: 0,
         fetched: 0,
-        missingProvider: 0,
-        fetchFailed: 2,
+        consideredMissingProvider: 0,
+        consideredFetchFailed: 2,
       },
     });
 

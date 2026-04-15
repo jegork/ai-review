@@ -1,6 +1,7 @@
 export type {
   Severity,
   FocusArea,
+  ReviewStyle,
   Recommendation,
   TicketComplianceStatus,
   Finding,
@@ -13,6 +14,7 @@ import type {
   Finding,
   Observation,
   FocusArea,
+  ReviewStyle,
   Recommendation,
   Severity,
   ReviewOutput,
@@ -33,8 +35,6 @@ export interface ConsensusMetadata {
   recommendationElevated: boolean;
   passRecommendations: Recommendation[];
 }
-
-export type ReviewStyle = "strict" | "balanced" | "lenient" | "roast";
 
 export type TriageClassification = "skip" | "skim" | "deep-review";
 
@@ -128,15 +128,17 @@ export interface TicketInfo {
 
 export interface TicketResolutionStatus {
   /** Total linked ticket references detected before any cap is applied. */
-  refsFound: number;
-  /** Number of refs actually considered for resolution after caps such as MAX_TICKETS. */
+  totalRefsFound: number;
+  /** Number of refs actually considered for resolution after the MAX_TICKETS cap. */
   refsConsidered: number;
-  /** Number of considered refs that were successfully fetched into TicketInfo objects. */
+  /** Number of refs dropped because they exceeded the MAX_TICKETS cap. */
+  refsSkippedByLimit: number;
+  /** Number of considered refs successfully fetched into TicketInfo objects. */
   fetched: number;
   /** Number of considered refs skipped because no provider was configured for their source. */
-  missingProvider: number;
-  /** Number of considered refs that had a provider but still failed to resolve. */
-  fetchFailed: number;
+  consideredMissingProvider: number;
+  /** Number of considered refs where the provider was available but the fetch still failed. */
+  consideredFetchFailed: number;
 }
 
 export type TicketSource = "github" | "jira" | "linear" | "azure-devops";

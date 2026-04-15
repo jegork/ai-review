@@ -6,13 +6,13 @@ Built on [Mastra](https://mastra.ai/) (TypeScript).
 
 ## Features
 
-- **4 review styles** — Strict, Balanced, Lenient, Roast
+- **5 review styles** — Strict, Balanced, Lenient, Roast, Thorough
 - **6 focus areas** — Security, Performance, Bugs, Code Style, Test Coverage, Documentation
 - **Triage-driven cascading review** — cheap model classifies files as skip/skim/deep-review, each tier gets an appropriate level of scrutiny
 - **Tree-sitter context expansion** — hunks expand to enclosing function/class boundaries instead of fixed line counts (TS, JS, Python, Go, Java, Rust)
 - **Structured summary comments** — severity table, collapsible issue details, files reviewed
 - **Inline code comments** — findings posted directly on PR diff lines
-- **Ticket compliance** — extracts linked tickets from PR description/branch name, checks if requirements are addressed
+- **Ticket compliance** — discovers linked tickets from PR description, branch name, and platform APIs (GitHub linked issues, ADO work items), then checks if requirements are addressed
 - **Semgrep pre-scan** — runs Semgrep SAST on changed files before LLM review, feeds findings for triage (gracefully skipped when Semgrep is not installed)
 - **Multi-provider LLM** — OpenAI, Anthropic, Google, or any provider supported by Mastra
 - **GitHub + Azure DevOps** — webhook server for GitHub, pipeline task for Azure DevOps
@@ -239,6 +239,7 @@ Example `.rusty-bot.md`:
 | **Balanced** | Focuses on confidence, balances thoroughness with practicality |
 | **Lenient** | Only critical bugs and security issues, encouraging tone |
 | **Roast** | Technically accurate feedback wrapped in sharp, witty commentary |
+| **Thorough** | Structured reasoning (intent → components → execution paths → invariants → edge cases → blast radius) before producing findings |
 
 ### Judge / Filter Pass
 
@@ -396,7 +397,9 @@ The feature is automatic and requires no configuration. Unsupported languages (C
 
 ### Ticket Integration
 
-Rusty Bot automatically extracts ticket references from PR descriptions and branch names:
+Rusty Bot discovers linked tickets through three mechanisms:
+
+**1. Regex extraction** — scans PR descriptions and branch names for ticket patterns:
 
 - **GitHub Issues**: `#123`, `owner/repo#123`, full URL
 - **Jira**: `PROJ-123`, Jira browse URL
@@ -404,7 +407,11 @@ Rusty Bot automatically extracts ticket references from PR descriptions and bran
 - **Azure DevOps**: `AB#123`, ADO work item URL
 - **Branch names**: `feature/123-desc`, `fix/PROJ-123-title`
 
-When tickets are found and the corresponding provider is configured, the review summary includes a compliance assessment.
+**2. GitHub linked issues** — queries the `closingIssuesReferences` GraphQL field to find issues linked via closing keywords (`Closes #123`, `Fixes #456`) or the PR Development sidebar.
+
+**3. Azure DevOps linked work items** — calls the PR work items API endpoint to find work items formally linked through the ADO UI, even when they aren't mentioned in the description or branch name.
+
+All three sources are merged and deduplicated before resolution. When tickets are found and the corresponding provider is configured, the review summary includes a compliance assessment.
 
 ## Development
 

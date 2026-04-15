@@ -9,13 +9,14 @@ export async function resolveTicketsWithStatus(
 ): Promise<{ tickets: TicketInfo[]; status: TicketResolutionStatus }> {
   const results: TicketInfo[] = [];
   const refsToConsider = refs.slice(0, MAX_TICKETS);
-  let missingProvider = 0;
-  let fetchFailed = 0;
+  let consideredMissingProvider = 0;
+  let consideredFetchFailed = 0;
+  const startMs = Date.now();
 
   for (const ref of refsToConsider) {
     const provider = providers.get(ref.source);
     if (!provider) {
-      missingProvider++;
+      consideredMissingProvider++;
       continue;
     }
 
@@ -24,24 +25,37 @@ export async function resolveTicketsWithStatus(
       if (info) {
         results.push(info);
       } else {
-        fetchFailed++;
+        consideredFetchFailed++;
       }
     } catch (err) {
-      fetchFailed++;
+      consideredFetchFailed++;
       logger.warn({ ticketId: ref.id, source: ref.source, err }, "failed to fetch ticket");
     }
   }
 
-  return {
-    tickets: results,
-    status: {
-      refsFound: refs.length,
-      refsConsidered: refsToConsider.length,
-      fetched: results.length,
-      missingProvider,
-      fetchFailed,
-    },
+  const status: TicketResolutionStatus = {
+    totalRefsFound: refs.length,
+    refsConsidered: refsToConsider.length,
+    refsSkippedByLimit: refs.length - refsToConsider.length,
+    fetched: results.length,
+    consideredMissingProvider,
+    consideredFetchFailed,
   };
+
+  const sources = [...new Set(refs.map((r) => r.source))];
+
+  logger.info(
+    {
+      module: "tickets",
+      durationMs: Date.now() - startMs,
+      sources,
+      configuredProviders: [...providers.keys()],
+      ...status,
+    },
+    "ticket resolution complete",
+  );
+
+  return { tickets: results, status };
 }
 
 export async function resolveTickets(

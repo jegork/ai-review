@@ -1,4 +1,5 @@
-import type { FocusArea, ReviewConfig, ReviewStyle } from "@rusty-bot/core";
+import type { FocusArea, ReviewConfig, TicketRef } from "@rusty-bot/core";
+import { ReviewStyleSchema } from "@rusty-bot/core";
 import {
   filterFiles,
   stripDeletionOnlyHunks,
@@ -24,7 +25,6 @@ import { AzureDevOpsProvider } from "./provider.js";
 
 const log = logger.child({ package: "azure-devops" });
 
-const VALID_STYLES = new Set(["strict", "balanced", "lenient", "roast"]);
 const MAX_TOKENS = 120_000;
 
 export function parseConfig(): {
@@ -50,7 +50,8 @@ export function parseConfig(): {
   }
 
   const reviewStyle = process.env.RUSTY_REVIEW_STYLE ?? "balanced";
-  if (!VALID_STYLES.has(reviewStyle)) {
+  const parsedStyle = ReviewStyleSchema.safeParse(reviewStyle);
+  if (!parsedStyle.success) {
     throw new Error(`invalid review style: ${reviewStyle}`);
   }
 
@@ -68,7 +69,7 @@ export function parseConfig(): {
       accessToken,
     }),
     config: {
-      style: reviewStyle as ReviewStyle,
+      style: parsedStyle.data,
       focusAreas,
       ignorePatterns,
     },
@@ -105,10 +106,24 @@ async function main(): Promise<void> {
     "files changed",
   );
 
-  const ticketRefs = extractTicketRefs(metadata.title, metadata.description);
-  const ticketProviders = new Map<string, AzureDevOpsTicketProvider>();
+  const ticketRefs = extractTicketRefs(metadata.description, metadata.sourceBranch);
 
-  if (ticketRefs.some((r) => r.source === "azure-devops")) {
+  let linkedRefs: TicketRef[] = [];
+  try {
+    const linkedIds = await provider.getLinkedWorkItemIds();
+    const existingIds = new Set(
+      ticketRefs.filter((r) => r.source === "azure-devops").map((r) => r.id),
+    );
+    linkedRefs = linkedIds
+      .filter((id) => !existingIds.has(id))
+      .map((id) => ({ id, source: "azure-devops" }));
+  } catch (err) {
+    log.warn({ err }, "failed to fetch linked work items from ADO, continuing with extracted refs");
+  }
+  const allRefs = [...ticketRefs, ...linkedRefs];
+
+  const ticketProviders = new Map<string, AzureDevOpsTicketProvider>();
+  if (allRefs.some((r) => r.source === "azure-devops")) {
     ticketProviders.set(
       "azure-devops",
       new AzureDevOpsTicketProvider({
@@ -120,7 +135,7 @@ async function main(): Promise<void> {
   }
 
   const { tickets, status: ticketResolution } = await resolveTicketsWithStatus(
-    ticketRefs,
+    allRefs,
     ticketProviders,
   );
 

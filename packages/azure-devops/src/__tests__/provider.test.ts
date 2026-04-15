@@ -352,6 +352,44 @@ describe("AzureDevOpsProvider", () => {
     });
   });
 
+  describe("getLinkedWorkItemIds", () => {
+    it("returns work item ids from the PR work items endpoint", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          value: [
+            { id: "9952", url: "https://dev.azure.com/org/proj/_apis/wit/workItems/9952" },
+            { id: "1001", url: "https://dev.azure.com/org/proj/_apis/wit/workItems/1001" },
+          ],
+        }),
+      );
+
+      const ids = await provider.getLinkedWorkItemIds();
+
+      expect(ids).toEqual(["9952", "1001"]);
+      expect(fetchSpy).toHaveBeenCalledWith(
+        `${BASE_URL}/pullRequests/${PULL_REQUEST_ID}/workitems?${API_VERSION}`,
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: `Bearer ${ACCESS_TOKEN}`,
+          }),
+        }),
+      );
+    });
+
+    it("returns empty array when no work items are linked", async () => {
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ value: [] }));
+
+      const ids = await provider.getLinkedWorkItemIds();
+      expect(ids).toEqual([]);
+    });
+
+    it("throws on API error", async () => {
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ message: "forbidden" }, false, 403));
+
+      await expect(provider.getLinkedWorkItemIds()).rejects.toThrow("Azure DevOps API error 403");
+    });
+  });
+
   describe("getDiff", () => {
     function mockPRAndIterations() {
       fetchSpy.mockResolvedValueOnce(

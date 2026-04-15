@@ -4,8 +4,8 @@ import { serve } from "@hono/node-server";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile, stat } from "node:fs/promises";
-import type { FocusArea, ReviewStyle } from "@rusty-bot/core";
-import { logger } from "@rusty-bot/core";
+import type { FocusArea } from "@rusty-bot/core";
+import { ReviewStyleSchema, logger } from "@rusty-bot/core";
 import { validateWebhookSignature, parseWebhookEvent } from "./webhook.js";
 import { createAppOctokit } from "./auth.js";
 import { orchestrateReview } from "./orchestrator.js";
@@ -117,15 +117,20 @@ app.get("/api/config/repos/:owner/:repo", async (c) => {
 app.put("/api/config/repos/:owner/:repo", async (c) => {
   const { owner, repo } = c.req.param();
   const body: {
-    style?: ReviewStyle;
+    style?: string;
     focusAreas?: FocusArea[];
     ignorePatterns?: string[];
   } = await c.req.json();
 
+  const parsedStyle = ReviewStyleSchema.safeParse(body.style);
+  if (body.style !== undefined && !parsedStyle.success) {
+    return c.json({ error: `invalid review style: ${body.style}` }, 400);
+  }
+
   const config: RepoConfig = {
     owner,
     repo,
-    style: body.style ?? "balanced",
+    style: parsedStyle.success ? parsedStyle.data : "balanced",
     focusAreas: body.focusAreas ?? ["security", "performance", "bugs", "style", "tests", "docs"],
     ignorePatterns: body.ignorePatterns ?? [],
   };
