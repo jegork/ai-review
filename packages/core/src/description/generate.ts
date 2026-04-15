@@ -71,6 +71,7 @@ export function formatDescription(output: PRDescriptionOutput): string {
 export async function generatePRDescription(
   patches: FilePatch[],
   prMetadata: PRMetadata,
+  existingDescription?: string,
 ): Promise<GenerateDescriptionResult> {
   const { compressed } = compressDiff(patches, MAX_DESCRIPTION_TOKENS);
 
@@ -85,7 +86,7 @@ export async function generatePRDescription(
     model,
   });
 
-  const userMessage = buildDescriptionUserMessage(compressed, prMetadata);
+  const userMessage = buildDescriptionUserMessage(compressed, prMetadata, existingDescription);
 
   const response = await agent.generate(userMessage, {
     structuredOutput: { schema: PRDescriptionOutputSchema },

@@ -269,4 +269,22 @@ describe("buildDescriptionUserMessage", () => {
     const msg = buildDescriptionUserMessage("diff", prMetadata);
     expect(msg).toContain("dev123");
   });
+
+  it("includes existing description when provided", () => {
+    const existing = "<!-- rusty-bot-description -->\n\n## Summary\nPrevious bot-generated text.";
+    const msg = buildDescriptionUserMessage("diff", prMetadata, existing);
+    expect(msg).toContain("Existing Description");
+    expect(msg).toContain("Previous bot-generated text.");
+    expect(msg).toContain("Preserve any useful human-added context");
+  });
+
+  it("omits existing description section when empty", () => {
+    const msg = buildDescriptionUserMessage("diff", prMetadata, "");
+    expect(msg).not.toContain("Existing Description");
+  });
+
+  it("omits existing description section when undefined", () => {
+    const msg = buildDescriptionUserMessage("diff", prMetadata);
+    expect(msg).not.toContain("Existing Description");
+  });
 });

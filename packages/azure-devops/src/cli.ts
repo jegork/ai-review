@@ -109,7 +109,7 @@ async function main(): Promise<void> {
   if (process.env.RUSTY_GENERATE_DESCRIPTION === "true") {
     try {
       if (shouldGenerateDescription(metadata.description)) {
-        const descResult = await generatePRDescription(reviewable, metadata);
+        const descResult = await generatePRDescription(reviewable, metadata, metadata.description);
         await provider.updatePRDescription(descResult.markdown);
         metadata.description = descResult.markdown;
         log.info(

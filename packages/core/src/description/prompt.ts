@@ -10,19 +10,33 @@ Rules:
 - Only list breaking changes when the diff clearly introduces API/contract/schema incompatibilities
 - Only include migration notes when there are schema migrations, API changes, config changes, or dependency changes that consumers need to act on
 - If the PR title or branch name hints at the purpose, use that context
-- Do not invent context that isn't evident from the diff`;
+- Do not invent context that isn't evident from the diff
+- When an existing description is provided, preserve any useful human-added context (rationale, rollout notes, linked issues) and incorporate it into the new description`;
 
 export function buildDescriptionSystemPrompt(): string {
   return SYSTEM_PROMPT;
 }
 
-export function buildDescriptionUserMessage(diff: string, prMetadata: PRMetadata): string {
+export function buildDescriptionUserMessage(
+  diff: string,
+  prMetadata: PRMetadata,
+  existingDescription?: string,
+): string {
   const parts: string[] = [];
 
   parts.push("## Pull Request");
   parts.push(`**Title:** ${prMetadata.title}`);
   parts.push(`**Author:** ${prMetadata.author}`);
   parts.push(`**Branch:** ${prMetadata.sourceBranch} → ${prMetadata.targetBranch}`);
+
+  if (existingDescription?.trim()) {
+    parts.push("\n## Existing Description");
+    parts.push(
+      "The PR currently has the following description. Preserve any useful human-added " +
+        "context (rationale, rollout notes, linked issues) when generating the new description.\n",
+    );
+    parts.push(existingDescription.trim());
+  }
 
   parts.push("\n## Diff\n");
   parts.push(diff);
