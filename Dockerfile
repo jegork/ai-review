@@ -23,7 +23,8 @@ WORKDIR /app
 
 ARG OPENGREP_VERSION=v1.19.0
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && apt-get install -y --no-install-recommends curl ca-certificates python3 python3-pip \
+    && pip3 install --break-system-packages charset-normalizer chardet \
     && curl -fsSL -o /usr/local/bin/opengrep \
        "https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep_manylinux_x86" \
     && chmod +x /usr/local/bin/opengrep \

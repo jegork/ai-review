@@ -109,7 +109,7 @@ export async function runOpenGrep(
         findings: [],
         rawCount: 0,
         available: true,
-        error: `opengrep exited with code ${exitCode}: ${stderr.slice(0, 200)}`,
+        error: `opengrep exited with code ${exitCode}: ${stderr.slice(0, 500)}`,
       };
     }
 
