@@ -28,7 +28,14 @@ export function shouldGenerateDescription(currentDescription: string): boolean {
   return false;
 }
 
-export function formatDescription(output: PRDescriptionOutput): string {
+function stripBotMarker(description: string): string {
+  return description.replace(DESCRIPTION_MARKER, "").trim();
+}
+
+export function formatDescription(
+  output: PRDescriptionOutput,
+  originalDescription?: string,
+): string {
   const lines: string[] = [DESCRIPTION_MARKER, ""];
 
   lines.push("## Summary");
@@ -65,6 +72,17 @@ export function formatDescription(output: PRDescriptionOutput): string {
     lines.push("");
   }
 
+  const stripped = originalDescription ? stripBotMarker(originalDescription) : "";
+  if (stripped.length > 0) {
+    lines.push("<details>");
+    lines.push("<summary>Original description</summary>");
+    lines.push("");
+    lines.push(stripped);
+    lines.push("");
+    lines.push("</details>");
+    lines.push("");
+  }
+
   return lines.join("\n");
 }
 
@@ -96,7 +114,7 @@ export async function generatePRDescription(
   const tokenCount = response.usage.totalTokens ?? 0;
 
   return {
-    markdown: formatDescription(parsed),
+    markdown: formatDescription(parsed, existingDescription),
     modelUsed: modelName,
     tokenCount,
   };

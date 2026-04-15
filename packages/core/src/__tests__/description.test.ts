@@ -249,6 +249,61 @@ describe("formatDescription", () => {
     });
     expect(result).toContain("added A \\| B union type");
   });
+
+  it("appends original description in a collapsed section", () => {
+    const result = formatDescription(
+      {
+        summary: "New description.",
+        fileChanges: [],
+        breakingChanges: [],
+        migrationNotes: null,
+      },
+      "WIP - need to also handle the timeout case",
+    );
+    expect(result).toContain("<summary>Original description</summary>");
+    expect(result).toContain("WIP - need to also handle the timeout case");
+  });
+
+  it("strips bot marker from original description before appending", () => {
+    const botGenerated = "<!-- rusty-bot-description -->\n\n## Summary\nPrevious bot text.";
+    const result = formatDescription(
+      {
+        summary: "Updated.",
+        fileChanges: [],
+        breakingChanges: [],
+        migrationNotes: null,
+      },
+      botGenerated,
+    );
+    expect(result).toContain("Original description");
+    expect(result).toContain("Previous bot text.");
+    // the marker inside the accordion body should be stripped
+    const accordionContent = result.split("Original description")[1];
+    expect(accordionContent).not.toContain("<!-- rusty-bot-description -->");
+  });
+
+  it("omits original description section when original is empty", () => {
+    const result = formatDescription(
+      {
+        summary: "Fresh.",
+        fileChanges: [],
+        breakingChanges: [],
+        migrationNotes: null,
+      },
+      "",
+    );
+    expect(result).not.toContain("Original description");
+  });
+
+  it("omits original description section when original is undefined", () => {
+    const result = formatDescription({
+      summary: "Fresh.",
+      fileChanges: [],
+      breakingChanges: [],
+      migrationNotes: null,
+    });
+    expect(result).not.toContain("Original description");
+  });
 });
 
 describe("buildDescriptionUserMessage", () => {
