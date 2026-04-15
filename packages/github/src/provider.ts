@@ -218,6 +218,30 @@ export class GitHubProvider implements GitProvider {
     });
   }
 
+  async getLinkedIssueNumbers(): Promise<number[]> {
+    const { repository } = await this.octokit.graphql<{
+      repository: {
+        pullRequest: {
+          closingIssuesReferences: {
+            nodes: { number: number }[];
+          };
+        };
+      };
+    }>(
+      `query ($owner: String!, $repo: String!, $pr: Int!) {
+        repository(owner: $owner, name: $repo) {
+          pullRequest(number: $pr) {
+            closingIssuesReferences(first: 50) {
+              nodes { number }
+            }
+          }
+        }
+      }`,
+      { owner: this.owner, repo: this.repo, pr: this.pullNumber },
+    );
+    return repository.pullRequest.closingIssuesReferences.nodes.map((n) => n.number);
+  }
+
   async deleteExistingBotComments(): Promise<void> {
     const { data: comments } = await this.octokit.request(
       "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
