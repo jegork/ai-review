@@ -9,7 +9,30 @@ export type {
   ReviewOutput,
 } from "./agent/schema.js";
 
-import type { Finding, Observation, FocusArea, ReviewOutput } from "./agent/schema.js";
+import type {
+  Finding,
+  Observation,
+  FocusArea,
+  Recommendation,
+  Severity,
+  ReviewOutput,
+} from "./agent/schema.js";
+
+export interface DroppedFinding {
+  file: string;
+  line: number;
+  severity: Severity;
+  message: string;
+  voteCount: number;
+}
+
+export interface ConsensusMetadata {
+  passes: number;
+  threshold: number;
+  agreementRate: number;
+  recommendationElevated: boolean;
+  passRecommendations: Recommendation[];
+}
 
 export type ReviewStyle = "strict" | "balanced" | "lenient" | "roast";
 
@@ -45,7 +68,8 @@ export interface ReviewResult extends ReviewOutput {
   filteredCount?: number;
   /** tokens consumed by the judge pass */
   judgeTokenCount?: number;
-  consensusMetadata?: { passes: number; threshold: number };
+  consensusMetadata?: ConsensusMetadata;
+  droppedFindings?: DroppedFinding[];
 }
 
 export interface ReviewConfig {

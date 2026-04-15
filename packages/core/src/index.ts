@@ -24,6 +24,8 @@ export type {
   CodeSearchResult,
   GitProvider,
   TicketProvider,
+  DroppedFinding,
+  ConsensusMetadata,
 } from "./types.js";
 
 export { getMastra, getStorage } from "./mastra.js";
