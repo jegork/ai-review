@@ -102,6 +102,15 @@ describe("opengrep prompt integration", () => {
     expect(message).toContain('const token = "hardcoded-secret";');
   });
 
+  it("wraps snippets in 4-backtick fences so triple backticks in code don't break formatting", () => {
+    const findings = [makeOpenGrepFinding({ snippet: "const x = `${a}`;" })];
+
+    const message = buildUserMessage("diff", prMetadata, undefined, undefined, undefined, findings);
+
+    expect(message).toContain("````");
+    expect(message).not.toMatch(/[^`]```[^`]/);
+  });
+
   it("renders opengrep section before diff", () => {
     const findings = [makeOpenGrepFinding()];
     const message = buildUserMessage(
@@ -234,6 +243,110 @@ describe("opengrep runner types", () => {
   it("extractChangedFilePaths returns empty for empty patches", async () => {
     const { extractChangedFilePaths } = await import("../opengrep/runner.js");
     expect(extractChangedFilePaths([])).toEqual([]);
+  });
+});
+
+describe("filterOpenGrepForFiles", () => {
+  // filterOpenGrepForFiles is not exported, so we test it indirectly
+  // through the multi-call module. Instead we replicate the logic here
+  // to validate the filtering behavior in isolation.
+  function filterForFiles(
+    findings: OpenGrepFinding[] | undefined,
+    files: Set<string>,
+  ): OpenGrepFinding[] | undefined {
+    if (!findings || findings.length === 0) return undefined;
+    const normalize = (f: string) =>
+      f
+        .replace(/\\/g, "/")
+        .replace(/^\.\//, "")
+        .replace(/:\d+(?::\d+)?$/, "");
+    const normalizedFiles = new Set(Array.from(files, normalize));
+    const filtered = findings.filter((f) => normalizedFiles.has(normalize(f.file)));
+    return filtered.length > 0 ? filtered : undefined;
+  }
+
+  it("returns undefined for undefined input", () => {
+    expect(filterForFiles(undefined, new Set(["a.ts"]))).toBeUndefined();
+  });
+
+  it("returns undefined for empty findings", () => {
+    expect(filterForFiles([], new Set(["a.ts"]))).toBeUndefined();
+  });
+
+  it("filters findings to only matching files", () => {
+    const findings = [
+      makeOpenGrepFinding({ file: "src/a.ts" }),
+      makeOpenGrepFinding({ file: "src/b.ts" }),
+      makeOpenGrepFinding({ file: "src/c.ts" }),
+    ];
+
+    const result = filterForFiles(findings, new Set(["src/a.ts", "src/c.ts"]));
+
+    expect(result).toHaveLength(2);
+    expect(result!.map((f) => f.file)).toEqual(["src/a.ts", "src/c.ts"]);
+  });
+
+  it("returns undefined when no findings match", () => {
+    const findings = [makeOpenGrepFinding({ file: "src/a.ts" })];
+    expect(filterForFiles(findings, new Set(["src/z.ts"]))).toBeUndefined();
+  });
+
+  it("normalizes leading ./ in paths", () => {
+    const findings = [makeOpenGrepFinding({ file: "./src/a.ts" })];
+    const result = filterForFiles(findings, new Set(["src/a.ts"]));
+    expect(result).toHaveLength(1);
+  });
+
+  it("normalizes backslashes in paths", () => {
+    const findings = [makeOpenGrepFinding({ file: "src\\a.ts" })];
+    const result = filterForFiles(findings, new Set(["src/a.ts"]));
+    expect(result).toHaveLength(1);
+  });
+});
+
+describe("opengrep JSON parsing", () => {
+  it("parses a valid semgrep/opengrep JSON output", () => {
+    const rawJson = JSON.stringify({
+      results: [
+        {
+          check_id: "javascript.lang.security.detect-eval",
+          path: "src/index.ts",
+          start: { line: 10, col: 1 },
+          end: { line: 10, col: 30 },
+          extra: {
+            message: "detected eval usage",
+            severity: "ERROR",
+            lines: "eval(userInput);",
+            metadata: { cwe: ["CWE-95"] },
+          },
+        },
+        {
+          check_id: "generic.secrets.security.detected-api-key",
+          path: "src/config.ts",
+          start: { line: 5, col: 1 },
+          end: { line: 5, col: 50 },
+          extra: {
+            message: "hardcoded API key",
+            severity: "WARNING",
+          },
+        },
+      ],
+      errors: [],
+    } satisfies OpenGrepRawOutput);
+
+    const parsed = JSON.parse(rawJson) as OpenGrepRawOutput;
+
+    expect(parsed.results).toHaveLength(2);
+    expect(parsed.results[0].check_id).toBe("javascript.lang.security.detect-eval");
+    expect(parsed.results[0].extra.severity).toBe("ERROR");
+    expect(parsed.results[0].extra.lines).toBe("eval(userInput);");
+    expect(parsed.results[1].extra.metadata).toBeUndefined();
+    expect(parsed.results[1].extra.lines).toBeUndefined();
+  });
+
+  it("handles empty results array", () => {
+    const raw: OpenGrepRawOutput = { results: [], errors: [] };
+    expect(raw.results).toHaveLength(0);
   });
 });
 

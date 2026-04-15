@@ -21,10 +21,13 @@ FROM node:22-slim AS runtime
 
 WORKDIR /app
 
+ARG OPENGREP_VERSION=v1.19.0
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
-    && curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash \
-    && ln -sf "$HOME/.opengrep/cli/latest/opengrep" /usr/local/bin/opengrep \
+    && curl -fsSL -o /usr/local/bin/opengrep \
+       "https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+    && chmod +x /usr/local/bin/opengrep \
+    && opengrep --version \
     && apt-get purge -y curl \
     && apt-get autoremove -y \
     && apt-get clean \
