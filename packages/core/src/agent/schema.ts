@@ -65,6 +65,12 @@ export const SkimFindingSchema = z.object({
   severity: SeveritySchema,
   category: FocusAreaSchema,
   message: z.string(),
+  suggestedFix: z
+    .string()
+    .nullable()
+    .describe(
+      "exact replacement code for the line(s) from `line` to `endLine` — raw code only, no markdown fences, no extra context lines; null when no localized fix is possible",
+    ),
 });
 
 export const ObservationSchema = z.object({

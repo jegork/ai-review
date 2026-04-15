@@ -278,7 +278,7 @@ describe("runMultiCallReview", () => {
     const consensusConfig: ReviewConfig = { ...config, consensusPasses: 3 };
     const patches = [makePatch("small.ts", 10)];
     const result = await runMultiCallReview(patches, consensusConfig, prMetadata);
-    expect(result.consensusMetadata).toEqual({ passes: 3, threshold: 2 });
+    expect(result.consensusMetadata).toMatchObject({ passes: 3, threshold: 2 });
     expect(result.findings.length).toBeGreaterThanOrEqual(1);
   });
 

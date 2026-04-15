@@ -377,6 +377,135 @@ describe("formatInlineComment", () => {
   });
 });
 
+describe("formatSummaryComment with dropped findings", () => {
+  it("renders a collapsible dropped findings section", () => {
+    const review = makeReview({
+      droppedFindings: [
+        {
+          file: "src/parser.ts",
+          line: 42,
+          severity: "warning",
+          message: "potential resource leak in WASM cleanup",
+          voteCount: 1,
+        },
+        {
+          file: "src/utils.ts",
+          line: 15,
+          severity: "suggestion",
+          message: "consider extracting helper function",
+          voteCount: 1,
+        },
+      ],
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 0.5,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good", "looks_good", "looks_good"],
+      },
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).toContain("Filtered findings (2 dropped by consensus, voted below threshold)");
+    expect(result).toContain("| `src/parser.ts` | 42 | warning |");
+    expect(result).toContain("| 1/3 |");
+    expect(result).toContain("| `src/utils.ts` | 15 | suggestion |");
+  });
+
+  it("omits dropped findings section when droppedFindings is undefined", () => {
+    const review = makeReview({ droppedFindings: undefined });
+    const result = formatSummaryComment(review);
+    expect(result).not.toContain("Filtered findings");
+  });
+
+  it("omits dropped findings section when droppedFindings is empty", () => {
+    const review = makeReview({
+      droppedFindings: [],
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 1,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good", "looks_good", "looks_good"],
+      },
+    });
+    const result = formatSummaryComment(review);
+    expect(result).not.toContain("Filtered findings");
+  });
+
+  it("sanitizes pipe characters in dropped finding messages", () => {
+    const review = makeReview({
+      droppedFindings: [
+        {
+          file: "src/a.ts",
+          line: 1,
+          severity: "warning",
+          message: "use a | b instead of a || b",
+          voteCount: 1,
+        },
+      ],
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 0.5,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good", "looks_good", "looks_good"],
+      },
+    });
+
+    const result = formatSummaryComment(review);
+    expect(result).toContain("use a \\| b instead of a \\|\\| b");
+  });
+});
+
+describe("formatSummaryComment with consensus metadata in footer", () => {
+  it("includes consensus pass count and agreement rate in footer", () => {
+    const review = makeReview({
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 0.67,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good", "looks_good", "address_before_merge"],
+      },
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).toContain("consensus 3 passes");
+    expect(result).toContain("67% agreement");
+    expect(result).not.toContain("recommendation elevated");
+  });
+
+  it("shows elevated recommendation note when recommendationElevated is true", () => {
+    const review = makeReview({
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 1,
+        recommendationElevated: true,
+        passRecommendations: [
+          "address_before_merge",
+          "address_before_merge",
+          "address_before_merge",
+        ],
+      },
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).toContain("recommendation elevated from pass votes");
+  });
+
+  it("omits consensus metadata from footer when not present", () => {
+    const review = makeReview();
+    const result = formatSummaryComment(review);
+    expect(result).not.toContain("consensus");
+    expect(result).not.toContain("agreement");
+  });
+});
+
 describe("formatSummaryComment with triage stats", () => {
   it("includes triage section when triageStats is present", () => {
     const review: ReviewResult = {

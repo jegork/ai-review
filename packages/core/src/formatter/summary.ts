@@ -3,6 +3,7 @@ import type {
   Severity,
   Finding,
   Observation,
+  DroppedFinding,
   TriageStats,
   TicketComplianceStatus,
   TicketResolutionStatus,
@@ -62,6 +63,26 @@ function buildTriageSection(stats: TriageStats): string {
   lines.push(`| Deep Reviewed | ${stats.filesDeepReviewed} |`);
   lines.push("");
   lines.push(`Triage model: \`${stats.triageModelUsed}\` · ${stats.triageTokenCount} tokens`);
+  lines.push("");
+  lines.push("</details>");
+  lines.push("");
+  return lines.join("\n");
+}
+
+function buildDroppedFindingsSection(dropped: DroppedFinding[], passes: number): string {
+  const lines: string[] = [];
+  lines.push("<details>");
+  lines.push(
+    `<summary>Filtered findings (${dropped.length} dropped by consensus, voted below threshold)</summary>`,
+  );
+  lines.push("");
+  lines.push("| File | Line | Severity | Message | Votes |");
+  lines.push("|------|------|----------|---------|-------|");
+  for (const f of dropped) {
+    lines.push(
+      `| \`${f.file}\` | ${f.line} | ${f.severity} | ${sanitizeTableCell(f.message)} | ${f.voteCount}/${passes} |`,
+    );
+  }
   lines.push("");
   lines.push("</details>");
   lines.push("");
@@ -153,6 +174,12 @@ export function formatSummaryComment(
   lines.push("</details>");
   lines.push("");
 
+  if (review.droppedFindings && review.droppedFindings.length > 0 && review.consensusMetadata) {
+    lines.push(
+      buildDroppedFindingsSection(review.droppedFindings, review.consensusMetadata.passes),
+    );
+  }
+
   if (options?.ticketResolution && options.ticketResolution.refsFound > 0) {
     lines.push("## Ticket Fetch");
     lines.push("");
@@ -222,6 +249,14 @@ export function formatSummaryComment(
   }
   if (review.filteredCount !== undefined) {
     parts.push(`${review.filteredCount} low-confidence findings filtered`);
+  }
+  if (review.consensusMetadata) {
+    const cm = review.consensusMetadata;
+    parts.push(`consensus ${cm.passes} passes`);
+    parts.push(`${Math.round(cm.agreementRate * 100)}% agreement`);
+    if (cm.recommendationElevated) {
+      parts.push("recommendation elevated from pass votes");
+    }
   }
   lines.push(parts.join(" · "));
   lines.push("");
