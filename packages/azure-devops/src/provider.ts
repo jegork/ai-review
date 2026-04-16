@@ -316,7 +316,7 @@ export class AzureDevOpsProvider implements GitProvider {
             threadContext: {
               filePath: `/${finding.file}`,
               rightFileStart: { line: finding.line, offset: 1 },
-              rightFileEnd: { line: finding.line, offset: 1 },
+              rightFileEnd: { line: finding.endLine ?? finding.line, offset: 1 },
             },
             status: 1,
           }),

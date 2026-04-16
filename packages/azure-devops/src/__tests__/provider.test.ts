@@ -217,6 +217,50 @@ describe("AzureDevOpsProvider", () => {
       expect(secondBody.comments[0].content).not.toContain("```suggestion");
     });
 
+    it("uses endLine for rightFileEnd when finding spans multiple lines", async () => {
+      fetchSpy.mockResolvedValue(mockFetchResponse({}));
+
+      const findings: Finding[] = [
+        {
+          file: "src/config.ts",
+          line: 5,
+          endLine: 12,
+          severity: "warning",
+          category: "bugs",
+          message: "duplicate entries",
+          suggestedFix: "const plugins = [\n  'react',\n  'vitest',\n];",
+        },
+      ];
+
+      await provider.postInlineComments(findings);
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(body.threadContext.rightFileStart).toEqual({ line: 5, offset: 1 });
+      expect(body.threadContext.rightFileEnd).toEqual({ line: 12, offset: 1 });
+    });
+
+    it("falls back to line when endLine is null", async () => {
+      fetchSpy.mockResolvedValue(mockFetchResponse({}));
+
+      const findings: Finding[] = [
+        {
+          file: "src/index.ts",
+          line: 42,
+          endLine: null,
+          severity: "warning",
+          category: "bugs",
+          message: "issue",
+          suggestedFix: null,
+        },
+      ];
+
+      await provider.postInlineComments(findings);
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(body.threadContext.rightFileStart).toEqual({ line: 42, offset: 1 });
+      expect(body.threadContext.rightFileEnd).toEqual({ line: 42, offset: 1 });
+    });
+
     it("skips API call when findings array is empty", async () => {
       await provider.postInlineComments([]);
       expect(fetchSpy).not.toHaveBeenCalled();
