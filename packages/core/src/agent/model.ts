@@ -102,6 +102,44 @@ export function resolveModel(
   }
 }
 
+export interface ModelSettings {
+  temperature?: number;
+  topP?: number;
+}
+
+type AgentKind = "review" | "triage" | "judge" | "description";
+
+const AGENT_ENV_PREFIX: Record<AgentKind, string> = {
+  review: "RUSTY_REVIEW",
+  triage: "RUSTY_TRIAGE",
+  judge: "RUSTY_JUDGE",
+  description: "RUSTY_DESCRIPTION",
+};
+
+function readNumericEnv(
+  agentKind: AgentKind,
+  suffix: string,
+  globalKey: string,
+): number | undefined {
+  const raw = process.env[`${AGENT_ENV_PREFIX[agentKind]}_${suffix}`] ?? process.env[globalKey];
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  return Number.isNaN(n) ? undefined : n;
+}
+
+/** per-agent settings with global fallback: e.g. RUSTY_JUDGE_TEMPERATURE → RUSTY_LLM_TEMPERATURE */
+export function resolveModelSettings(agentKind: AgentKind = "review"): ModelSettings {
+  const settings: ModelSettings = {};
+
+  const temp = readNumericEnv(agentKind, "TEMPERATURE", "RUSTY_LLM_TEMPERATURE");
+  if (temp !== undefined) settings.temperature = temp;
+
+  const topP = readNumericEnv(agentKind, "TOP_P", "RUSTY_LLM_TOP_P");
+  if (topP !== undefined) settings.topP = topP;
+
+  return settings;
+}
+
 export function getModelDisplayName(config: ModelConfig): string {
   switch (config.type) {
     case "router":

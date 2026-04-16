@@ -159,6 +159,12 @@ The task exits with code 1 when critical issues are found (configurable via `RUS
 | `RUSTY_CASCADE_ENABLED` | explicitly enable/disable cascading (`true`/`false`) | auto (enabled when triage model is set) |
 | `RUSTY_OPENGREP_RULES` | OpenGrep config string (ruleset or path to rule file) | `auto` |
 | `RUSTY_GENERATE_DESCRIPTION` | generate PR description when empty/placeholder | `false` |
+| `RUSTY_LLM_TEMPERATURE` | global LLM temperature | provider default |
+| `RUSTY_LLM_TOP_P` | global LLM top-p | provider default |
+| `RUSTY_REVIEW_TEMPERATURE` | temperature override for the review agent | `RUSTY_LLM_TEMPERATURE` |
+| `RUSTY_TRIAGE_TEMPERATURE` | temperature override for the triage agent | `RUSTY_LLM_TEMPERATURE` |
+| `RUSTY_JUDGE_TEMPERATURE` | temperature override for the judge agent | `RUSTY_LLM_TEMPERATURE` |
+| `RUSTY_DESCRIPTION_TEMPERATURE` | temperature override for the description agent | `RUSTY_LLM_TEMPERATURE` |
 
 ### LLM Provider Configuration
 
@@ -195,6 +201,24 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 Supports 99+ providers: `openai/gpt-4o`, `google/gemini-2.5-flash`, `openrouter/...`, etc.
+
+### Model Inference Settings
+
+Set a global temperature/top-p for all agents, or override per agent. Per-agent values take priority over the global fallback.
+
+```bash
+# global defaults
+RUSTY_LLM_TEMPERATURE=0.3
+RUSTY_LLM_TOP_P=0.9
+
+# per-agent overrides (each falls back to the global value when unset)
+RUSTY_REVIEW_TEMPERATURE=0.3
+RUSTY_TRIAGE_TEMPERATURE=0
+RUSTY_JUDGE_TEMPERATURE=0
+RUSTY_DESCRIPTION_TEMPERATURE=0.5
+```
+
+Some models enforce a fixed temperature (e.g. `moonshot/kimi-k2.5` only accepts `temperature=1`). Use the per-agent override when you run different models per agent.
 
 ### Per-Repository Configuration
 

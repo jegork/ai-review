@@ -13,6 +13,7 @@ vi.mock("../agent/model.js", () => ({
   resolveModelConfig: vi.fn(() => ({ type: "router", model: "test-model" })),
   resolveModel: vi.fn(() => "test-model"),
   getModelDisplayName: vi.fn(() => "test-model"),
+  resolveModelSettings: vi.fn(() => ({})),
 }));
 
 const { judgeFindings, judgeReviewResult, resolveJudgeConfig } = await import("../agent/judge.js");

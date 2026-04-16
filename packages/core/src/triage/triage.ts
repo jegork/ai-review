@@ -2,7 +2,12 @@ import { Agent } from "@mastra/core/agent";
 import type { FilePatch, TriageResult, TriageFileResult, TriageClassification } from "../types.js";
 import { TriageOutputSchema } from "./schema.js";
 import { buildTriageSystemPrompt, buildTriageUserMessage } from "./prompt.js";
-import { resolveTriageModelConfig, resolveModel, getModelDisplayName } from "../agent/model.js";
+import {
+  resolveTriageModelConfig,
+  resolveModel,
+  getModelDisplayName,
+  resolveModelSettings,
+} from "../agent/model.js";
 import { countTokens } from "../diff/compress.js";
 import { logger } from "../logger.js";
 
@@ -90,8 +95,10 @@ export async function runTriage(patches: FilePatch[]): Promise<TriageResult> {
   });
 
   const triageMessage = buildTriageUserMessage(triageablePatches);
+  const modelSettings = resolveModelSettings("triage");
   const response = await agent.generate(triageMessage, {
     structuredOutput: { schema: TriageOutputSchema },
+    ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
   });
 
   const parsed = response.object;

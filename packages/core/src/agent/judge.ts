@@ -1,6 +1,11 @@
 import { Agent } from "@mastra/core/agent";
 import { z } from "zod";
-import { resolveModelConfig, resolveModel, getModelDisplayName } from "./model.js";
+import {
+  resolveModelConfig,
+  resolveModel,
+  getModelDisplayName,
+  resolveModelSettings,
+} from "./model.js";
 import type { Finding, ReviewResult } from "../types.js";
 import { logger } from "../logger.js";
 
@@ -139,8 +144,10 @@ export async function judgeFindings(
   let evaluations: JudgeEvaluation[];
   let tokenCount = 0;
   try {
+    const modelSettings = resolveModelSettings("judge");
     const response = await agent.generate(userMessage, {
       structuredOutput: { schema: JudgeOutputSchema },
+      ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
     });
     evaluations = response.object.evaluations;
     tokenCount = response.usage.totalTokens ?? 0;

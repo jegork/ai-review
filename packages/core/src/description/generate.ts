@@ -1,6 +1,11 @@
 import { Agent } from "@mastra/core/agent";
 import { compressDiff } from "../diff/compress.js";
-import { resolveModelConfig, resolveModel, getModelDisplayName } from "../agent/model.js";
+import {
+  resolveModelConfig,
+  resolveModel,
+  getModelDisplayName,
+  resolveModelSettings,
+} from "../agent/model.js";
 import { PRDescriptionOutputSchema, type PRDescriptionOutput } from "./schema.js";
 import { buildDescriptionSystemPrompt, buildDescriptionUserMessage } from "./prompt.js";
 import type { FilePatch, PRMetadata } from "../types.js";
@@ -106,8 +111,10 @@ export async function generatePRDescription(
 
   const userMessage = buildDescriptionUserMessage(compressed, prMetadata, existingDescription);
 
+  const modelSettings = resolveModelSettings("description");
   const response = await agent.generate(userMessage, {
     structuredOutput: { schema: PRDescriptionOutputSchema },
+    ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
   });
 
   const parsed = response.object;

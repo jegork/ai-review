@@ -2,7 +2,12 @@ import { Agent } from "@mastra/core/agent";
 import type { ToolsInput } from "@mastra/core/agent";
 import { ReviewOutputSchema, SkimReviewOutputSchema } from "./schema.js";
 import { buildSystemPrompt, buildUserMessage } from "./prompts.js";
-import { resolveModelConfig, resolveModel, getModelDisplayName } from "./model.js";
+import {
+  resolveModelConfig,
+  resolveModel,
+  getModelDisplayName,
+  resolveModelSettings,
+} from "./model.js";
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
 import type { OpenGrepFinding } from "../opengrep/types.js";
 import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
@@ -68,8 +73,10 @@ export async function runReview(
 
   const schema = tier === "skim" ? SkimReviewOutputSchema : ReviewOutputSchema;
 
+  const modelSettings = resolveModelSettings("review");
   const response = await agent.generate(userMessage, {
     structuredOutput: { schema },
+    ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
   });
 
   const parsed = response.object;
