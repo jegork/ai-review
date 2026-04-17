@@ -164,7 +164,12 @@ async function main(): Promise<void> {
     config: process.env.RUSTY_OPENGREP_RULES ?? "auto",
   });
   const openGrepFindings = openGrepResult.findings.length > 0 ? openGrepResult.findings : undefined;
-  if (openGrepResult.available) {
+  if (openGrepResult.error) {
+    log.warn(
+      { error: openGrepResult.error },
+      "opengrep pre-scan failed, review will proceed without its findings",
+    );
+  } else if (openGrepResult.available) {
     log.info({ findingCount: openGrepResult.findings.length }, "opengrep pre-scan complete");
   }
 

@@ -366,3 +366,72 @@ describe("opengrep runner - runOpenGrep", () => {
     expect(Array.isArray(result.findings)).toBe(true);
   });
 });
+
+describe("formatOpenGrepExecError", () => {
+  it("includes only exit code when both streams are empty", async () => {
+    const { formatOpenGrepExecError } = await import("../opengrep/runner.js");
+    expect(formatOpenGrepExecError(2, "", "")).toBe("opengrep exited with code 2");
+  });
+
+  it("treats whitespace-only streams as empty", async () => {
+    const { formatOpenGrepExecError } = await import("../opengrep/runner.js");
+    const result = formatOpenGrepExecError(2, "   \n\n  ", "\n\t");
+    expect(result).toBe("opengrep exited with code 2");
+    expect(result).not.toContain("stderr:");
+    expect(result).not.toContain("stdout:");
+  });
+
+  it("includes stderr when present", async () => {
+    const { formatOpenGrepExecError } = await import("../opengrep/runner.js");
+    const result = formatOpenGrepExecError(2, "fatal: config not found", "");
+    expect(result).toContain("opengrep exited with code 2");
+    expect(result).toContain("stderr: fatal: config not found");
+    expect(result).not.toContain("stdout:");
+  });
+
+  it("includes stdout when present", async () => {
+    const { formatOpenGrepExecError } = await import("../opengrep/runner.js");
+    const result = formatOpenGrepExecError(2, "", '{"errors":[{"message":"rule broken"}]}');
+    expect(result).toContain("opengrep exited with code 2");
+    expect(result).toContain('stdout: {"errors":[{"message":"rule broken"}]}');
+    expect(result).not.toContain("stderr:");
+  });
+
+  it("combines both streams with a separator when both are present", async () => {
+    const { formatOpenGrepExecError } = await import("../opengrep/runner.js");
+    const result = formatOpenGrepExecError(137, "killed", "partial json");
+    expect(result).toContain("opengrep exited with code 137");
+    expect(result).toContain("stderr: killed");
+    expect(result).toContain("stdout: partial json");
+    expect(result.split(" | ")).toHaveLength(3);
+  });
+
+  it("truncates very long stderr to keep error bounded", async () => {
+    const { formatOpenGrepExecError } = await import("../opengrep/runner.js");
+    const huge = "x".repeat(10_000);
+    const result = formatOpenGrepExecError(2, huge, "");
+    // result must be smaller than input but still include the prefix and a stderr chunk
+    expect(result.length).toBeLessThan(huge.length);
+    expect(result).toContain("stderr: ");
+    expect(result).toContain("opengrep exited with code 2");
+  });
+
+  it("truncates very long stdout to keep error bounded", async () => {
+    const { formatOpenGrepExecError } = await import("../opengrep/runner.js");
+    const huge = "y".repeat(10_000);
+    const result = formatOpenGrepExecError(2, "", huge);
+    expect(result.length).toBeLessThan(huge.length);
+    expect(result).toContain("stdout: ");
+  });
+
+  it("preserves leading chardet-style warning content so root cause is visible", async () => {
+    // regression: real-world exit-code-2 stderr included only a Python
+    // RequestsDependencyWarning which we used to truncate at 500 chars
+    const { formatOpenGrepExecError } = await import("../opengrep/runner.js");
+    const warning =
+      "/root/.cache/opengrep/v1.19.0/requests/__init__.py:86: RequestsDependencyWarning: Unable to find acceptable character detection dependency (chardet or charset_normalizer).";
+    const result = formatOpenGrepExecError(2, `${warning}\n${warning}`, "");
+    expect(result).toContain("RequestsDependencyWarning");
+    expect(result).toContain("chardet or charset_normalizer");
+  });
+});

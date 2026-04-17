@@ -6,6 +6,21 @@ import type { OpenGrepFinding, OpenGrepRawOutput, OpenGrepResult } from "./types
 const log = logger.child({ module: "opengrep" });
 
 const OPENGREP_TIMEOUT_MS = 120_000;
+const STDERR_SLICE_LEN = 4000;
+const STDOUT_SLICE_LEN = 2000;
+
+export function formatOpenGrepExecError(exitCode: number, stderr: string, stdout: string): string {
+  const parts = [`opengrep exited with code ${exitCode}`];
+  const stderrTrimmed = stderr.trim();
+  if (stderrTrimmed) {
+    parts.push(`stderr: ${stderrTrimmed.slice(0, STDERR_SLICE_LEN)}`);
+  }
+  const stdoutTrimmed = stdout.trim();
+  if (stdoutTrimmed) {
+    parts.push(`stdout: ${stdoutTrimmed.slice(0, STDOUT_SLICE_LEN)}`);
+  }
+  return parts.join(" | ");
+}
 
 function normalizeSeverity(raw: string): OpenGrepFinding["severity"] {
   const lower = raw.toLowerCase();
@@ -104,12 +119,20 @@ export async function runOpenGrep(
     const { stdout, stderr, exitCode } = await runCommand("opengrep", args, timeout, workDir);
 
     if (exitCode > 1) {
-      log.warn({ exitCode, stderr: stderr.slice(0, 500) }, "opengrep exited with error");
+      const error = formatOpenGrepExecError(exitCode, stderr, stdout);
+      log.warn(
+        {
+          exitCode,
+          stderr: stderr.slice(0, STDERR_SLICE_LEN),
+          stdout: stdout.slice(0, STDOUT_SLICE_LEN),
+        },
+        "opengrep pre-scan failed with non-zero exit code, continuing without findings",
+      );
       return {
         findings: [],
         rawCount: 0,
         available: true,
-        error: `opengrep exited with code ${exitCode}: ${stderr.slice(0, 500)}`,
+        error,
       };
     }
 
@@ -123,8 +146,13 @@ export async function runOpenGrep(
     return { findings, rawCount: findings.length, available: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    log.warn({ err: message }, "opengrep pre-scan failed, continuing without it");
-    return { findings: [], rawCount: 0, available: true, error: message };
+    log.warn({ err: message }, "opengrep pre-scan threw, continuing without findings");
+    return {
+      findings: [],
+      rawCount: 0,
+      available: true,
+      error: `opengrep pre-scan threw: ${message}`,
+    };
   }
 }
 
