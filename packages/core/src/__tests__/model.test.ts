@@ -179,14 +179,37 @@ describe("resolveModelConfigWithOverride", () => {
     expect(process.env.RUSTY_LLM_MODEL).toBeUndefined();
   });
 
-  it("restores RUSTY_LLM_MODEL even when resolution throws", () => {
+  it("restores RUSTY_LLM_MODEL when resolveModelConfig throws", () => {
     process.env.RUSTY_LLM_MODEL = "anthropic/claude-sonnet";
 
-    // force a throw by stubbing resolveModelConfig via an invalid azure-openai setup —
-    // actually resolveModelConfig doesn't throw on its own, so we simulate by making
-    // the call succeed but verify the restore path is exercised on the happy path too.
-    // (the throw path is indirectly covered by the try/finally structure.)
-    resolveModelConfigWithOverride("azure-openai/does-not-matter");
+    // process.env rejects accessor descriptors, so wrap it in a Proxy that
+    // throws on AZURE_API_KEY reads — resolveModelConfig hits that read
+    // once the model string starts with "azure-openai/"
+    const realEnv = process.env;
+    const throwingEnv = new Proxy(realEnv, {
+      get(target, prop) {
+        if (prop === "AZURE_API_KEY") throw new Error("simulated env failure");
+        return Reflect.get(target, prop);
+      },
+      // delegate set/delete directly to target so process.env's string-coercion
+      // path runs on the real env, not on the Proxy wrapper
+      set(target, prop, value) {
+        (target as Record<string, string>)[prop as string] = value;
+        return true;
+      },
+      deleteProperty(target, prop) {
+        return Reflect.deleteProperty(target, prop);
+      },
+    });
+    Object.defineProperty(process, "env", { value: throwingEnv, configurable: true });
+
+    try {
+      expect(() => resolveModelConfigWithOverride("azure-openai/gpt-5.4-mini")).toThrow(
+        "simulated env failure",
+      );
+    } finally {
+      Object.defineProperty(process, "env", { value: realEnv, configurable: true });
+    }
 
     expect(process.env.RUSTY_LLM_MODEL).toBe("anthropic/claude-sonnet");
   });
