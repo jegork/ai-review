@@ -23,23 +23,15 @@ WORKDIR /app
 
 ARG OPENGREP_VERSION=v1.19.0
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates python3 \
+    && apt-get install -y --no-install-recommends curl ca-certificates python3 python3-pip \
     && curl -fsSL -o /usr/local/bin/opengrep \
        "https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep_manylinux_x86" \
     && chmod +x /usr/local/bin/opengrep \
     && opengrep --version \
-    # force extraction of the bundled python env via an offline scan
-    && printf 'rules:\n  - id: prime-cache\n    pattern: TODO\n    message: prime\n    languages: [generic]\n    severity: INFO\n' > /tmp/prime.yml \
-    && printf 'prime\n' > /tmp/prime.txt \
-    && opengrep scan --config /tmp/prime.yml --quiet /tmp/prime.txt \
-    && rm /tmp/prime.yml /tmp/prime.txt \
-    && test -d "/root/.cache/opengrep/${OPENGREP_VERSION#v}" \
-    && uv pip install --target="/root/.cache/opengrep/${OPENGREP_VERSION#v}" \
+    && pip3 install --target="/root/.cache/opengrep/${OPENGREP_VERSION}" \
        charset-normalizer==3.4.1 chardet==5.2.0 \
-    && apt-get purge -y curl \
+    && apt-get purge -y curl python3-pip \
     && apt-get autoremove -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
