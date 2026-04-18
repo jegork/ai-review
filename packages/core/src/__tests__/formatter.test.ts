@@ -491,6 +491,7 @@ describe("formatSummaryComment with dropped findings", () => {
         agreementRate: 0.5,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "looks_good", "looks_good"],
+        failedPasses: 0,
       },
     });
 
@@ -517,6 +518,7 @@ describe("formatSummaryComment with dropped findings", () => {
         agreementRate: 1,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "looks_good", "looks_good"],
+        failedPasses: 0,
       },
     });
     const result = formatSummaryComment(review);
@@ -540,6 +542,7 @@ describe("formatSummaryComment with dropped findings", () => {
         agreementRate: 0.5,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "looks_good", "looks_good"],
+        failedPasses: 0,
       },
     });
 
@@ -557,6 +560,7 @@ describe("formatSummaryComment with consensus metadata in footer", () => {
         agreementRate: 0.67,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "looks_good", "address_before_merge"],
+        failedPasses: 0,
       },
     });
 
@@ -579,6 +583,7 @@ describe("formatSummaryComment with consensus metadata in footer", () => {
           "address_before_merge",
           "address_before_merge",
         ],
+        failedPasses: 0,
       },
     });
 

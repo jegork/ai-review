@@ -388,6 +388,7 @@ describe("judgeReviewResult", () => {
           "address_before_merge",
           "address_before_merge",
         ],
+        failedPasses: 0,
       },
     };
 
@@ -410,6 +411,7 @@ describe("judgeReviewResult", () => {
           "address_before_merge",
           "address_before_merge",
         ],
+        failedPasses: 0,
       },
     };
 

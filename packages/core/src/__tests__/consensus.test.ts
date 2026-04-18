@@ -254,3 +254,99 @@ describe("runConsensusReview", () => {
     expect(result.recommendation).toBe("address_before_merge");
   });
 });
+
+describe("runConsensusReview failure tolerance", () => {
+  beforeEach(() => {
+    callCount = 0;
+    mockBehavior = "default";
+    vi.clearAllMocks();
+  });
+
+  it("tolerates one failed pass when the remaining successes still meet the threshold", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
+      .mockRejectedValueOnce(new Error("structured output failed"))
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }));
+
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+
+    // 2 successful passes, threshold=2 ⇒ finding with 2 votes still survives
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].voteCount).toBe(2);
+    expect(result.consensusMetadata?.failedPasses).toBe(1);
+    expect(result.consensusMetadata?.passRecommendations).toHaveLength(2);
+  });
+
+  it("throws when too few passes succeed to meet the threshold", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
+      .mockRejectedValueOnce(new Error("structured output failed (pass 2)"))
+      .mockRejectedValueOnce(new Error("structured output failed (pass 3)"));
+
+    const consensusConfig = { ...config, consensusPasses: 3 };
+
+    // 1 successful pass, threshold=2 ⇒ cannot form consensus
+    await expect(
+      runConsensusReview([], consensusConfig, prMetadata, "diff content"),
+    ).rejects.toThrow(/consensus/i);
+  });
+
+  it("throws when every pass fails", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error("fail 1"))
+      .mockRejectedValueOnce(new Error("fail 2"))
+      .mockRejectedValueOnce(new Error("fail 3"));
+
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    await expect(
+      runConsensusReview([], consensusConfig, prMetadata, "diff content"),
+    ).rejects.toThrow();
+  });
+
+  it("reports failedPasses=0 when all passes succeed", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }));
+
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+
+    expect(result.consensusMetadata?.failedPasses).toBe(0);
+  });
+
+  it("aggregates token counts only from successful passes", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
+      .mockRejectedValueOnce(new Error("pass 2 failed"))
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 250 }));
+
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+
+    expect(result.tokenCount).toBe(350);
+  });
+
+  it("throws with an AggregateError that includes every pass failure", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error("first failure"))
+      .mockRejectedValueOnce(new Error("second failure"))
+      .mockRejectedValueOnce(new Error("third failure"));
+
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    try {
+      await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+      expect.fail("expected runConsensusReview to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AggregateError);
+      expect((err as AggregateError).errors).toHaveLength(3);
+    }
+  });
+});
