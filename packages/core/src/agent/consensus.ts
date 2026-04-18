@@ -82,7 +82,31 @@ export async function runConsensusReview(
     return runReview(config, compressed, prMetadata, tickets, options);
   });
 
-  const results = await Promise.all(passPromises);
+  const settled = await Promise.allSettled(passPromises);
+  const results: ReviewResult[] = [];
+  const failures: unknown[] = [];
+
+  for (let i = 0; i < settled.length; i++) {
+    const outcome = settled[i];
+    if (outcome.status === "fulfilled") {
+      results.push(outcome.value);
+    } else {
+      failures.push(outcome.reason);
+      logger.warn(
+        { err: outcome.reason, passIndex: i, prId: prMetadata.id },
+        "consensus pass failed",
+      );
+    }
+  }
+
+  if (results.length < threshold) {
+    throw new AggregateError(
+      failures,
+      `consensus review failed: only ${results.length}/${passes} passes succeeded (threshold ${threshold})`,
+    );
+  }
+
+  const failedPasses = failures.length;
 
   const findingsByPass = results.map((r) => r.findings);
   const observationsByPass = results.map((r) => r.observations);
@@ -126,6 +150,7 @@ export async function runConsensusReview(
     {
       passes,
       threshold,
+      failedPasses,
       totalClusters: findingClusters.length,
       surviving: survivingFindings.length,
       dropped: droppedFindings.length,
@@ -158,6 +183,7 @@ export async function runConsensusReview(
       agreementRate,
       recommendationElevated,
       passRecommendations,
+      failedPasses,
     },
     droppedFindings: droppedFindings.length > 0 ? droppedFindings : undefined,
   };

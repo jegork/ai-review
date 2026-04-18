@@ -366,6 +366,14 @@ Configure via per-repo config:
 4. Clusters with votes below the threshold are dropped
 5. Surviving findings include a `voteCount` showing how many passes flagged them
 
+**Pass-level fault tolerance:**
+
+Consensus uses `Promise.allSettled` rather than `Promise.all`, so a single flaky pass no longer fails the whole review:
+
+- Each pass retries once on `STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED` (common with models that have inconsistent structured-output support, e.g. Kimi K2 via aggregators). Other errors are not retried.
+- If at least `consensusThreshold` passes succeed, consensus is formed from the surviving passes and `consensusMetadata.failedPasses` records how many threw.
+- If fewer than `consensusThreshold` passes succeed, the review throws an `AggregateError` containing every pass failure.
+
 **Cost:** With the default 3 passes, LLM cost per review triples. Combine with the judge pass (using a cheaper model) to offset costs.
 
 Set `consensusPasses` to `1` to disable consensus voting and get the original single-pass behavior with zero overhead.

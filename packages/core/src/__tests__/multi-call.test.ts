@@ -512,6 +512,7 @@ describe("mergeResults", () => {
           "address_before_merge",
           "address_before_merge",
         ],
+        failedPasses: 0,
       },
     };
 

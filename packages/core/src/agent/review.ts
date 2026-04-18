@@ -11,6 +11,33 @@ import {
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
 import type { OpenGrepFinding } from "../opengrep/types.js";
 import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
+import { logger } from "../logger.js";
+
+const log = logger.child({ module: "review" });
+
+const STRUCTURED_OUTPUT_VALIDATION_ERROR_ID = "STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED";
+
+function isStructuredOutputValidationError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "id" in err &&
+    (err as { id: unknown }).id === STRUCTURED_OUTPUT_VALIDATION_ERROR_ID
+  );
+}
+
+async function generateWithStructuredOutputRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (!isStructuredOutputValidationError(err)) throw err;
+    log.warn(
+      { err },
+      "structured output validation failed, retrying once before giving up on this pass",
+    );
+    return await fn();
+  }
+}
 
 export type ReviewTier = "skim" | "deep-review";
 
@@ -74,10 +101,12 @@ export async function runReview(
   const schema = tier === "skim" ? SkimReviewOutputSchema : ReviewOutputSchema;
 
   const modelSettings = resolveModelSettings("review");
-  const response = await agent.generate(userMessage, {
-    structuredOutput: { schema },
-    ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
-  });
+  const response = await generateWithStructuredOutputRetry(() =>
+    agent.generate(userMessage, {
+      structuredOutput: { schema },
+      ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
+    }),
+  );
 
   const parsed = response.object;
 
