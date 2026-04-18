@@ -11,8 +11,13 @@ vi.mock("@mastra/core/agent", () => ({
 
 vi.mock("../agent/model.js", () => ({
   resolveModelConfig: vi.fn(() => ({ type: "router", model: "test-model" })),
-  resolveModel: vi.fn(() => "test-model"),
-  getModelDisplayName: vi.fn(() => "test-model"),
+  resolveModelConfigWithOverride: vi.fn((model: string) => ({ type: "router", model })),
+  resolveModel: vi.fn((config: { type: string; model?: string }) =>
+    config.type === "router" ? (config.model ?? "test-model") : "test-model",
+  ),
+  getModelDisplayName: vi.fn((config: { type: string; model?: string }) =>
+    config.type === "router" ? (config.model ?? "test-model") : "test-model",
+  ),
   resolveModelSettings: vi.fn(() => ({})),
 }));
 
@@ -266,6 +271,32 @@ describe("judgeFindings", () => {
     expect(Agent).toHaveBeenCalledWith(
       expect.objectContaining({ model: "anthropic/claude-haiku" }),
     );
+  });
+
+  it("routes override model through provider resolution (azure-openai prefix)", async () => {
+    const modelModule = await import("../agent/model.js");
+    const resolveWithOverrideSpy = vi.mocked(modelModule.resolveModelConfigWithOverride);
+    resolveWithOverrideSpy.mockClear();
+
+    const findings = [makeFinding()];
+
+    generateMock.mockResolvedValueOnce({
+      object: {
+        evaluations: [{ index: 0, confidence: 9, reasoning: "valid" }],
+      },
+      usage: { totalTokens: 200 },
+    });
+
+    await judgeFindings(findings, DIFF, {
+      enabled: true,
+      threshold: 6,
+      model: "azure-openai/gpt-5.4-mini",
+    });
+
+    // override must flow through the provider resolution helper, otherwise
+    // azure-openai/ strings get handed to the mastra router and fail with
+    // "Could not find config for provider azure-openai"
+    expect(resolveWithOverrideSpy).toHaveBeenCalledWith("azure-openai/gpt-5.4-mini");
   });
 });
 

@@ -2,6 +2,7 @@ import { Agent } from "@mastra/core/agent";
 import { z } from "zod";
 import {
   resolveModelConfig,
+  resolveModelConfigWithOverride,
   resolveModel,
   getModelDisplayName,
   resolveModelSettings,
@@ -89,11 +90,13 @@ function formatFindingsForJudge(findings: readonly Finding[], diff: string): str
 }
 
 function resolveJudgeModel(judgeModelOverride?: string) {
-  if (judgeModelOverride) {
-    return { model: judgeModelOverride, displayName: judgeModelOverride };
-  }
-
-  const config = resolveModelConfig();
+  // override must go through the full resolution chain so azure-openai/ prefix
+  // + API key + resource name get wrapped in createAzure() — otherwise the
+  // raw string is handed to mastra's model router which doesn't know the
+  // azure-openai provider
+  const config = judgeModelOverride
+    ? resolveModelConfigWithOverride(judgeModelOverride)
+    : resolveModelConfig();
   return { model: resolveModel(config), displayName: getModelDisplayName(config) };
 }
 
