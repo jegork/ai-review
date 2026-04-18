@@ -27,6 +27,7 @@ export { runConsensusReview } from "./consensus.js";
 export {
   resolveModelConfig,
   resolveTriageModelConfig,
+  resolveModelConfigWithOverride,
   resolveModel,
   getModelDisplayName,
 } from "./model.js";

@@ -44,12 +44,14 @@ export function resolveModelConfig(): ModelConfig {
   return { type: "router", model };
 }
 
-export function resolveTriageModelConfig(): ModelConfig | null {
-  const triageModel = process.env.RUSTY_LLM_TRIAGE_MODEL;
-  if (!triageModel) return null;
-  // triage model uses the same provider resolution logic but with its own model string
+/**
+ * resolve a ModelConfig for a specific model string, as if RUSTY_LLM_MODEL
+ * were set to it — so azure-openai/ prefix handling, openai-compatible
+ * endpoints, etc. all apply consistently across per-agent overrides.
+ */
+export function resolveModelConfigWithOverride(overrideModel: string): ModelConfig {
   const saved = process.env.RUSTY_LLM_MODEL;
-  process.env.RUSTY_LLM_MODEL = triageModel;
+  process.env.RUSTY_LLM_MODEL = overrideModel;
   try {
     return resolveModelConfig();
   } finally {
@@ -59,6 +61,12 @@ export function resolveTriageModelConfig(): ModelConfig | null {
       delete process.env.RUSTY_LLM_MODEL;
     }
   }
+}
+
+export function resolveTriageModelConfig(): ModelConfig | null {
+  const triageModel = process.env.RUSTY_LLM_TRIAGE_MODEL;
+  if (!triageModel) return null;
+  return resolveModelConfigWithOverride(triageModel);
 }
 
 export function resolveModel(
