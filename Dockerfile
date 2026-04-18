@@ -22,14 +22,16 @@ FROM node:22-slim AS runtime
 WORKDIR /app
 
 ARG OPENGREP_VERSION=v1.19.0
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates python3 python3-pip \
-    && pip3 install --break-system-packages charset-normalizer==3.4.1 chardet==5.2.0 \
     && curl -fsSL -o /usr/local/bin/opengrep \
        "https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep_manylinux_x86" \
     && chmod +x /usr/local/bin/opengrep \
     && opengrep --version \
-    && apt-get purge -y curl \
+    && pip3 install --target="/root/.cache/opengrep/${OPENGREP_VERSION}" \
+       charset-normalizer==3.4.1 chardet==5.2.0 \
+    && apt-get purge -y curl python3-pip \
     && apt-get autoremove -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
