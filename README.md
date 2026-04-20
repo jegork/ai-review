@@ -16,7 +16,7 @@ Built on [Mastra](https://mastra.ai/) (TypeScript).
 - **OpenGrep pre-scan** — runs [OpenGrep](https://opengrep.dev/) SAST on changed files before LLM review, feeds findings for triage (gracefully skipped when not installed)
 - **Multi-provider LLM** — OpenAI, Anthropic, Google, or any provider supported by Mastra
 - **PR description generation** — optionally generate a structured PR description from the diff when the description is empty or a placeholder (off by default)
-- **GitHub + Azure DevOps** — webhook server for GitHub, pipeline task for Azure DevOps
+- **GitHub + Azure DevOps** — webhook server for GitHub, pipeline task for Azure DevOps, or a drop-in GitHub Action
 - **Web dashboard** — configure repos, review styles, focus areas, and view history
 
 ## Quick Start
@@ -62,6 +62,7 @@ packages/
 │   │   └── types.ts    # shared type definitions
 │   └── src/prompts/    # externalized prompt templates (styles + focus areas)
 ├── github/         # GitHub App webhook server + config API
+├── github-action/  # One-shot CLI driven by GitHub Actions env + event payload
 ├── azure-devops/   # Azure DevOps pipeline task (Docker entrypoint)
 └── dashboard/      # React SPA for configuration and review history
 ```
@@ -85,6 +86,58 @@ GITHUB_WEBHOOK_SECRET=your-secret
 
 6. Point the webhook URL to `https://your-domain/api/webhooks/github`
 7. Install the app on your repositories
+
+## GitHub Action Setup
+
+The repo publishes a Docker-based GitHub Action alongside the webhook server. Drop it into any repo to get AI review on pull requests without hosting anything — reviews run on the GitHub-hosted runner, authenticated with the built-in `GITHUB_TOKEN`.
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+      issues: read
+    steps:
+      - uses: jegork/ai-review@v1
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          review-style: balanced
+          focus-areas: security,bugs,performance
+          fail-on-critical: "true"
+```
+
+**Required permissions** (set on the job, not the whole workflow):
+
+- `pull-requests: write` — post summary and inline review comments
+- `issues: read` — read linked issues for ticket compliance
+- `contents: read` — read the diff and convention file from the target branch
+
+**Action inputs:**
+
+| Input | Default | Notes |
+|---|---|---|
+| `github-token` | `${{ github.token }}` | Built-in token has the right scopes when the `permissions:` block above is set |
+| `review-style` | `balanced` | One of `strict`, `balanced`, `lenient`, `roast`, `thorough` |
+| `focus-areas` | _all_ | Comma-separated: `security,performance,bugs,style,tests,docs` |
+| `ignore-patterns` | — | Comma-separated glob patterns (e.g. `*.lock,dist/**`) |
+| `llm-model` | `anthropic/claude-sonnet-4-20250514` | `provider/model` format |
+| `fail-on-critical` | `true` | Exit code 1 on critical findings — gates the PR |
+| `generate-description` | `false` | Generate a PR description when empty/placeholder |
+| `review-drafts` | `false` | Review draft PRs (skipped by default) |
+| `opengrep-rules` | `auto` | OpenGrep ruleset or config path |
+| `anthropic-api-key` / `openai-api-key` / `google-api-key` | — | Pass exactly one, matching your `llm-model` provider |
+| `jira-base-url` / `jira-email` / `jira-api-token` | — | Enable Jira ticket compliance |
+| `linear-api-key` | — | Enable Linear ticket compliance |
+
+The Action runs inside the published Docker image (`ghcr.io/jegork/ai-review:latest`), which includes OpenGrep. First run in a repo adds ~20–40s for the image pull; subsequent runs are cached by the runner.
+
+**Skipped events:** the Action exits early with no error for `closed`/`labeled`/`unlabeled`/`assigned`/`unassigned` and for draft PRs (unless `review-drafts: "true"`).
 
 ## Azure DevOps Pipeline Setup
 
@@ -140,7 +193,8 @@ The task exits with code 1 when critical issues are found (configurable via `RUS
 | `RUSTY_REVIEW_STYLE` | default review style | `balanced` |
 | `RUSTY_FOCUS_AREAS` | comma-separated focus areas | all enabled |
 | `RUSTY_IGNORE_PATTERNS` | comma-separated glob patterns to skip | — |
-| `RUSTY_FAIL_ON_CRITICAL` | exit 1 on critical findings (pipeline mode) | `true` |
+| `RUSTY_FAIL_ON_CRITICAL` | exit 1 on critical findings (pipeline/action mode) | `true` |
+| `RUSTY_REVIEW_DRAFTS` | review draft PRs in GitHub Action mode | `false` |
 | `RUSTY_JIRA_BASE_URL` | Jira instance URL | — |
 | `RUSTY_JIRA_EMAIL` | Jira auth email | — |
 | `RUSTY_JIRA_API_TOKEN` | Jira API token | — |

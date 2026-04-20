@@ -1,0 +1,87 @@
+name: Rusty Bot
+description: AI-powered PR review with configurable styles, focus areas, OpenGrep SAST, and ticket compliance checks
+author: jegork
+branding:
+  icon: git-pull-request
+  color: orange
+
+inputs:
+  github-token:
+    description: Token used to read the PR diff and post review comments. Requires pull-requests:write, issues:read, contents:read
+    required: true
+    default: ${{ github.token }}
+  review-style:
+    description: "Review style: strict | balanced | lenient | roast | thorough"
+    required: false
+    default: balanced
+  focus-areas:
+    description: "Comma-separated focus areas (security,performance,bugs,style,tests,docs). Empty = all"
+    required: false
+    default: ""
+  ignore-patterns:
+    description: Comma-separated glob patterns to skip (e.g. "*.lock,dist/**")
+    required: false
+    default: ""
+  llm-model:
+    description: LLM model in provider/model format (e.g. anthropic/claude-sonnet-4-20250514)
+    required: false
+    default: anthropic/claude-sonnet-4-20250514
+  fail-on-critical:
+    description: Exit with code 1 when critical findings are produced (gates the PR)
+    required: false
+    default: "true"
+  generate-description:
+    description: Generate a PR description when it's empty or a placeholder
+    required: false
+    default: "false"
+  review-drafts:
+    description: Review draft PRs (skipped by default)
+    required: false
+    default: "false"
+  anthropic-api-key:
+    description: Anthropic API key
+    required: false
+  openai-api-key:
+    description: OpenAI API key
+    required: false
+  google-api-key:
+    description: Google Generative AI API key
+    required: false
+  opengrep-rules:
+    description: OpenGrep config string (ruleset or path)
+    required: false
+    default: auto
+  jira-base-url:
+    description: Jira instance URL for ticket compliance
+    required: false
+  jira-email:
+    description: Jira auth email
+    required: false
+  jira-api-token:
+    description: Jira API token
+    required: false
+  linear-api-key:
+    description: Linear API key
+    required: false
+
+runs:
+  using: docker
+  image: docker://ghcr.io/jegork/ai-review:latest
+  env:
+    RUSTY_MODE: github-action
+    GITHUB_TOKEN: ${{ inputs.github-token }}
+    RUSTY_REVIEW_STYLE: ${{ inputs.review-style }}
+    RUSTY_FOCUS_AREAS: ${{ inputs.focus-areas }}
+    RUSTY_IGNORE_PATTERNS: ${{ inputs.ignore-patterns }}
+    RUSTY_LLM_MODEL: ${{ inputs.llm-model }}
+    RUSTY_FAIL_ON_CRITICAL: ${{ inputs.fail-on-critical }}
+    RUSTY_GENERATE_DESCRIPTION: ${{ inputs.generate-description }}
+    RUSTY_REVIEW_DRAFTS: ${{ inputs.review-drafts }}
+    RUSTY_OPENGREP_RULES: ${{ inputs.opengrep-rules }}
+    ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+    OPENAI_API_KEY: ${{ inputs.openai-api-key }}
+    GOOGLE_GENERATIVE_AI_API_KEY: ${{ inputs.google-api-key }}
+    RUSTY_JIRA_BASE_URL: ${{ inputs.jira-base-url }}
+    RUSTY_JIRA_EMAIL: ${{ inputs.jira-email }}
+    RUSTY_JIRA_API_TOKEN: ${{ inputs.jira-api-token }}
+    RUSTY_LINEAR_API_KEY: ${{ inputs.linear-api-key }}

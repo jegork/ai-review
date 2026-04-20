@@ -1,0 +1,25 @@
+{
+  "name": "@rusty-bot/github-action",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@rusty-bot/core": "workspace:*",
+    "@rusty-bot/github": "workspace:*",
+    "octokit": "^5.0.5",
+    "zod": "^4.3.6"
+  }
+}
