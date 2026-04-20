@@ -206,7 +206,7 @@ describe("AzureDevOpsProvider", () => {
       const firstBody = JSON.parse(fetchSpy.mock.calls[0][1].body);
       expect(firstBody.threadContext.filePath).toBe("/src/index.ts");
       expect(firstBody.threadContext.rightFileStart).toEqual({ line: 10, offset: 1 });
-      expect(firstBody.threadContext.rightFileEnd).toEqual({ line: 10, offset: 1 });
+      expect(firstBody.threadContext.rightFileEnd).toEqual({ line: 11, offset: 1 });
       expect(firstBody.comments[0].content).toContain("<!-- rusty-bot-review -->");
       expect(firstBody.comments[0].content).toContain("SQL injection risk");
       expect(firstBody.comments[0].content).toContain("```suggestion");
@@ -236,7 +236,7 @@ describe("AzureDevOpsProvider", () => {
 
       const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
       expect(body.threadContext.rightFileStart).toEqual({ line: 5, offset: 1 });
-      expect(body.threadContext.rightFileEnd).toEqual({ line: 12, offset: 1 });
+      expect(body.threadContext.rightFileEnd).toEqual({ line: 13, offset: 1 });
     });
 
     it("falls back to line when endLine is null", async () => {
@@ -258,7 +258,30 @@ describe("AzureDevOpsProvider", () => {
 
       const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
       expect(body.threadContext.rightFileStart).toEqual({ line: 42, offset: 1 });
-      expect(body.threadContext.rightFileEnd).toEqual({ line: 42, offset: 1 });
+      expect(body.threadContext.rightFileEnd).toEqual({ line: 43, offset: 1 });
+    });
+
+    it("anchors single-line suggestion so the full line is replaced, not inserted", async () => {
+      fetchSpy.mockResolvedValue(mockFetchResponse({}));
+
+      await provider.postInlineComments([
+        {
+          file: "pyproject.toml",
+          line: 58,
+          endLine: null,
+          severity: "warning",
+          category: "security",
+          message: "wildcard version pinning",
+          suggestedFix: 'cryptography = "^43.0.3"',
+        },
+      ]);
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      const { rightFileStart, rightFileEnd } = body.threadContext;
+      // a zero-width range (start == end) makes ado insert the suggestion at col 1
+      // instead of replacing the line, concatenating the fix with the original content
+      expect(rightFileStart).not.toEqual(rightFileEnd);
+      expect(rightFileEnd.line).toBeGreaterThan(rightFileStart.line);
     });
 
     it("skips API call when findings array is empty", async () => {

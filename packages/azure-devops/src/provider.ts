@@ -300,6 +300,7 @@ export class AzureDevOpsProvider implements GitProvider {
 
     for (const finding of findings) {
       const content = `${BOT_MARKER}\n${formatInlineComment(finding)}`;
+      const endLine = finding.endLine ?? finding.line;
 
       await this.fetchApi(
         `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads?${API_VERSION}`,
@@ -315,8 +316,11 @@ export class AzureDevOpsProvider implements GitProvider {
             ],
             threadContext: {
               filePath: `/${finding.file}`,
+              // anchor spans from col 1 of the first line to col 1 of the line after the
+              // last target line. zero-width ranges make ado treat ```suggestion blocks as
+              // insertions instead of replacements, concatenating the fix with the original
               rightFileStart: { line: finding.line, offset: 1 },
-              rightFileEnd: { line: finding.endLine ?? finding.line, offset: 1 },
+              rightFileEnd: { line: endLine + 1, offset: 1 },
             },
             status: 1,
           }),
