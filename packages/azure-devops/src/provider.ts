@@ -72,6 +72,9 @@ export class AzureDevOpsProvider implements GitProvider {
   private readonly repoName: string;
   private readonly pullRequestId: number;
   private readonly accessToken: string;
+  // source-branch file contents indexed by path; populated by getDiff and used
+  // by postInlineComments to compute exact line-end offsets for suggestion anchors
+  private readonly fileLineCache = new Map<string, string[]>();
 
   constructor(config: AzureDevOpsProviderConfig) {
     this.orgUrl = config.orgUrl.replace(/\/$/, "");
@@ -187,6 +190,7 @@ export class AzureDevOpsProvider implements GitProvider {
         ]);
 
         if (newContent !== null) {
+          this.fileLineCache.set(filePath, newContent.split("\n"));
           const patch = buildPatchFromContent(filePath, oldContent, newContent);
           if (patch.hunks.length > 0) {
             patches.push(patch);
@@ -316,17 +320,28 @@ export class AzureDevOpsProvider implements GitProvider {
             ],
             threadContext: {
               filePath: `/${finding.file}`,
-              // anchor spans from col 1 of the first line to col 1 of the line after the
-              // last target line. zero-width ranges make ado treat ```suggestion blocks as
-              // insertions instead of replacements, concatenating the fix with the original
               rightFileStart: { line: finding.line, offset: 1 },
-              rightFileEnd: { line: endLine + 1, offset: 1 },
+              rightFileEnd: this.computeRightFileEnd(finding.file, endLine),
             },
             status: 1,
           }),
         },
       );
     }
+  }
+
+  // ado's ```suggestion renders as a diff based on the thread's character range. if the
+  // range covers line content + trailing newline, the newline gets stripped when the
+  // suggestion replaces it, merging the target line with the next one. we anchor strictly
+  // within the target line's content (col 1 to col len) so the newline survives. zero-width
+  // ranges must be avoided too — ado treats those as insertions, not replacements.
+  private computeRightFileEnd(path: string, endLine: number): { line: number; offset: number } {
+    const lines = this.fileLineCache.get(path);
+    const lineContent = lines?.[endLine - 1];
+    if (!lineContent) {
+      return { line: endLine + 1, offset: 1 };
+    }
+    return { line: endLine, offset: lineContent.length };
   }
 
   async deleteExistingBotComments(): Promise<void> {

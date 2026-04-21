@@ -32,6 +32,17 @@ function mockFetchResponse(body: unknown, ok = true, status = 200): Response {
   } as Response;
 }
 
+function mockFileContentResponse(body: string, ok = true): Response {
+  return {
+    ok,
+    status: ok ? 200 : 400,
+    statusText: ok ? "OK" : "Bad Request",
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(body),
+    headers: new Headers(),
+  } as Response;
+}
+
 describe("AzureDevOpsProvider", () => {
   let provider: AzureDevOpsProvider;
   let fetchSpy: ReturnType<typeof vi.fn>;
@@ -281,7 +292,176 @@ describe("AzureDevOpsProvider", () => {
       // a zero-width range (start == end) makes ado insert the suggestion at col 1
       // instead of replacing the line, concatenating the fix with the original content
       expect(rightFileStart).not.toEqual(rightFileEnd);
-      expect(rightFileEnd.line).toBeGreaterThan(rightFileStart.line);
+    });
+
+    it("anchors multi-line suggestion to the end of the last line when content is cached", async () => {
+      const fileContent = [
+        "const plugins = [",
+        "  'react',",
+        "  'vitest',",
+        "  'unused',",
+        "];",
+      ].join("\n");
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          pullRequestId: 42,
+          title: "",
+          description: "",
+          createdBy: { displayName: "U", uniqueName: "u@e.com" },
+          sourceRefName: "refs/heads/feature",
+          targetRefName: "refs/heads/main",
+          repository: { webUrl: "" },
+        }),
+      );
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ value: [{ id: 1 }] }));
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            { changeType: "edit", item: { path: "/src/config.ts", gitObjectType: "blob" } },
+          ],
+        }),
+      );
+      fetchSpy.mockResolvedValueOnce(mockFileContentResponse(fileContent));
+      fetchSpy.mockResolvedValueOnce(mockFileContentResponse("old"));
+
+      await provider.getDiff();
+
+      fetchSpy.mockResolvedValue(mockFetchResponse({}));
+
+      await provider.postInlineComments([
+        {
+          file: "src/config.ts",
+          line: 2,
+          endLine: 4,
+          severity: "warning",
+          category: "bugs",
+          message: "drop unused plugin entry",
+          suggestedFix: "  'react',\n  'vitest',",
+        },
+      ]);
+
+      const threadCall = fetchSpy.mock.calls.find((args: unknown[]) => {
+        const init = args[1] as RequestInit | undefined;
+        return init?.method === "POST" && (args[0] as string).includes("/threads?");
+      });
+      const body = JSON.parse((threadCall![1] as RequestInit & { body: string }).body);
+      expect(body.threadContext.rightFileStart).toEqual({ line: 2, offset: 1 });
+      expect(body.threadContext.rightFileEnd).toEqual({
+        line: 4,
+        offset: "  'unused',".length,
+      });
+    });
+
+    it("falls back to next-line anchor for empty target lines to avoid a zero-width range", async () => {
+      const fileContent = ["first", "", "third"].join("\n");
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          pullRequestId: 42,
+          title: "",
+          description: "",
+          createdBy: { displayName: "U", uniqueName: "u@e.com" },
+          sourceRefName: "refs/heads/feature",
+          targetRefName: "refs/heads/main",
+          repository: { webUrl: "" },
+        }),
+      );
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ value: [{ id: 1 }] }));
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            { changeType: "edit", item: { path: "/src/file.ts", gitObjectType: "blob" } },
+          ],
+        }),
+      );
+      fetchSpy.mockResolvedValueOnce(mockFileContentResponse(fileContent));
+      fetchSpy.mockResolvedValueOnce(mockFileContentResponse("old"));
+
+      await provider.getDiff();
+
+      fetchSpy.mockResolvedValue(mockFetchResponse({}));
+
+      await provider.postInlineComments([
+        {
+          file: "src/file.ts",
+          line: 2,
+          endLine: null,
+          severity: "suggestion",
+          category: "style",
+          message: "add content here",
+          suggestedFix: "// new content",
+        },
+      ]);
+
+      const threadCall = fetchSpy.mock.calls.find((args: unknown[]) => {
+        const init = args[1] as RequestInit | undefined;
+        return init?.method === "POST" && (args[0] as string).includes("/threads?");
+      });
+      const body = JSON.parse((threadCall![1] as RequestInit & { body: string }).body);
+      expect(body.threadContext.rightFileEnd).toEqual({ line: 3, offset: 1 });
+    });
+
+    it("anchors single-line suggestion within the target line so the trailing newline is preserved", async () => {
+      const fileContent = [
+        "{",
+        '  "rules": {',
+        '    "typescript/no-floating-promises": "off",',
+        '    "@typescript-eslint/ban-ts-comment": "error",',
+        "  }",
+        "}",
+      ].join("\n");
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          pullRequestId: 42,
+          title: "",
+          description: "",
+          createdBy: { displayName: "U", uniqueName: "u@e.com" },
+          sourceRefName: "refs/heads/feature",
+          targetRefName: "refs/heads/main",
+          repository: { webUrl: "" },
+        }),
+      );
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ value: [{ id: 1 }] }));
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            { changeType: "edit", item: { path: "/.oxlintrc.json", gitObjectType: "blob" } },
+          ],
+        }),
+      );
+      fetchSpy.mockResolvedValueOnce(mockFileContentResponse(fileContent));
+      fetchSpy.mockResolvedValueOnce(mockFileContentResponse("old"));
+
+      await provider.getDiff();
+
+      fetchSpy.mockResolvedValue(mockFetchResponse({}));
+
+      await provider.postInlineComments([
+        {
+          file: ".oxlintrc.json",
+          line: 3,
+          endLine: null,
+          severity: "warning",
+          category: "bugs",
+          message: "disabling this rule removes protection",
+          suggestedFix: '    "typescript/no-floating-promises": "error",',
+        },
+      ]);
+
+      const threadCall = fetchSpy.mock.calls.find((args: unknown[]) => {
+        const init = args[1] as RequestInit | undefined;
+        if (init?.method !== "POST") return false;
+        const url = args[0] as string;
+        return url.includes("/threads?");
+      });
+      expect(threadCall).toBeDefined();
+
+      const body = JSON.parse((threadCall![1] as RequestInit & { body: string }).body);
+      const targetLineLength = '    "typescript/no-floating-promises": "off",'.length;
+      expect(body.threadContext.rightFileStart).toEqual({ line: 3, offset: 1 });
+      expect(body.threadContext.rightFileEnd).toEqual({ line: 3, offset: targetLineLength });
     });
 
     it("skips API call when findings array is empty", async () => {
