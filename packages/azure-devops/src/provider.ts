@@ -143,6 +143,8 @@ export class AzureDevOpsProvider implements GitProvider {
   }
 
   async getDiff(): Promise<FilePatch[]> {
+    this.fileLineCache.clear();
+
     const pr = await this.request(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`,
       AdoPullRequestSchema,
@@ -190,7 +192,9 @@ export class AzureDevOpsProvider implements GitProvider {
         ]);
 
         if (newContent !== null) {
-          this.fileLineCache.set(filePath, newContent.split("\n"));
+          // split on both lf and crlf so windows line endings don't leak a trailing \r
+          // into cached line contents — that would inflate the offset passed to ado
+          this.fileLineCache.set(filePath, newContent.split(/\r?\n/));
           const patch = buildPatchFromContent(filePath, oldContent, newContent);
           if (patch.hunks.length > 0) {
             patches.push(patch);

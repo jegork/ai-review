@@ -345,6 +345,8 @@ describe("AzureDevOpsProvider", () => {
         const init = args[1] as RequestInit | undefined;
         return init?.method === "POST" && (args[0] as string).includes("/threads?");
       });
+      expect(threadCall).toBeDefined();
+
       const body = JSON.parse((threadCall![1] as RequestInit & { body: string }).body);
       expect(body.threadContext.rightFileStart).toEqual({ line: 2, offset: 1 });
       expect(body.threadContext.rightFileEnd).toEqual({
@@ -398,6 +400,8 @@ describe("AzureDevOpsProvider", () => {
         const init = args[1] as RequestInit | undefined;
         return init?.method === "POST" && (args[0] as string).includes("/threads?");
       });
+      expect(threadCall).toBeDefined();
+
       const body = JSON.parse((threadCall![1] as RequestInit & { body: string }).body);
       expect(body.threadContext.rightFileEnd).toEqual({ line: 3, offset: 1 });
     });
@@ -462,6 +466,60 @@ describe("AzureDevOpsProvider", () => {
       const targetLineLength = '    "typescript/no-floating-promises": "off",'.length;
       expect(body.threadContext.rightFileStart).toEqual({ line: 3, offset: 1 });
       expect(body.threadContext.rightFileEnd).toEqual({ line: 3, offset: targetLineLength });
+    });
+
+    it("excludes trailing carriage returns from offsets when file uses crlf line endings", async () => {
+      const targetLine = '    "typescript/no-floating-promises": "off",';
+      const fileContent = ["{", '  "rules": {', targetLine, "  }", "}"].join("\r\n");
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          pullRequestId: 42,
+          title: "",
+          description: "",
+          createdBy: { displayName: "U", uniqueName: "u@e.com" },
+          sourceRefName: "refs/heads/feature",
+          targetRefName: "refs/heads/main",
+          repository: { webUrl: "" },
+        }),
+      );
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ value: [{ id: 1 }] }));
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            { changeType: "edit", item: { path: "/.oxlintrc.json", gitObjectType: "blob" } },
+          ],
+        }),
+      );
+      fetchSpy.mockResolvedValueOnce(mockFileContentResponse(fileContent));
+      fetchSpy.mockResolvedValueOnce(mockFileContentResponse("old"));
+
+      await provider.getDiff();
+
+      fetchSpy.mockResolvedValue(mockFetchResponse({}));
+
+      await provider.postInlineComments([
+        {
+          file: ".oxlintrc.json",
+          line: 3,
+          endLine: null,
+          severity: "warning",
+          category: "bugs",
+          message: "disabling this rule removes protection",
+          suggestedFix: '    "typescript/no-floating-promises": "error",',
+        },
+      ]);
+
+      const threadCall = fetchSpy.mock.calls.find((args: unknown[]) => {
+        const init = args[1] as RequestInit | undefined;
+        return init?.method === "POST" && (args[0] as string).includes("/threads?");
+      });
+      expect(threadCall).toBeDefined();
+
+      const body = JSON.parse((threadCall![1] as RequestInit & { body: string }).body);
+      // offset must equal raw line length without the trailing \r; otherwise ado
+      // extends the anchor past the visible content and the suggestion leaves behind a cr
+      expect(body.threadContext.rightFileEnd).toEqual({ line: 3, offset: targetLine.length });
     });
 
     it("skips API call when findings array is empty", async () => {
