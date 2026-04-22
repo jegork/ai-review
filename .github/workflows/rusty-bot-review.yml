@@ -23,13 +23,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # the action.yml points at a private GHCR image, so authenticate before
-      # the runner tries to docker pull it
+      # the action.yml points at a private GHCR image; the runner's implicit
+      # docker pull during `docker run` doesn't reuse docker/login-action's
+      # credentials, so authenticate and pull explicitly first
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pre-pull Rusty Bot image
+        run: docker pull ghcr.io/jegork/ai-review:latest
 
       - name: Run Rusty Bot
         uses: ./
