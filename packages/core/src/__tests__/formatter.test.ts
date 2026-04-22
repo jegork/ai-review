@@ -551,6 +551,167 @@ describe("formatSummaryComment with dropped findings", () => {
   });
 });
 
+describe("formatSummaryComment with elevated recommendation but no surviving findings", () => {
+  function makeElevatedReview(overrides: Partial<ReviewResult> = {}): ReviewResult {
+    return makeReview({
+      recommendation: "address_before_merge",
+      findings: [],
+      droppedFindings: [
+        {
+          file: "src/dao.ts",
+          line: 120,
+          severity: "warning",
+          message: "race path can return empty conflicts payload",
+          voteCount: 1,
+        },
+        {
+          file: "src/router.ts",
+          line: 55,
+          severity: "warning",
+          message: "partial RBAC grants on mid-loop failure",
+          voteCount: 1,
+        },
+        {
+          file: "src/dao.ts",
+          line: 200,
+          severity: "suggestion",
+          message: "bulk create ignores folder_id",
+          voteCount: 1,
+        },
+      ],
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 0,
+        recommendationElevated: true,
+        passRecommendations: [
+          "address_before_merge",
+          "address_before_merge",
+          "address_before_merge",
+        ],
+        failedPasses: 0,
+      },
+      ...overrides,
+    });
+  }
+
+  it("renders a prominent Elevated Concerns section (expanded, not collapsed)", () => {
+    const result = formatSummaryComment(makeElevatedReview());
+
+    expect(result).toContain("## Elevated Concerns (3)");
+    expect(result).toContain("threshold of 2/3 passes");
+    expect(result).toContain("| `src/dao.ts` | 120 | warning |");
+    expect(result).toContain("| `src/router.ts` | 55 | warning |");
+    expect(result).toContain("| 1/3 |");
+    // not wrapped in a <details> block (no unclosed <details> before the section)
+    const elevatedIdx = result.indexOf("## Elevated Concerns");
+    const preceding = result.slice(0, elevatedIdx);
+    const lastDetailsOpen = preceding.lastIndexOf("<details>");
+    const lastDetailsClose = preceding.lastIndexOf("</details>");
+    expect(lastDetailsClose).toBeGreaterThanOrEqual(lastDetailsOpen);
+  });
+
+  it("suppresses the collapsed Filtered findings section to avoid duplication", () => {
+    const result = formatSummaryComment(makeElevatedReview());
+    expect(result).not.toContain("Filtered findings");
+  });
+
+  it("annotates the status line to point readers to the elevated concerns", () => {
+    const result = formatSummaryComment(makeElevatedReview());
+    expect(result).toContain(
+      "**Status:** 0 Issues Found — 3 elevated concerns below | **Recommendation:** Address before merge",
+    );
+  });
+
+  it("uses singular wording when exactly one concern is elevated", () => {
+    const review = makeElevatedReview({
+      droppedFindings: [
+        {
+          file: "src/a.ts",
+          line: 1,
+          severity: "warning",
+          message: "lone concern",
+          voteCount: 1,
+        },
+      ],
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).toContain("1 elevated concern below");
+    expect(result).not.toContain("1 elevated concerns below");
+    expect(result).toContain("## Elevated Concerns (1)");
+  });
+
+  it("places the prominent section before Overview so the zero-count table reads as context", () => {
+    const result = formatSummaryComment(makeElevatedReview());
+    const elevatedIdx = result.indexOf("## Elevated Concerns");
+    const overviewIdx = result.indexOf("## Overview");
+    expect(elevatedIdx).toBeGreaterThan(-1);
+    expect(elevatedIdx).toBeLessThan(overviewIdx);
+  });
+
+  it("sanitizes pipe characters in elevated concern messages", () => {
+    const review = makeElevatedReview({
+      droppedFindings: [
+        {
+          file: "src/a.ts",
+          line: 1,
+          severity: "warning",
+          message: "prefer a | b over a || b",
+          voteCount: 1,
+        },
+      ],
+    });
+
+    const result = formatSummaryComment(review);
+    expect(result).toContain("prefer a \\| b over a \\|\\| b");
+  });
+
+  it("falls back to the collapsed Filtered findings section when findings survived", () => {
+    // surviving findings + dropped findings + elevated flag false
+    // (this is the pre-existing behavior; the new section only kicks in when findings.length === 0)
+    const review = makeElevatedReview({
+      findings: [makeFinding({ severity: "warning" })],
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 0.5,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good", "address_before_merge", "address_before_merge"],
+        failedPasses: 0,
+      },
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).not.toContain("## Elevated Concerns");
+    expect(result).toContain("Filtered findings");
+    expect(result).not.toContain("elevated concern below");
+    expect(result).not.toContain("elevated concerns below");
+  });
+
+  it("falls back to the collapsed Filtered findings section when elevation did not fire", () => {
+    // dropped findings exist, zero surviving findings, but recommendationElevated is false
+    const review = makeElevatedReview({
+      recommendation: "looks_good",
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 0,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good", "looks_good", "looks_good"],
+        failedPasses: 0,
+      },
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).not.toContain("## Elevated Concerns");
+    expect(result).toContain("Filtered findings");
+  });
+});
+
 describe("formatSummaryComment with consensus metadata in footer", () => {
   it("includes consensus pass count and agreement rate in footer", () => {
     const review = makeReview({
