@@ -1,5 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import type { FilePatch, TriageResult, TriageFileResult, TriageClassification } from "../types.js";
+import type { OpenGrepFinding } from "../opengrep/types.js";
 import { TriageOutputSchema } from "./schema.js";
 import { buildTriageSystemPrompt, buildTriageUserMessage } from "./prompt.js";
 import {
@@ -8,6 +9,7 @@ import {
   getModelDisplayName,
   resolveModelSettings,
 } from "../agent/model.js";
+import { normalizePath } from "../agent/multi-call.js";
 import { countTokens } from "../diff/compress.js";
 import { logger } from "../logger.js";
 
@@ -26,6 +28,25 @@ function applyOverflowDefaults(
       classification: "deep-review" as const,
       reason: "exceeded triage token budget",
     }));
+}
+
+export function promoteOpenGrepFindings(
+  files: TriageFileResult[],
+  openGrepFindings: OpenGrepFinding[] | undefined,
+): TriageFileResult[] {
+  if (!openGrepFindings || openGrepFindings.length === 0) return files;
+
+  const flaggedPaths = new Set(openGrepFindings.map((f) => normalizePath(f.file)));
+
+  return files.map((f) => {
+    if (f.classification === "deep-review") return f;
+    if (!flaggedPaths.has(normalizePath(f.path))) return f;
+    return {
+      ...f,
+      classification: "deep-review" as TriageClassification,
+      reason: "opengrep finding",
+    };
+  });
 }
 
 function applySafetyNet(files: TriageFileResult[], patches: FilePatch[]): TriageFileResult[] {
@@ -50,7 +71,10 @@ function applySafetyNet(files: TriageFileResult[], patches: FilePatch[]): Triage
   );
 }
 
-export async function runTriage(patches: FilePatch[]): Promise<TriageResult> {
+export async function runTriage(
+  patches: FilePatch[],
+  openGrepFindings?: OpenGrepFinding[],
+): Promise<TriageResult> {
   const modelConfig = resolveTriageModelConfig();
   if (!modelConfig) {
     throw new Error("triage model not configured");
@@ -119,13 +143,19 @@ export async function runTriage(patches: FilePatch[]): Promise<TriageResult> {
     }
   }
 
-  const safeFiles = applySafetyNet(allFiles, patches);
+  const promotedFiles = promoteOpenGrepFindings(allFiles, openGrepFindings);
+  const safeFiles = applySafetyNet(promotedFiles, patches);
+
+  const promotedCount = promotedFiles.filter(
+    (f, i) => f.classification === "deep-review" && allFiles[i].classification !== "deep-review",
+  ).length;
 
   log.info(
     {
       skipped: safeFiles.filter((f) => f.classification === "skip").length,
       skimmed: safeFiles.filter((f) => f.classification === "skim").length,
       deepReview: safeFiles.filter((f) => f.classification === "deep-review").length,
+      openGrepPromoted: promotedCount,
       model: modelName,
       tokens: tokenCount,
     },

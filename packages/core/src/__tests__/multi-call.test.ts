@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { countTokens } from "../diff/compress.js";
 import type { FilePatch, ReviewConfig, ReviewResult, TicketInfo, Observation } from "../types.js";
+import type { OpenGrepFinding } from "../opengrep/types.js";
 
 function makeMockReview(diff: string): ReviewResult {
   return {
@@ -581,5 +582,84 @@ describe("runCascadeReview", () => {
 
     const deepOpts = deepCalls[0][4];
     expect(deepOpts?.otherPrFiles).toBeUndefined();
+  });
+
+  function makeFinding(file: string): OpenGrepFinding {
+    return {
+      ruleId: "python.sqlalchemy.security.text-sql-injection",
+      file,
+      startLine: 10,
+      endLine: 10,
+      message: "Potential SQL injection",
+      severity: "error",
+    };
+  }
+
+  it("does not leak skim-file opengrep findings into the deep-review tier (single-group)", async () => {
+    const skimPatches = [makePatch("tests/test_auth.py", 20)];
+    const deepPatches = [makePatch("src/datasource_service.py", 20)];
+    const findings = [makeFinding("tests/test_auth.py")];
+
+    await runCascadeReview(skimPatches, deepPatches, config, prMetadata, undefined, {
+      openGrepFindings: findings,
+    });
+
+    const skimCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier === "skim");
+    const deepCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier !== "skim");
+    expect(skimCalls.length).toBeGreaterThanOrEqual(1);
+    expect(deepCalls.length).toBeGreaterThanOrEqual(1);
+
+    expect(skimCalls[0][4]?.openGrepFindings).toHaveLength(1);
+    expect(skimCalls[0][4]?.openGrepFindings?.[0].file).toBe("tests/test_auth.py");
+    expect(deepCalls[0][4]?.openGrepFindings).toBeUndefined();
+  });
+
+  it("does not leak deep-file opengrep findings into the skim tier (single-group)", async () => {
+    const skimPatches = [makePatch("tests/test_auth.py", 20)];
+    const deepPatches = [makePatch("src/datasource_service.py", 20)];
+    const findings = [makeFinding("src/datasource_service.py")];
+
+    await runCascadeReview(skimPatches, deepPatches, config, prMetadata, undefined, {
+      openGrepFindings: findings,
+    });
+
+    const skimCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier === "skim");
+    const deepCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier !== "skim");
+
+    expect(skimCalls[0][4]?.openGrepFindings).toBeUndefined();
+    expect(deepCalls[0][4]?.openGrepFindings).toHaveLength(1);
+    expect(deepCalls[0][4]?.openGrepFindings?.[0].file).toBe("src/datasource_service.py");
+  });
+
+  it("routes opengrep findings to both tiers when each has a matching file", async () => {
+    const skimPatches = [makePatch("tests/test_auth.py", 20)];
+    const deepPatches = [makePatch("src/datasource_service.py", 20)];
+    const findings = [makeFinding("tests/test_auth.py"), makeFinding("src/datasource_service.py")];
+
+    await runCascadeReview(skimPatches, deepPatches, config, prMetadata, undefined, {
+      openGrepFindings: findings,
+    });
+
+    const skimCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier === "skim");
+    const deepCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier !== "skim");
+
+    expect(skimCalls[0][4]?.openGrepFindings).toHaveLength(1);
+    expect(skimCalls[0][4]?.openGrepFindings?.[0].file).toBe("tests/test_auth.py");
+    expect(deepCalls[0][4]?.openGrepFindings).toHaveLength(1);
+    expect(deepCalls[0][4]?.openGrepFindings?.[0].file).toBe("src/datasource_service.py");
+  });
+
+  it("drops findings whose file is in neither tier", async () => {
+    const skimPatches = [makePatch("tests/test_auth.py", 20)];
+    const deepPatches = [makePatch("src/auth.py", 20)];
+    const findings = [makeFinding("src/not-in-pr.py")];
+
+    await runCascadeReview(skimPatches, deepPatches, config, prMetadata, undefined, {
+      openGrepFindings: findings,
+    });
+
+    for (const call of runReviewMock.mock.calls) {
+      expect(call[4]?.openGrepFindings).toBeUndefined();
+    }
   });
 });

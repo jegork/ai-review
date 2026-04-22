@@ -76,7 +76,7 @@ function estimateTicketContextTokens(ticketContext?: TicketInfo[]): number {
   return countTokens(serialized);
 }
 
-function normalizePath(file: string): string {
+export function normalizePath(file: string): string {
   return file
     .replace(/\\/g, "/")
     .replace(/^\.\//, "")
@@ -240,7 +240,13 @@ async function runTieredReview(
 ): Promise<ReviewResult[]> {
   if (patches.length === 0) return [];
 
-  const tierOptions: RunReviewOptions = { ...resolvedOptions, tier };
+  const tierPaths = new Set(patches.map((p) => p.path));
+  const tierFindings = filterOpenGrepForFiles(resolvedOptions.openGrepFindings, tierPaths);
+  const tierOptions: RunReviewOptions = {
+    ...resolvedOptions,
+    tier,
+    openGrepFindings: tierFindings,
+  };
 
   if (tier === "skim") {
     const { compressed, skippedFiles } = compressDiff(patches, maxTokens);

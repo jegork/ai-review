@@ -1,8 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { FilePatch, TriageFileResult } from "../types.js";
+import type { OpenGrepFinding } from "../opengrep/types.js";
 import { TriageOutputSchema } from "../triage/schema.js";
 import { buildTriageSystemPrompt, buildTriageUserMessage } from "../triage/prompt.js";
-import { splitByClassification, isCascadeEnabled } from "../triage/triage.js";
+import {
+  splitByClassification,
+  isCascadeEnabled,
+  promoteOpenGrepFindings,
+} from "../triage/triage.js";
 
 function makePatch(path: string, additions = 10): FilePatch {
   const lines = Array.from({ length: additions }, (_, i) => `+line ${i}`).join("\n");
@@ -166,6 +171,133 @@ describe("splitByClassification", () => {
     expect(skip).toHaveLength(5);
     expect(skim).toHaveLength(0);
     expect(deepReview).toHaveLength(0);
+  });
+});
+
+describe("promoteOpenGrepFindings", () => {
+  function makeFinding(file: string): OpenGrepFinding {
+    return {
+      ruleId: "python.sqlalchemy.security.text-sql-injection",
+      file,
+      startLine: 10,
+      endLine: 10,
+      message: "Potential SQL injection via sa.text()",
+      severity: "error",
+    };
+  }
+
+  const baseFiles: TriageFileResult[] = [
+    { path: "src/datasource_service.py", classification: "skim", reason: "mostly tests" },
+    { path: "src/unrelated.py", classification: "skim", reason: "docs" },
+    { path: "tests/fixtures.py", classification: "skip", reason: "fixtures" },
+    { path: "src/auth.py", classification: "deep-review", reason: "security-sensitive" },
+  ];
+
+  it("promotes a skim-classified file when opengrep flags it", () => {
+    const findings = [makeFinding("src/datasource_service.py")];
+    const result = promoteOpenGrepFindings(baseFiles, findings);
+
+    const promoted = result.find((f) => f.path === "src/datasource_service.py");
+    expect(promoted?.classification).toBe("deep-review");
+    expect(promoted?.reason).toBe("opengrep finding");
+  });
+
+  it("promotes a skip-classified file when opengrep flags it", () => {
+    const findings = [makeFinding("tests/fixtures.py")];
+    const result = promoteOpenGrepFindings(baseFiles, findings);
+
+    const promoted = result.find((f) => f.path === "tests/fixtures.py");
+    expect(promoted?.classification).toBe("deep-review");
+    expect(promoted?.reason).toBe("opengrep finding");
+  });
+
+  it("leaves unflagged files unchanged", () => {
+    const findings = [makeFinding("src/datasource_service.py")];
+    const result = promoteOpenGrepFindings(baseFiles, findings);
+
+    const untouched = result.find((f) => f.path === "src/unrelated.py");
+    expect(untouched?.classification).toBe("skim");
+    expect(untouched?.reason).toBe("docs");
+  });
+
+  it("preserves existing deep-review classification and reason", () => {
+    const findings = [makeFinding("src/auth.py")];
+    const result = promoteOpenGrepFindings(baseFiles, findings);
+
+    const preserved = result.find((f) => f.path === "src/auth.py");
+    expect(preserved?.classification).toBe("deep-review");
+    expect(preserved?.reason).toBe("security-sensitive");
+  });
+
+  it("returns files unchanged when no findings are provided", () => {
+    expect(promoteOpenGrepFindings(baseFiles, undefined)).toEqual(baseFiles);
+    expect(promoteOpenGrepFindings(baseFiles, [])).toEqual(baseFiles);
+  });
+
+  it("matches paths with ./ prefix", () => {
+    const findings = [makeFinding("./src/datasource_service.py")];
+    const result = promoteOpenGrepFindings(baseFiles, findings);
+
+    const promoted = result.find((f) => f.path === "src/datasource_service.py");
+    expect(promoted?.classification).toBe("deep-review");
+  });
+
+  it("matches paths with backslash separators", () => {
+    const files: TriageFileResult[] = [
+      { path: "src/utils/db.py", classification: "skim", reason: "simple" },
+    ];
+    const findings = [makeFinding("src\\utils\\db.py")];
+    const result = promoteOpenGrepFindings(files, findings);
+
+    expect(result[0].classification).toBe("deep-review");
+  });
+
+  it("matches paths with trailing line:col suffix", () => {
+    const files: TriageFileResult[] = [
+      { path: "src/db.py", classification: "skim", reason: "simple" },
+    ];
+    const findings = [makeFinding("src/db.py:42:10")];
+    const result = promoteOpenGrepFindings(files, findings);
+
+    expect(result[0].classification).toBe("deep-review");
+  });
+
+  it("ignores findings referring to files not in the triage set", () => {
+    const findings = [makeFinding("src/not-in-pr.py")];
+    const result = promoteOpenGrepFindings(baseFiles, findings);
+
+    expect(result).toEqual(baseFiles);
+  });
+
+  it("promotes multiple files when multiple findings match", () => {
+    const findings = [makeFinding("src/datasource_service.py"), makeFinding("tests/fixtures.py")];
+    const result = promoteOpenGrepFindings(baseFiles, findings);
+
+    expect(result.find((f) => f.path === "src/datasource_service.py")?.classification).toBe(
+      "deep-review",
+    );
+    expect(result.find((f) => f.path === "tests/fixtures.py")?.classification).toBe("deep-review");
+    expect(result.find((f) => f.path === "src/unrelated.py")?.classification).toBe("skim");
+  });
+
+  it("collapses multiple findings on the same file into one promotion", () => {
+    const findings = [
+      makeFinding("src/datasource_service.py"),
+      makeFinding("src/datasource_service.py"),
+    ];
+    const result = promoteOpenGrepFindings(baseFiles, findings);
+
+    expect(result.filter((f) => f.path === "src/datasource_service.py")).toHaveLength(1);
+    expect(result.find((f) => f.path === "src/datasource_service.py")?.classification).toBe(
+      "deep-review",
+    );
+  });
+
+  it("does not mutate the input files array", () => {
+    const findings = [makeFinding("src/datasource_service.py")];
+    const snapshot = JSON.parse(JSON.stringify(baseFiles));
+    promoteOpenGrepFindings(baseFiles, findings);
+    expect(baseFiles).toEqual(snapshot);
   });
 });
 
