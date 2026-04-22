@@ -18,6 +18,7 @@
   "references": [
     { "path": "packages/core" },
     { "path": "packages/github" },
+    { "path": "packages/github-action" },
     { "path": "packages/azure-devops" }
   ]
 }

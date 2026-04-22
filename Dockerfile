@@ -7,6 +7,7 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/core/package.json ./packages/core/
 COPY packages/github/package.json ./packages/github/
+COPY packages/github-action/package.json ./packages/github-action/
 COPY packages/azure-devops/package.json ./packages/azure-devops/
 COPY packages/dashboard/package.json ./packages/dashboard/
 
@@ -41,6 +42,7 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/core/package.json ./packages/core/
 COPY packages/github/package.json ./packages/github/
+COPY packages/github-action/package.json ./packages/github-action/
 COPY packages/azure-devops/package.json ./packages/azure-devops/
 COPY packages/dashboard/package.json ./packages/dashboard/
 
@@ -48,6 +50,7 @@ RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 COPY --from=build /app/packages/core/dist ./packages/core/dist
 COPY --from=build /app/packages/github/dist ./packages/github/dist
+COPY --from=build /app/packages/github-action/dist ./packages/github-action/dist
 COPY --from=build /app/packages/azure-devops/dist ./packages/azure-devops/dist
 COPY --from=build /app/packages/dashboard/dist ./packages/dashboard/dist
 
@@ -69,11 +72,17 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 COPY <<'EOF' /app/entrypoint.sh
 #!/bin/sh
 set -e
-if [ "$RUSTY_MODE" = "pipeline" ]; then
-  exec node /app/packages/azure-devops/dist/index.js
-else
-  exec node /app/packages/github/dist/server.js
-fi
+case "$RUSTY_MODE" in
+  pipeline)
+    exec node /app/packages/azure-devops/dist/index.js
+    ;;
+  github-action)
+    exec node /app/packages/github-action/dist/cli.js
+    ;;
+  *)
+    exec node /app/packages/github/dist/server.js
+    ;;
+esac
 EOF
 
 RUN chmod +x /app/entrypoint.sh
