@@ -11,6 +11,7 @@ function makeEnv(overrides: Record<string, string | undefined> = {}): NodeJS.Pro
   const defaults: Record<string, string> = {
     GITHUB_TOKEN: "ghs_abc123",
     GITHUB_REPOSITORY: "jegork/ai-review",
+    ANTHROPIC_API_KEY: "sk-ant-test",
   };
   const merged: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(defaults)) {
@@ -158,6 +159,73 @@ describe("parseConfig", () => {
       });
       expect(config.failOnCritical).toBe(true);
     }
+  });
+
+  describe("LLM credential validation", () => {
+    it("throws when the model provider's API key env var is missing", () => {
+      expect(() =>
+        parseConfig({ event: BASE_EVENT, env: makeEnv({ ANTHROPIC_API_KEY: undefined }) }),
+      ).toThrow(/ANTHROPIC_API_KEY is missing/);
+    });
+
+    it("validates against the provider prefix of RUSTY_LLM_MODEL, not the default", () => {
+      expect(() =>
+        parseConfig({
+          event: BASE_EVENT,
+          env: makeEnv({
+            ANTHROPIC_API_KEY: undefined,
+            RUSTY_LLM_MODEL: "openai/gpt-4o",
+          }),
+        }),
+      ).toThrow(/OPENAI_API_KEY is missing/);
+
+      expect(() =>
+        parseConfig({
+          event: BASE_EVENT,
+          env: makeEnv({
+            ANTHROPIC_API_KEY: undefined,
+            RUSTY_LLM_MODEL: "openai/gpt-4o",
+            OPENAI_API_KEY: "sk-openai",
+          }),
+        }),
+      ).not.toThrow();
+    });
+
+    it("skips key validation when RUSTY_LLM_BASE_URL is set (custom endpoint)", () => {
+      expect(() =>
+        parseConfig({
+          event: BASE_EVENT,
+          env: makeEnv({
+            ANTHROPIC_API_KEY: undefined,
+            RUSTY_LLM_BASE_URL: "http://localhost:4000/v1",
+          }),
+        }),
+      ).not.toThrow();
+    });
+
+    it("skips key validation for Azure managed identity", () => {
+      expect(() =>
+        parseConfig({
+          event: BASE_EVENT,
+          env: makeEnv({
+            ANTHROPIC_API_KEY: undefined,
+            RUSTY_AZURE_RESOURCE_NAME: "my-resource",
+          }),
+        }),
+      ).not.toThrow();
+    });
+
+    it("skips key validation for unknown provider prefixes (router-handled)", () => {
+      expect(() =>
+        parseConfig({
+          event: BASE_EVENT,
+          env: makeEnv({
+            ANTHROPIC_API_KEY: undefined,
+            RUSTY_LLM_MODEL: "requesty/google/gemini-3.1-flash-lite-preview",
+          }),
+        }),
+      ).not.toThrow();
+    });
   });
 
   it("enables description generation only on exact 'true'", () => {

@@ -57,17 +57,42 @@ interface ParseConfigOptions {
   env?: NodeJS.ProcessEnv;
 }
 
+const PROVIDER_API_KEY_ENV: Record<string, string> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+  google: "GOOGLE_GENERATIVE_AI_API_KEY",
+  "azure-openai": "AZURE_OPENAI_API_KEY",
+};
+
+function assertLlmCredentials(env: NodeJS.ProcessEnv): void {
+  if (env.RUSTY_LLM_BASE_URL || env.RUSTY_AZURE_RESOURCE_NAME) {
+    return;
+  }
+
+  const model = env.RUSTY_LLM_MODEL ?? "anthropic/claude-sonnet-4-20250514";
+  const provider = model.split("/")[0]?.toLowerCase();
+  if (!provider) return;
+
+  const requiredKey = PROVIDER_API_KEY_ENV[provider];
+  if (!requiredKey || env[requiredKey]) return;
+
+  throw new Error(
+    `RUSTY_LLM_MODEL is set to "${model}" but ${requiredKey} is missing. Provide the matching API key, or set RUSTY_LLM_BASE_URL / RUSTY_AZURE_RESOURCE_NAME for alternative providers.`,
+  );
+}
+
 export function parseConfig({ event, env = process.env }: ParseConfigOptions): ActionConfig {
   const token = env.GITHUB_TOKEN ?? env.INPUT_GITHUB_TOKEN;
   const repository = env.GITHUB_REPOSITORY;
 
-  const missing: string[] = [];
-  if (!token) missing.push("GITHUB_TOKEN");
-  if (!repository) missing.push("GITHUB_REPOSITORY");
-  if (missing.length > 0) {
+  if (!token || !repository) {
+    const missing: string[] = [];
+    if (!token) missing.push("GITHUB_TOKEN");
+    if (!repository) missing.push("GITHUB_REPOSITORY");
     throw new Error(`missing required env vars: ${missing.join(", ")}`);
   }
-  if (!token || !repository) throw new Error("unreachable");
+
+  assertLlmCredentials(env);
 
   const { owner, repo } = parseOwnerRepo(repository);
 
