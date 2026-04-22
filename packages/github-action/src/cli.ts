@@ -109,9 +109,20 @@ export function parseConfig({ event, env = process.env }: ParseConfigOptions): A
     throw new Error(`invalid review style: ${reviewStyle}`);
   }
 
-  const focusAreas = (env.RUSTY_FOCUS_AREAS?.split(",")
-    .map((s) => s.trim())
-    .filter(Boolean) ?? []) as FocusArea[];
+  const rawFocusAreas =
+    env.RUSTY_FOCUS_AREAS?.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) ?? [];
+  const focusAreas = rawFocusAreas.filter((area): area is FocusArea =>
+    (ALL_FOCUS_AREAS as string[]).includes(area),
+  );
+  const invalidFocusAreas = rawFocusAreas.filter((area) => !focusAreas.includes(area as FocusArea));
+  if (invalidFocusAreas.length > 0) {
+    log.warn(
+      { invalid: invalidFocusAreas, allowed: ALL_FOCUS_AREAS },
+      "ignoring unknown RUSTY_FOCUS_AREAS values",
+    );
+  }
   const ignorePatterns =
     env.RUSTY_IGNORE_PATTERNS?.split(",")
       .map((s) => s.trim())

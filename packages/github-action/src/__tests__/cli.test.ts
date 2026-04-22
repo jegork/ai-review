@@ -135,6 +135,22 @@ describe("parseConfig", () => {
     expect(onlyCommas).toHaveLength(6);
   });
 
+  it("filters unknown focus area values out and keeps the valid ones", () => {
+    const config = parseConfig({
+      event: BASE_EVENT,
+      env: makeEnv({ RUSTY_FOCUS_AREAS: "security,bogus,bugs,YOLO" }),
+    });
+    expect(config.review.focusAreas).toEqual(["security", "bugs"]);
+  });
+
+  it("falls back to all focus areas when every provided value is invalid", () => {
+    const config = parseConfig({
+      event: BASE_EVENT,
+      env: makeEnv({ RUSTY_FOCUS_AREAS: "bogus,YOLO" }),
+    });
+    expect(config.review.focusAreas).toHaveLength(6);
+  });
+
   it("parses ignore patterns", () => {
     const config = parseConfig({
       event: BASE_EVENT,

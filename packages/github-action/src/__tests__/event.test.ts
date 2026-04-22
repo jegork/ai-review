@@ -146,7 +146,7 @@ describe("readEventPayload", () => {
   it("throws when JSON is malformed", async () => {
     const path = join(dir, "event.json");
     await writeFile(path, "{not json");
-    await expect(readEventPayload(path)).rejects.toThrow();
+    await expect(readEventPayload(path)).rejects.toThrow(SyntaxError);
   });
 
   it("throws when required shape is violated (pull_request.number as string)", async () => {
