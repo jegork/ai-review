@@ -107,6 +107,32 @@ function buildDroppedFindingsSection(dropped: DroppedFinding[], passes: number):
   return lines.join("\n");
 }
 
+function buildElevatedConcernsSection(
+  dropped: DroppedFinding[],
+  passes: number,
+  threshold: number,
+): string {
+  const lines: string[] = [];
+  lines.push(`## Elevated Concerns (${dropped.length})`);
+  lines.push("");
+  lines.push(
+    `> No finding reached the consensus threshold of ${threshold}/${passes} passes, but each pass raised a concern. ` +
+      `The overall recommendation was elevated because multiple passes agreed something needs attention, ` +
+      `even though they did not agree on what. Review these manually — they may be real issues, noise, ` +
+      `or different angles on the same underlying problem.`,
+  );
+  lines.push("");
+  lines.push("| File | Line | Severity | Message | Votes |");
+  lines.push("|------|------|----------|---------|-------|");
+  for (const f of dropped) {
+    lines.push(
+      `| \`${f.file}\` | ${f.line} | ${f.severity} | ${sanitizeTableCell(f.message)} | ${f.voteCount}/${passes} |`,
+    );
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
 function buildTicketFetchMessage(status: TicketResolutionStatus): string {
   if (status.totalRefsFound === 0) {
     return "No linked ticket references detected.";
@@ -148,14 +174,23 @@ export function formatSummaryComment(
   const counts = countBySeverity(review.findings);
   const totalIssues = review.findings.length;
 
+  const droppedCount = review.droppedFindings?.length ?? 0;
+  const isElevatedWithoutSurvivors =
+    review.consensusMetadata?.recommendationElevated === true &&
+    totalIssues === 0 &&
+    droppedCount > 0;
+
   const lines: string[] = [];
 
   lines.push("# Code Review Summary");
   lines.push("");
   lines.push("---");
   lines.push("");
+  const statusSuffix = isElevatedWithoutSurvivors
+    ? ` — ${droppedCount} elevated concern${droppedCount === 1 ? "" : "s"} below`
+    : "";
   lines.push(
-    `**Status:** ${totalIssues} Issues Found | **Recommendation:** ${RECOMMENDATION_TEXT[review.recommendation]}`,
+    `**Status:** ${totalIssues} Issues Found${statusSuffix} | **Recommendation:** ${RECOMMENDATION_TEXT[review.recommendation]}`,
   );
   lines.push("");
 
@@ -165,6 +200,16 @@ export function formatSummaryComment(
 
   if (review.openGrepStats) {
     lines.push(buildOpenGrepStatsSection(review.openGrepStats));
+  }
+
+  if (isElevatedWithoutSurvivors && review.droppedFindings && review.consensusMetadata) {
+    lines.push(
+      buildElevatedConcernsSection(
+        review.droppedFindings,
+        review.consensusMetadata.passes,
+        review.consensusMetadata.threshold,
+      ),
+    );
   }
 
   lines.push("## Overview");
@@ -198,7 +243,12 @@ export function formatSummaryComment(
   lines.push("</details>");
   lines.push("");
 
-  if (review.droppedFindings && review.droppedFindings.length > 0 && review.consensusMetadata) {
+  if (
+    !isElevatedWithoutSurvivors &&
+    review.droppedFindings &&
+    review.droppedFindings.length > 0 &&
+    review.consensusMetadata
+  ) {
     lines.push(
       buildDroppedFindingsSection(review.droppedFindings, review.consensusMetadata.passes),
     );
