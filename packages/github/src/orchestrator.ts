@@ -193,7 +193,7 @@ export async function orchestrateReview(params: {
 
       let triageResult;
       try {
-        triageResult = await runTriage(reviewable);
+        triageResult = await runTriage(reviewable, openGrepFindings);
       } catch (err) {
         log.warn({ err }, "triage failed, falling back to full review");
       }
