@@ -17,7 +17,6 @@ permissions:
 jobs:
   review:
     runs-on: ubuntu-latest
-    # skip PRs from forks — they cannot access the LLM secret
     if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +25,15 @@ jobs:
         uses: ./
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          review-style: balanced
-          fail-on-critical: "true"
+          llm-api-key: ${{ secrets.REQUESTY_API_KEY }}
+        env:
+          RUSTY_LLM_MODEL: requesty/moonshotai/kimi-k2.5
+          RUSTY_LLM_BASE_URL: https://router.requesty.ai/v1
+          RUSTY_REVIEW_TEMPERATURE: "1"
+          RUSTY_JUDGE_ENABLED: "true"
+          RUSTY_JUDGE_MODEL: requesty/google/gemini-3.1-flash-lite-preview
+          RUSTY_JUDGE_TEMPERATURE: "0"
+          RUSTY_LLM_TRIAGE_MODEL: requesty/google/gemini-3.1-flash-lite-preview
+          RUSTY_TRIAGE_TEMPERATURE: "0"
+          RUSTY_REVIEW_STYLE: balanced
+          RUSTY_FAIL_ON_CRITICAL: "true"
