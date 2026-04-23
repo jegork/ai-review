@@ -41,7 +41,7 @@ inputs:
 # See the README for the full list of RUSTY_* env vars.
 runs:
   using: docker
-  image: docker://ghcr.io/jegork/ai-review:${{ github.action_ref }}
+  image: Dockerfile
   env:
     RUSTY_MODE: github-action
     GITHUB_TOKEN: ${{ inputs.github-token }}
