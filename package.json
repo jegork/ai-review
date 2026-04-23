@@ -1,6 +1,7 @@
 {
   "name": "rusty-bot",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest run --passWithNoTests",
