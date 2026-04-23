@@ -1,0 +1,56 @@
+---
+title: Getting started
+description: Add Rusty Bot to your repo as a one-step GitHub Action.
+---
+
+The fastest way to try Rusty Bot is to drop the GitHub Action into your repo.
+
+## 1. Add the workflow
+
+Create `.github/workflows/rusty-bot-review.yml`:
+
+```yaml
+name: Rusty Bot review
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: jegork/ai-review@v1
+        env:
+          RUSTY_LLM_MODEL: anthropic/claude-sonnet-4-20250514
+          RUSTY_REVIEW_STYLE: balanced
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+## 2. Add the API key
+
+Under **Settings → Secrets and variables → Actions**, add `ANTHROPIC_API_KEY`
+(or `OPENAI_API_KEY` / `GOOGLE_API_KEY`) — match the provider in
+`RUSTY_LLM_MODEL`.
+
+## 3. Open a PR
+
+That's it. Rusty Bot will run on the next PR and post a structured review with
+a summary comment plus inline findings on the diff.
+
+## Pinning
+
+| Pin | Behaviour |
+| --- | --- |
+| `@v1` | Floats to the latest `1.x.x` release. **Recommended.** |
+| `@v1.2.3` | Pinned to an exact release. |
+| `@main` | Tracks `main`. Use only for development. |
+
+Pinning to a specific SHA is supported only for the action repo itself; the
+underlying Docker image is published per release tag.
