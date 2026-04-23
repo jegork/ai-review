@@ -1,0 +1,54 @@
+name: Rusty Bot Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+concurrency:
+  group: rusty-bot-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: read
+  packages: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v4
+
+      # the action.yml points at a private GHCR image; the runner's implicit
+      # docker pull during `docker run` doesn't reuse docker/login-action's
+      # credentials, so authenticate and pull explicitly first
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pre-pull Rusty Bot image
+        run: docker pull ghcr.io/jegork/ai-review:latest
+
+      - name: Run Rusty Bot
+        uses: ./
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          # mastra's native requesty provider reads this directly; no base-url
+          # wiring needed when the model id already starts with "requesty/"
+          REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY }}
+          RUSTY_LLM_MODEL: requesty/moonshot/kimi-k2.5
+          RUSTY_REVIEW_TEMPERATURE: "1"
+          RUSTY_JUDGE_ENABLED: "true"
+          RUSTY_JUDGE_MODEL: requesty/google/gemini-3.1-flash-lite-preview
+          RUSTY_JUDGE_TEMPERATURE: "0"
+          RUSTY_LLM_TRIAGE_MODEL: requesty/google/gemini-3.1-flash-lite-preview
+          RUSTY_TRIAGE_TEMPERATURE: "0"
+          RUSTY_REVIEW_STYLE: balanced
+          RUSTY_FAIL_ON_CRITICAL: "true"

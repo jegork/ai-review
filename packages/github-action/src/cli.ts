@@ -372,7 +372,7 @@ export async function runAction(config: ActionConfig): Promise<number> {
   return 0;
 }
 
-async function main(): Promise<void> {
+async function main(): Promise<number> {
   const eventPath = process.env.GITHUB_EVENT_PATH;
   if (!eventPath) {
     throw new Error("GITHUB_EVENT_PATH is not set — this CLI must run inside a GitHub Action");
@@ -383,23 +383,23 @@ async function main(): Promise<void> {
   const skip = shouldSkipEvent(event);
   if (skip.skip) {
     log.info({ reason: skip.reason }, "skipping review");
-    return;
+    return 0;
   }
 
   const config = parseConfig({ event });
-  const exitCode = await runAction(config);
-  if (exitCode !== 0) {
-    flushLogger(() => process.exit(exitCode));
-    // keep the event loop alive until the logger drains
-    await new Promise(() => undefined);
-  }
+  return await runAction(config);
 }
 
 const isDirectRun = process.argv[1] && import.meta.url === `file://${process.argv[1]}`;
 
 if (isDirectRun) {
-  main().catch((err: unknown) => {
-    log.fatal({ err }, "fatal error");
-    flushLogger(() => process.exit(2));
-  });
+  // node won't exit on its own once main() resolves — the pino async transport
+  // worker, ai-sdk connection pools, and any leftover libsql/mcp handles keep
+  // the event loop alive. flush logs and force-exit on every termination path.
+  main()
+    .then((code) => flushLogger(() => process.exit(code)))
+    .catch((err: unknown) => {
+      log.fatal({ err }, "fatal error");
+      flushLogger(() => process.exit(2));
+    });
 }

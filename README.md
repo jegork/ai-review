@@ -107,9 +107,11 @@ jobs:
       - uses: jegork/ai-review@v1
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          review-style: balanced
-          focus-areas: security,bugs,performance
-          fail-on-critical: "true"
+        env:
+          RUSTY_LLM_MODEL: anthropic/claude-sonnet-4-20250514
+          RUSTY_REVIEW_STYLE: balanced
+          RUSTY_FOCUS_AREAS: security,bugs,performance
+          RUSTY_FAIL_ON_CRITICAL: "true"
 ```
 
 **Required permissions** (set on the job, not the whole workflow):
@@ -118,22 +120,20 @@ jobs:
 - `issues: read` — read linked issues for ticket compliance
 - `contents: read` — read the diff and convention file from the target branch
 
-**Action inputs:**
+**Action inputs** (secret-bearing only — everything else flows through `env:`):
 
-| Input | Default | Notes |
-|---|---|---|
-| `github-token` | `${{ github.token }}` | Built-in token has the right scopes when the `permissions:` block above is set |
-| `review-style` | `balanced` | One of `strict`, `balanced`, `lenient`, `roast`, `thorough` |
-| `focus-areas` | _all_ | Comma-separated: `security,performance,bugs,style,tests,docs` |
-| `ignore-patterns` | — | Comma-separated glob patterns (e.g. `*.lock,dist/**`) |
-| `llm-model` | `anthropic/claude-sonnet-4-20250514` | `provider/model` format |
-| `fail-on-critical` | `true` | Exit code 1 on critical findings — gates the PR |
-| `generate-description` | `false` | Generate a PR description when empty/placeholder |
-| `review-drafts` | `false` | Review draft PRs (skipped by default) |
-| `opengrep-rules` | `auto` | OpenGrep ruleset or config path |
-| `anthropic-api-key` / `openai-api-key` / `google-api-key` | — | Pass exactly one, matching your `llm-model` provider |
-| `jira-base-url` / `jira-email` / `jira-api-token` | — | Enable Jira ticket compliance |
-| `linear-api-key` | — | Enable Linear ticket compliance |
+| Input | Notes |
+|---|---|
+| `github-token` | Defaults to `${{ github.token }}`; the built-in token works when the `permissions:` block above is set |
+| `anthropic-api-key` | Required when `RUSTY_LLM_MODEL` targets an `anthropic/*` model |
+| `openai-api-key` | Required when `RUSTY_LLM_MODEL` targets an `openai/*` model |
+| `google-api-key` | Required when `RUSTY_LLM_MODEL` targets a `google/*` model |
+| `azure-openai-api-key` | Required when `RUSTY_LLM_MODEL` targets an `azure-openai/*` model |
+| `llm-api-key` | API key for an OpenAI-compatible endpoint (set together with `RUSTY_LLM_BASE_URL`, e.g. LiteLLM, Requesty, vLLM) |
+| `jira-api-token` | Enable Jira ticket compliance (combine with `RUSTY_JIRA_BASE_URL` + `RUSTY_JIRA_EMAIL` env) |
+| `linear-api-key` | Enable Linear ticket compliance |
+
+Everything else — `RUSTY_REVIEW_STYLE`, `RUSTY_FOCUS_AREAS`, `RUSTY_LLM_MODEL`, `RUSTY_JUDGE_*`, `RUSTY_LLM_TRIAGE_MODEL`, temperatures, `RUSTY_OPENGREP_RULES`, `RUSTY_REVIEW_DRAFTS`, etc. — is set per-step via `env:`. See the env-var table below for the full list.
 
 The Action runs inside the published Docker image (`ghcr.io/jegork/ai-review:latest`), which includes OpenGrep. First run in a repo adds ~20–40s for the image pull; subsequent runs are cached by the runner.
 
