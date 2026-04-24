@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/jegork/ai-review/compare/v1.0.0...v1.0.1) (2026-04-24)
+
+
+### Documentation
+
+* full documentation overhaul ([dbf0520](https://github.com/jegork/ai-review/commit/dbf052061cb2bfd88ff26d6650e3b6173a1f9770))
+* full documentation overhaul — providers, guides, env-vars ([f2ef26e](https://github.com/jegork/ai-review/commit/f2ef26e49555506d2bca9a0492e3245634e40263))
+
 ## 1.0.0 (2026-04-23)
 
 
