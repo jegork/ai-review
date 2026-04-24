@@ -10,7 +10,7 @@ const BASE_EVENT: PullRequestEvent = {
 function makeEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
   const defaults: Record<string, string> = {
     GITHUB_TOKEN: "ghs_abc123",
-    GITHUB_REPOSITORY: "jegork/ai-review",
+    GITHUB_REPOSITORY: "jegork/rusty-bot",
     ANTHROPIC_API_KEY: "sk-ant-test",
   };
   const merged: NodeJS.ProcessEnv = {};
@@ -37,7 +37,7 @@ describe("parseConfig", () => {
   it("parses a minimal valid config", () => {
     const config = parseConfig({ event: BASE_EVENT, env: makeEnv() });
     expect(config.owner).toBe("jegork");
-    expect(config.repo).toBe("ai-review");
+    expect(config.repo).toBe("rusty-bot");
     expect(config.pullNumber).toBe(42);
     expect(config.token).toBe("ghs_abc123");
     expect(config.review.style).toBe("balanced");
