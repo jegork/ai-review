@@ -1,6 +1,6 @@
 ---
 title: Action inputs
-description: Inputs accepted by the jegork/ai-review GitHub Action.
+description: Inputs accepted by the jegork/rusty-bot GitHub Action.
 ---
 
 Pass these via the `with:` block of the action step. Only `github-token` is

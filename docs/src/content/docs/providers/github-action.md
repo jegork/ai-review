@@ -22,7 +22,7 @@ jobs:
       contents: read
       issues: read
     steps:
-      - uses: jegork/ai-review@v1
+      - uses: jegork/rusty-bot@v1
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
         env:
@@ -76,4 +76,4 @@ The Action exits early (no error, no review) for these PR event types:
 
 ## Docker image
 
-The Action runs inside `ghcr.io/jegork/ai-review:latest`, which includes OpenGrep. The first run in a fresh runner environment adds roughly 20–40s for the image pull; subsequent runs on cached runners skip this entirely.
+The Action runs inside `ghcr.io/jegork/rusty-bot:latest`, which includes OpenGrep. The first run in a fresh runner environment adds roughly 20–40s for the image pull; subsequent runs on cached runners skip this entirely.

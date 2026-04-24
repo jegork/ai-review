@@ -12,7 +12,7 @@ Setting `RUSTY_FAIL_ON_CRITICAL=true` causes Rusty Bot to exit with code 1 when 
 Add `RUSTY_FAIL_ON_CRITICAL: "true"` to the step `env:`:
 
 ```yaml
-- uses: jegork/ai-review@v1
+- uses: jegork/rusty-bot@v1
   env:
     RUSTY_FAIL_ON_CRITICAL: "true"
   with:

@@ -118,6 +118,6 @@ See [GitHub App (self-hosted)](/providers/github-app/).
 ---
 
 For the canonical list, see
-[`action.yml`](https://github.com/jegork/ai-review/blob/main/action.yml) and
-[`.env.example`](https://github.com/jegork/ai-review/blob/main/.env.example) in
+[`action.yml`](https://github.com/jegork/rusty-bot/blob/main/action.yml) and
+[`.env.example`](https://github.com/jegork/rusty-bot/blob/main/.env.example) in
 the repo.

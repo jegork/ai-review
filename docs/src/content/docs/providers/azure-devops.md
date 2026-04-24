@@ -24,7 +24,7 @@ pool:
   vmImage: ubuntu-latest
 
 container:
-  image: ghcr.io/jegork/ai-review:latest
+  image: ghcr.io/jegork/rusty-bot:latest
   env:
     RUSTY_MODE: pipeline
 

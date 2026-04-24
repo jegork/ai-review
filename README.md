@@ -104,7 +104,7 @@ jobs:
       contents: read
       issues: read
     steps:
-      - uses: jegork/ai-review@v1
+      - uses: jegork/rusty-bot@v1
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
         env:
@@ -135,7 +135,7 @@ jobs:
 
 Everything else — `RUSTY_REVIEW_STYLE`, `RUSTY_FOCUS_AREAS`, `RUSTY_LLM_MODEL`, `RUSTY_JUDGE_*`, `RUSTY_LLM_TRIAGE_MODEL`, temperatures, `RUSTY_OPENGREP_RULES`, `RUSTY_REVIEW_DRAFTS`, etc. — is set per-step via `env:`. See the env-var table below for the full list.
 
-The Action runs inside the published Docker image (`ghcr.io/jegork/ai-review:latest`), which includes OpenGrep. First run in a repo adds ~20–40s for the image pull; subsequent runs are cached by the runner.
+The Action runs inside the published Docker image (`ghcr.io/jegork/rusty-bot:latest`), which includes OpenGrep. First run in a repo adds ~20–40s for the image pull; subsequent runs are cached by the runner.
 
 **Skipped events:** the Action exits early with no error for `closed`/`labeled`/`unlabeled`/`assigned`/`unassigned` and for draft PRs (unless `review-drafts: "true"`).
 
@@ -155,7 +155,7 @@ pool:
   vmImage: ubuntu-latest
 
 container:
-  image: ghcr.io/jegork/ai-review:latest
+  image: ghcr.io/jegork/rusty-bot:latest
   env:
     RUSTY_MODE: pipeline
 
@@ -555,10 +555,10 @@ This repo publishes agent skills under `skills/`. They're indexed by [skills.sh]
 
 ```bash
 # install every skill in this repo
-npx skills add jegork/ai-review
+npx skills add jegork/rusty-bot
 
 # or just one
-npx skills add jegork/ai-review/pr-comment-monitor
+npx skills add jegork/rusty-bot/pr-comment-monitor
 ```
 
 Available skills:

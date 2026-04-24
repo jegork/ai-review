@@ -25,7 +25,7 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: jegork/ai-review@v1
+      - uses: jegork/rusty-bot@v1
         env:
           RUSTY_LLM_MODEL: anthropic/claude-sonnet-4-20250514
           RUSTY_REVIEW_STYLE: balanced
