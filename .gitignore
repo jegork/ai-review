@@ -6,7 +6,10 @@ dist/
 *.db-wal
 *.tsbuildinfo
 .env
-.env.local
+.env.*
+*.pem
+*.key
+*.secret
 mcp-servers.json
 .mastra/
 .claude/

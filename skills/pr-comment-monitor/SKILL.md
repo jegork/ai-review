@@ -97,6 +97,6 @@ Always leave a short summary at the end: mode used, how many iterations ran, how
 
 ## Authentication notes
 
-- GitHub MCP tools in this harness are scoped to `jegork/ai-review`. Outside that repo, fall back to `gh` or a `GITHUB_TOKEN` env var.
+- GitHub MCP tools in this harness are scoped to the current repository. If they are not configured for your repo, fall back to `gh` or a `GITHUB_TOKEN` env var.
 - For Azure DevOps use `RUSTY_ADO_PAT` (already documented in this repo's `.env.example`) or `SYSTEM_ACCESSTOKEN` when running in a pipeline.
 - Never echo tokens into the terminal output or commit messages.
