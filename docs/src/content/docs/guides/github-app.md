@@ -9,7 +9,7 @@ Action minutes), set it up as a GitHub App.
 
 ## 1. Create the App
 
-Use the [`github-app-manifest.json`](https://github.com/jegork/ai-review/blob/main/github-app-manifest.json)
+Use the [`github-app-manifest.json`](https://github.com/jegork/rusty-bot/blob/main/github-app-manifest.json)
 template, or create a new App at
 `https://github.com/settings/apps/new` with these permissions:
 

@@ -31,6 +31,6 @@ server, and the Azure DevOps task without duplication.
 | `RUSTY_LINEAR_API_KEY` | Linear API key (also exposed as the `linear-api-key` action input). |
 
 For the canonical list, see
-[`action.yml`](https://github.com/jegork/ai-review/blob/main/action.yml) and
-[`.env.example`](https://github.com/jegork/ai-review/blob/main/.env.example) in
+[`action.yml`](https://github.com/jegork/rusty-bot/blob/main/action.yml) and
+[`.env.example`](https://github.com/jegork/rusty-bot/blob/main/.env.example) in
 the repo.

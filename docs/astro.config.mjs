@@ -4,7 +4,7 @@ import starlight from "@astrojs/starlight";
 
 export default defineConfig({
   site: "https://jegork.github.io",
-  base: "/ai-review",
+  base: "/rusty-bot",
   integrations: [
     starlight({
       title: "Rusty Bot",
@@ -14,11 +14,11 @@ export default defineConfig({
         {
           icon: "github",
           label: "GitHub",
-          href: "https://github.com/jegork/ai-review",
+          href: "https://github.com/jegork/rusty-bot",
         },
       ],
       editLink: {
-        baseUrl: "https://github.com/jegork/ai-review/edit/main/docs/",
+        baseUrl: "https://github.com/jegork/rusty-bot/edit/main/docs/",
       },
       lastUpdated: true,
       pagination: true,

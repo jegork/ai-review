@@ -6,7 +6,7 @@ import { readEventPayload, parseOwnerRepo, extractPullNumber, shouldSkipEvent } 
 
 describe("parseOwnerRepo", () => {
   it("splits a valid owner/repo string", () => {
-    expect(parseOwnerRepo("jegork/ai-review")).toEqual({ owner: "jegork", repo: "ai-review" });
+    expect(parseOwnerRepo("jegork/rusty-bot")).toEqual({ owner: "jegork", repo: "rusty-bot" });
   });
 
   it("throws on missing slash", () => {
@@ -119,7 +119,7 @@ describe("readEventPayload", () => {
           head: { ref: "feat", sha: "abc" },
           base: { ref: "main", sha: "def" },
         },
-        repository: { name: "ai-review", owner: { login: "jegork" } },
+        repository: { name: "rusty-bot", owner: { login: "jegork" } },
       }),
     );
 
