@@ -1,11 +1,9 @@
 ---
-title: Self-hosted GitHub App
-description: Run Rusty Bot as a GitHub App webhook server instead of a per-PR Action.
+title: GitHub App (self-hosted)
+description: Run Rusty Bot as a long-lived webhook server — single install across all your repos.
 ---
 
-The GitHub Action is the easy path. If you'd rather run Rusty Bot as a
-long-lived webhook server (single install across many repos, no per-PR
-Action minutes), set it up as a GitHub App.
+The GitHub Action runs once per PR on a GitHub-hosted runner. If you'd rather run Rusty Bot as a persistent webhook server — a single install that covers all repos in your org without per-PR Action minutes — set it up as a GitHub App.
 
 ## 1. Create the App
 
@@ -50,3 +48,7 @@ The dashboard is at `/`, health check at `/health`, and webhooks at
 
 Install the App on any repo from the App's public install URL. PRs in those
 repos will get reviewed automatically.
+
+:::note
+The webhook server also supports Azure DevOps — see [Azure DevOps](/providers/azure-devops/).
+:::
