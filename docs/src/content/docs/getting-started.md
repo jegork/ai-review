@@ -54,3 +54,10 @@ a summary comment plus inline findings on the diff.
 
 Pinning to a specific SHA is supported only for the action repo itself; the
 underlying Docker image is published per release tag.
+
+## Next steps
+
+- [Full GitHub Action reference](/providers/github-action/) — complete inputs, skipped events, and Docker image details
+- [GitHub App (self-hosted)](/providers/github-app/) — run as a webhook server for multiple repos
+- [Azure DevOps](/providers/azure-devops/) — run in Azure Pipelines
+- [LLM providers](/guides/llm-providers/) — connect Azure OpenAI, OpenAI-compatible endpoints, or any of 99+ providers
