@@ -233,6 +233,22 @@ describe("formatConventionalTitle", () => {
     expect(result.startsWith("refactor!: ")).toBe(true);
     expect(isConventionalTitle(result)).toBe(true);
   });
+
+  it("drops the scope and then truncates when both are needed", () => {
+    const scope = "a".repeat(50);
+    const subject = "b".repeat(MAX_TITLE_LENGTH + 100);
+    const result = formatConventionalTitle({
+      type: "feat",
+      scope,
+      subject,
+      isBreaking: false,
+    });
+    expect(result.length).toBeLessThanOrEqual(MAX_TITLE_LENGTH);
+    expect(result).not.toContain("(");
+    expect(result.startsWith("feat: ")).toBe(true);
+    expect(result.endsWith("…")).toBe(true);
+    expect(isConventionalTitle(result)).toBe(true);
+  });
 });
 
 describe("ConventionalTitleOutputSchema", () => {
