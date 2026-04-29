@@ -213,12 +213,14 @@ The task exits with code 1 when critical issues are found (configurable via `RUS
 | `RUSTY_CASCADE_ENABLED` | explicitly enable/disable cascading (`true`/`false`) | auto (enabled when triage model is set) |
 | `RUSTY_OPENGREP_RULES` | OpenGrep config string (ruleset or path to rule file) | `auto` |
 | `RUSTY_GENERATE_DESCRIPTION` | generate PR description when empty/placeholder | `false` |
+| `RUSTY_RENAME_TITLE_TO_CONVENTIONAL` | rewrite non-conventional PR titles into Conventional Commits format | `false` |
 | `RUSTY_LLM_TEMPERATURE` | global LLM temperature | provider default |
 | `RUSTY_LLM_TOP_P` | global LLM top-p | provider default |
 | `RUSTY_REVIEW_TEMPERATURE` | temperature override for the review agent | `RUSTY_LLM_TEMPERATURE` |
 | `RUSTY_TRIAGE_TEMPERATURE` | temperature override for the triage agent | `RUSTY_LLM_TEMPERATURE` |
 | `RUSTY_JUDGE_TEMPERATURE` | temperature override for the judge agent | `RUSTY_LLM_TEMPERATURE` |
 | `RUSTY_DESCRIPTION_TEMPERATURE` | temperature override for the description agent | `RUSTY_LLM_TEMPERATURE` |
+| `RUSTY_TITLE_TEMPERATURE` | temperature override for the title-rename agent | `RUSTY_LLM_TEMPERATURE` |
 
 ### LLM Provider Configuration
 
@@ -494,6 +496,25 @@ Or per-repo in the dashboard (PR Description checkbox).
 5. The review then runs with the generated description visible in the PR metadata
 
 **Safety:** The bot never overwrites a human-written description. The detection is conservative — any description with meaningful prose, issue references, or structured content is left untouched. Bot-generated descriptions (identified by an HTML marker) can be regenerated on subsequent runs.
+
+### Conventional Commit Title Rewriting
+
+When a PR title does not already follow the [Conventional Commits](https://www.conventionalcommits.org/) spec (e.g. `feat: add login`, `fix(auth): handle expired tokens`), Rusty Bot can rewrite it into one before the review starts. Useful when squash-merging into a repo that derives changelog/release notes from PR titles.
+
+Off by default. Enable via:
+
+```bash
+RUSTY_RENAME_TITLE_TO_CONVENTIONAL=true
+```
+
+**How it works:**
+
+1. Before the review starts, the bot inspects the current PR title
+2. If the title already matches the Conventional Commits regex (`type(scope)?!?: subject`), it is left untouched
+3. Otherwise, a dedicated agent picks a `type` (`feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`), an optional `scope`, a cleaned subject line, and a breaking-change flag based on the diff and metadata
+4. The new title is written back to the PR via the platform API and used for the rest of the run
+
+**Safety:** Already-conventional titles are never modified. The agent reuses wording from the original title and only adjusts the prefix, scope, and casing. The rewrite is wrapped in a try/catch — failures are logged and the review continues with the original title.
 
 ### Tree-sitter Context Expansion
 

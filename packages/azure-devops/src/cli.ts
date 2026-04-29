@@ -22,6 +22,8 @@ import {
   extractChangedFilePaths,
   generatePRDescription,
   shouldGenerateDescription,
+  generateConventionalTitle,
+  isConventionalTitle,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
@@ -107,6 +109,27 @@ async function main(): Promise<void> {
     { total: rawPatches.length, reviewed: reviewable.length, skipped: skippedCount },
     "files changed",
   );
+
+  if (process.env.RUSTY_RENAME_TITLE_TO_CONVENTIONAL === "true") {
+    try {
+      if (!isConventionalTitle(metadata.title)) {
+        const titleResult = await generateConventionalTitle(reviewable, metadata);
+        await provider.updatePRTitle(titleResult.title);
+        log.info(
+          {
+            originalTitle: metadata.title,
+            newTitle: titleResult.title,
+            model: titleResult.modelUsed,
+            tokens: titleResult.tokenCount,
+          },
+          "renamed PR title to conventional commit format",
+        );
+        metadata.title = titleResult.title;
+      }
+    } catch (err) {
+      log.warn({ err }, "failed to rename PR title, continuing with review");
+    }
+  }
 
   if (process.env.RUSTY_GENERATE_DESCRIPTION === "true") {
     try {

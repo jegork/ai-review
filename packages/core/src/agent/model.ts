@@ -115,13 +115,14 @@ export interface ModelSettings {
   topP?: number;
 }
 
-type AgentKind = "review" | "triage" | "judge" | "description";
+type AgentKind = "review" | "triage" | "judge" | "description" | "title";
 
 const AGENT_ENV_PREFIX: Record<AgentKind, string> = {
   review: "RUSTY_REVIEW",
   triage: "RUSTY_TRIAGE",
   judge: "RUSTY_JUDGE",
   description: "RUSTY_DESCRIPTION",
+  title: "RUSTY_TITLE",
 };
 
 function readNumericEnv(

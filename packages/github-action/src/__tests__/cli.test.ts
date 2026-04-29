@@ -51,6 +51,7 @@ describe("parseConfig", () => {
     ]);
     expect(config.failOnCritical).toBe(true);
     expect(config.generateDescription).toBe(false);
+    expect(config.renameTitleToConventional).toBe(false);
   });
 
   it("throws when GITHUB_TOKEN is missing", () => {
@@ -260,5 +261,25 @@ describe("parseConfig", () => {
     ).toBe(false);
 
     expect(parseConfig({ event: BASE_EVENT, env: makeEnv() }).generateDescription).toBe(false);
+  });
+
+  it("enables conventional title rename only on exact 'true'", () => {
+    expect(
+      parseConfig({
+        event: BASE_EVENT,
+        env: makeEnv({ RUSTY_RENAME_TITLE_TO_CONVENTIONAL: "true" }),
+      }).renameTitleToConventional,
+    ).toBe(true);
+
+    expect(
+      parseConfig({
+        event: BASE_EVENT,
+        env: makeEnv({ RUSTY_RENAME_TITLE_TO_CONVENTIONAL: "1" }),
+      }).renameTitleToConventional,
+    ).toBe(false);
+
+    expect(parseConfig({ event: BASE_EVENT, env: makeEnv() }).renameTitleToConventional).toBe(
+      false,
+    );
   });
 });
