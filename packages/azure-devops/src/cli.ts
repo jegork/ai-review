@@ -24,6 +24,7 @@ import {
   shouldGenerateDescription,
   generateConventionalTitle,
   isConventionalTitle,
+  filterAnchorableFindings,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
@@ -286,9 +287,30 @@ async function main(): Promise<void> {
 
   const summaryMarkdown = formatSummaryComment(review, { ticketResolution });
   await provider.postSummaryComment(summaryMarkdown);
-  await provider.postInlineComments(review.findings);
 
-  log.info({ inlineComments: review.findings.length }, "posted summary and inline comments");
+  const { anchored: inlineFindings, dropped } = filterAnchorableFindings(
+    review.findings,
+    reviewable,
+  );
+  if (dropped.length > 0) {
+    log.warn(
+      {
+        droppedCount: dropped.length,
+        samples: dropped.slice(0, 5).map((d) => ({
+          file: d.finding.file,
+          line: d.finding.line,
+          reason: d.reason,
+        })),
+      },
+      "dropped findings that don't anchor to the diff before posting inline comments",
+    );
+  }
+  await provider.postInlineComments(inlineFindings);
+
+  log.info(
+    { inlineComments: inlineFindings.length, droppedAnchors: dropped.length },
+    "posted summary and inline comments",
+  );
 
   if (failOnCritical && criticalCount > 0) {
     log.warn({ criticalCount }, "failing pipeline due to critical issues");

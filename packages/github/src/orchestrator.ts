@@ -26,6 +26,7 @@ import {
   shouldGenerateDescription,
   generateConventionalTitle,
   isConventionalTitle,
+  filterAnchorableFindings,
 } from "@rusty-bot/core";
 import { GitHubProvider } from "./provider.js";
 import { getRepoConfig, saveReview, getSetting, type ReviewRecord } from "./storage.js";
@@ -286,7 +287,24 @@ export async function orchestrateReview(params: {
     const summary = formatSummaryComment(result, { ticketResolution });
     await provider.postSummaryComment(summary);
 
-    const inlineFindings = result.findings.filter((f) => f.line > 0);
+    const inlineCandidates = result.findings.filter((f) => f.line > 0);
+    const { anchored: inlineFindings, dropped } = filterAnchorableFindings(
+      inlineCandidates,
+      reviewable,
+    );
+    if (dropped.length > 0) {
+      log.warn(
+        {
+          droppedCount: dropped.length,
+          samples: dropped.slice(0, 5).map((d) => ({
+            file: d.finding.file,
+            line: d.finding.line,
+            reason: d.reason,
+          })),
+        },
+        "dropped findings that don't anchor to the diff before posting inline comments",
+      );
+    }
     if (inlineFindings.length > 0) {
       await provider.postInlineComments(inlineFindings);
     }
