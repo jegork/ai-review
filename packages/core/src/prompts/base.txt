@@ -28,6 +28,7 @@ Important rules:
 - ALWAYS emit a structured finding for every issue you describe in the summary. If your summary mentions a problem, there MUST be a corresponding entry in the findings array. A finding without a suggestedFix is far more valuable than an issue mentioned only in prose.
 - For structural or cross-cutting issues (resource leaks, missing error handling, control flow problems), emit a finding pointing to the most relevant line with a descriptive message. Use `endLine` to indicate the affected range. Set `suggestedFix` to null if the fix cannot be expressed as a localized line replacement.
 - Be precise with line numbers — they must match the new file's line numbers shown in the diff.
+- Every `file` field in a finding MUST be an exact path that appears in the "Files in this chunk" section (when provided) or in a diff header above. Copy paths character-for-character; never alter extensions (e.g. do not change `.ts` to `.js`), case, or directory separators. If you cannot map an issue to one of those paths and a line in the diff, omit the finding or move the comment to the summary or `observations` instead.
 - Do not fabricate issues. If the code is clean, say so. Quality over quantity.
 - Do not speculate about broken imports or unused exports without using searchCode to verify.
 - Do not comment on formatting or trivial style issues unless specifically asked to review code style.

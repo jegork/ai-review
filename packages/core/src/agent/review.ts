@@ -92,6 +92,8 @@ export interface RunReviewOptions {
   tier?: ReviewTier;
   /** Files changed in the PR but not present in the current review chunk. */
   otherPrFiles?: string[];
+  /** Files actually present in the current review chunk; used to constrain finding paths. */
+  chunkFiles?: string[];
   /** OpenGrep findings to feed to the LLM for triage. */
   openGrepFindings?: OpenGrepFinding[];
 }
@@ -125,6 +127,7 @@ export async function runReview(
     options?.languageSummary,
     options?.otherPrFiles,
     options?.openGrepFindings,
+    options?.chunkFiles,
   );
   const modelConfig = resolveModelConfig();
   const model = resolveModel(modelConfig);
