@@ -41,7 +41,7 @@ inputs:
 # See the README for the full list of RUSTY_* env vars.
 runs:
   using: docker
-  image: Dockerfile
+  image: docker://ghcr.io/jegork/rusty-bot:latest
   env:
     RUSTY_MODE: github-action
     GITHUB_TOKEN: ${{ inputs.github-token }}
