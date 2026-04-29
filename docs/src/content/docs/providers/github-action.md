@@ -32,7 +32,7 @@ jobs:
           RUSTY_FAIL_ON_CRITICAL: "true"
 ```
 
-The [Getting started](/getting-started/) page has the bare minimum to get running. This page is the complete reference.
+The [Getting started](/rusty-bot/getting-started/) page has the bare minimum to get running. This page is the complete reference.
 
 ## Required permissions
 
