@@ -453,4 +453,22 @@ describe("judgeReviewResult", () => {
     expect(result.judgeTokenCount).toBe(200);
     expect(result.summary).toBe("test review");
   });
+
+  it("passes droppedFindings through unchanged when judge runs", async () => {
+    const review: ReviewResult = {
+      ...makeReviewResult([makeFinding()]),
+      droppedFindings: [
+        { file: "x.ts", line: 1, severity: "warning", message: "dropped 1", voteCount: 1 },
+        { file: "y.ts", line: 2, severity: "critical", message: "dropped 2", voteCount: 1 },
+      ],
+    };
+
+    generateMock.mockResolvedValueOnce({
+      object: { evaluations: [{ index: 0, confidence: 9, reasoning: "valid" }] },
+      usage: { totalTokens: 50 },
+    });
+
+    const result = await judgeReviewResult(review, DIFF, { enabled: true, threshold: 6 });
+    expect(result.droppedFindings).toEqual(review.droppedFindings);
+  });
 });

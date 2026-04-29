@@ -10,6 +10,7 @@ import type {
   TicketComplianceItem,
   TicketComplianceStatus,
   MissingTestItem,
+  DroppedFinding,
 } from "../types.js";
 import type { OpenGrepFinding } from "../opengrep/types.js";
 import { runReview, type RunReviewOptions, type ReviewTier } from "./review.js";
@@ -122,6 +123,17 @@ export function mergeResults(results: ReviewResult[], modelUsed: string): Review
     return true;
   });
 
+  const droppedSeen = new Set<string>();
+  const dedupedDropped: DroppedFinding[] = [];
+  for (const r of results) {
+    for (const d of r.droppedFindings ?? []) {
+      const key = `${d.file}:${d.line}:${d.message}`;
+      if (droppedSeen.has(key)) continue;
+      droppedSeen.add(key);
+      dedupedDropped.push(d);
+    }
+  }
+
   const criticalCount = dedupedFindings.filter((f) => f.severity === "critical").length;
 
   const summaries = results.map((r) => r.summary).filter(Boolean);
@@ -158,6 +170,7 @@ export function mergeResults(results: ReviewResult[], modelUsed: string): Review
     tokenCount: totalTokens,
     ...(triageStats ? { triageStats } : {}),
     ...(consensusMetadata && { consensusMetadata }),
+    ...(dedupedDropped.length > 0 && { droppedFindings: dedupedDropped }),
   };
 }
 

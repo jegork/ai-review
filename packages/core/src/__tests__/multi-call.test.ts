@@ -550,6 +550,122 @@ describe("mergeResults", () => {
     const merged = mergeResults([result1, result2], "test-model");
     expect(merged.recommendation).toBe("looks_good");
   });
+
+  it("carries droppedFindings from each input result through into the merged result", () => {
+    const skimResult: ReviewResult = {
+      summary: "skim",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      missingTests: [],
+      filesReviewed: ["a.ts"],
+      modelUsed: "test-model",
+      tokenCount: 10,
+    };
+
+    const deepResult: ReviewResult = {
+      summary: "deep elevated",
+      recommendation: "address_before_merge",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      missingTests: [],
+      filesReviewed: ["b.ts"],
+      modelUsed: "test-model",
+      tokenCount: 50,
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 0,
+        recommendationElevated: true,
+        passRecommendations: [
+          "address_before_merge",
+          "address_before_merge",
+          "address_before_merge",
+        ],
+        failedPasses: 0,
+      },
+      droppedFindings: [
+        { file: "b.ts", line: 10, severity: "warning", message: "fallback bug", voteCount: 1 },
+        {
+          file: "c.ts",
+          line: 20,
+          severity: "warning",
+          message: "dao delete helper safety",
+          voteCount: 1,
+        },
+      ],
+    };
+
+    const merged = mergeResults([skimResult, deepResult], "test-model");
+
+    expect(merged.droppedFindings).toBeDefined();
+    expect(merged.droppedFindings).toHaveLength(2);
+    expect(merged.droppedFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ file: "b.ts", line: 10, message: "fallback bug" }),
+        expect.objectContaining({ file: "c.ts", line: 20, message: "dao delete helper safety" }),
+      ]),
+    );
+  });
+
+  it("merges droppedFindings across multiple results and deduplicates by file:line:message", () => {
+    const r1: ReviewResult = {
+      summary: "r1",
+      recommendation: "address_before_merge",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      missingTests: [],
+      filesReviewed: ["a.ts"],
+      modelUsed: "test-model",
+      tokenCount: 10,
+      droppedFindings: [
+        { file: "a.ts", line: 5, severity: "warning", message: "shared finding", voteCount: 1 },
+        { file: "a.ts", line: 8, severity: "warning", message: "r1 only", voteCount: 1 },
+      ],
+    };
+
+    const r2: ReviewResult = {
+      summary: "r2",
+      recommendation: "address_before_merge",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      missingTests: [],
+      filesReviewed: ["a.ts"],
+      modelUsed: "test-model",
+      tokenCount: 10,
+      droppedFindings: [
+        { file: "a.ts", line: 5, severity: "warning", message: "shared finding", voteCount: 1 },
+        { file: "a.ts", line: 12, severity: "critical", message: "r2 only", voteCount: 1 },
+      ],
+    };
+
+    const merged = mergeResults([r1, r2], "test-model");
+
+    expect(merged.droppedFindings).toHaveLength(3);
+    const messages = (merged.droppedFindings ?? []).map((d) => d.message).sort();
+    expect(messages).toEqual(["r1 only", "r2 only", "shared finding"]);
+  });
+
+  it("omits droppedFindings when no input result has any", () => {
+    const r1: ReviewResult = {
+      summary: "r1",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      missingTests: [],
+      filesReviewed: ["a.ts"],
+      modelUsed: "test-model",
+      tokenCount: 10,
+    };
+
+    const merged = mergeResults([r1, r1], "test-model");
+    expect(merged.droppedFindings).toBeUndefined();
+  });
 });
 
 describe("runCascadeReview", () => {
