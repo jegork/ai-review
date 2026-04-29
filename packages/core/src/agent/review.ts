@@ -26,6 +26,29 @@ function isStructuredOutputValidationError(err: unknown): boolean {
   );
 }
 
+// AI SDK marks transient upstream failures (headers timeout, 5xx, connection reset)
+// with isRetryable=true. Mastra's internal pRetry handles per-request retries; this
+// catches the case where its retries exhausted within a single tight timeout window
+// and gives the caller a fresh request budget.
+function isTransientRetryableError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "isRetryable" in err &&
+    (err as { isRetryable: unknown }).isRetryable === true
+  );
+}
+
+const TRANSIENT_RETRY_BACKOFF_MS = [500, 2_000];
+
+function readMaxTransientRetries(): number {
+  const raw = process.env.RUSTY_LLM_MAX_RETRIES;
+  if (raw === undefined) return TRANSIENT_RETRY_BACKOFF_MS.length;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return TRANSIENT_RETRY_BACKOFF_MS.length;
+  return Math.min(Math.floor(n), TRANSIENT_RETRY_BACKOFF_MS.length);
+}
+
 async function generateWithStructuredOutputRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -37,6 +60,26 @@ async function generateWithStructuredOutputRetry<T>(fn: () => Promise<T>): Promi
     );
     return await fn();
   }
+}
+
+async function generateWithTransientRetry<T>(fn: () => Promise<T>): Promise<T> {
+  const maxRetries = readMaxTransientRetries();
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isTransientRetryableError(err) || attempt === maxRetries) throw err;
+      const backoffMs = TRANSIENT_RETRY_BACKOFF_MS[attempt];
+      log.warn(
+        { err, attempt: attempt + 1, maxRetries, backoffMs },
+        "transient LLM error, retrying after backoff",
+      );
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
+  throw lastErr;
 }
 
 export type ReviewTier = "skim" | "deep-review";
@@ -101,11 +144,13 @@ export async function runReview(
   const schema = tier === "skim" ? SkimReviewOutputSchema : ReviewOutputSchema;
 
   const modelSettings = resolveModelSettings("review");
-  const response = await generateWithStructuredOutputRetry(() =>
-    agent.generate(userMessage, {
-      structuredOutput: { schema },
-      ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
-    }),
+  const response = await generateWithTransientRetry(() =>
+    generateWithStructuredOutputRetry(() =>
+      agent.generate(userMessage, {
+        structuredOutput: { schema },
+        ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
+      }),
+    ),
   );
 
   const parsed = response.object;

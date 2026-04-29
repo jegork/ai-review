@@ -214,6 +214,7 @@ The task exits with code 1 when critical issues are found (configurable via `RUS
 | `RUSTY_OPENGREP_RULES` | OpenGrep config string (ruleset or path to rule file) | `auto` |
 | `RUSTY_GENERATE_DESCRIPTION` | generate PR description when empty/placeholder | `false` |
 | `RUSTY_RENAME_TITLE_TO_CONVENTIONAL` | rewrite non-conventional PR titles into Conventional Commits format | `false` |
+| `RUSTY_LLM_MAX_RETRIES` | application-level retries on transient LLM errors (max 2) | `2` |
 | `RUSTY_LLM_TEMPERATURE` | global LLM temperature | provider default |
 | `RUSTY_LLM_TOP_P` | global LLM top-p | provider default |
 | `RUSTY_REVIEW_TEMPERATURE` | temperature override for the review agent | `RUSTY_LLM_TEMPERATURE` |
