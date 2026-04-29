@@ -22,17 +22,52 @@ import { Card, CardGrid } from "@astrojs/starlight/components";
   <Card title="Cascading triage" icon="puzzle">
     A cheap model classifies files as skip / skim / deep-review so the heavyweight
     model only runs where it pays off.
+
+    [Learn more →](/guides/cascading-review/)
   </Card>
   <Card title="Tree-sitter context" icon="document">
     Hunks expand to enclosing function/class boundaries — the model sees real
     semantic context instead of arbitrary line counts.
+
+    [Learn more →](/guides/tree-sitter/)
   </Card>
   <Card title="OpenGrep pre-scan" icon="seti:lock">
     SAST findings on changed files inform triage before the LLM runs, so
     obvious security issues are never missed.
+
+    [Learn more →](/guides/opengrep/)
   </Card>
   <Card title="Consensus voting" icon="approve-check">
     Multiple review passes vote on each finding; lonely false positives are
     dropped automatically.
+
+    [Learn more →](/guides/consensus-voting/)
+  </Card>
+</CardGrid>
+
+## More to explore
+
+<CardGrid>
+  <Card title="Judge pass" icon="approve-check-circle">
+    A second model re-scores findings against a quality bar and drops the noise.
+
+    [Learn more →](/guides/judge-pass/)
+  </Card>
+  <Card title="Convention files" icon="open-book">
+    Drop a `REVIEW-BOT.md` or `.rusty-bot.md` in your repo to teach the bot your
+    house rules.
+
+    [Learn more →](/guides/convention-files/)
+  </Card>
+  <Card title="Ticket integration" icon="list-format">
+    Pull Linear / Jira / GitHub issue context into the review so findings are
+    judged against actual requirements.
+
+    [Learn more →](/guides/ticket-integration/)
+  </Card>
+  <Card title="Gating merges" icon="error">
+    Fail the check on critical findings to block merges until they're addressed.
+
+    [Learn more →](/guides/gating-merges/)
   </Card>
 </CardGrid>
