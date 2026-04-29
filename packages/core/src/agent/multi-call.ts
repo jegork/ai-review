@@ -251,7 +251,10 @@ async function runTieredReview(
   if (tier === "skim") {
     const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
     if (skippedFiles.length === 0) {
-      const result = await runReview(config, compressed, prMetadata, ticketContext, tierOptions);
+      const result = await runReview(config, compressed, prMetadata, ticketContext, {
+        ...tierOptions,
+        chunkFiles: patches.map((p) => p.path),
+      });
       return [result];
     }
     const groups = splitIntoGroups(patches, maxTokens);
@@ -264,6 +267,7 @@ async function runTieredReview(
       const result = await runReview(config, groupDiff, prMetadata, groupTickets, {
         ...tierOptions,
         openGrepFindings: groupOpenGrep,
+        chunkFiles: [...groupPaths],
       });
       results.push(result);
     }
@@ -279,7 +283,7 @@ async function runTieredReview(
       prMetadata,
       compressed,
       ticketContext,
-      tierOptions,
+      { ...tierOptions, chunkFiles: patches.map((p) => p.path) },
     );
     return [result];
   }
@@ -296,7 +300,7 @@ async function runTieredReview(
       prMetadata,
       groupCompressed,
       ticketContext,
-      { ...tierOptions, openGrepFindings: groupOpenGrep },
+      { ...tierOptions, openGrepFindings: groupOpenGrep, chunkFiles: [...groupPaths] },
     );
     results.push(groupResult);
   }
@@ -335,14 +339,10 @@ export async function runMultiCallReview(
     let result: ReviewResult;
 
     if (skippedFiles.length === 0) {
-      result = await runConsensusReview(
-        patches,
-        config,
-        prMetadata,
-        compressed,
-        ticketContext,
-        resolvedOptions,
-      );
+      result = await runConsensusReview(patches, config, prMetadata, compressed, ticketContext, {
+        ...resolvedOptions,
+        chunkFiles: patches.map((p) => p.path),
+      });
     } else {
       const groups = splitIntoGroups(patches, maxTokens);
 
@@ -372,7 +372,12 @@ export async function runMultiCallReview(
           prMetadata,
           groupCompressed,
           ticketContext,
-          { ...resolvedOptions, otherPrFiles, openGrepFindings: groupOpenGrep },
+          {
+            ...resolvedOptions,
+            otherPrFiles,
+            openGrepFindings: groupOpenGrep,
+            chunkFiles: [...groupPaths],
+          },
         );
         results.push(groupResult);
       }

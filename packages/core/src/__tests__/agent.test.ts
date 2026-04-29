@@ -222,6 +222,51 @@ describe("buildUserMessage", () => {
     const diffIdx = msg.indexOf("## Diff");
     expect(otherFilesIdx).toBeLessThan(diffIdx);
   });
+
+  it("includes 'Files in this chunk' section when chunkFiles is provided", () => {
+    const msg = buildUserMessage("diff", prMetadata, undefined, undefined, undefined, undefined, [
+      "packages/core/src/title/parse.ts",
+      "packages/core/src/title/schema.ts",
+    ]);
+    expect(msg).toContain("## Files in this chunk");
+    expect(msg).toContain("`packages/core/src/title/parse.ts`");
+    expect(msg).toContain("`packages/core/src/title/schema.ts`");
+    expect(msg).toContain("Copy each path exactly as written");
+  });
+
+  it("omits 'Files in this chunk' section when chunkFiles is empty", () => {
+    const msg = buildUserMessage(
+      "diff",
+      prMetadata,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [],
+    );
+    expect(msg).not.toContain("## Files in this chunk");
+  });
+
+  it("omits 'Files in this chunk' section when chunkFiles is undefined", () => {
+    const msg = buildUserMessage("diff", prMetadata);
+    expect(msg).not.toContain("## Files in this chunk");
+  });
+
+  it("places 'Files in this chunk' before the diff", () => {
+    const msg = buildUserMessage(
+      "diff content here",
+      prMetadata,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ["src/foo.ts"],
+    );
+    const chunkIdx = msg.indexOf("## Files in this chunk");
+    const diffIdx = msg.indexOf("## Diff");
+    expect(chunkIdx).toBeGreaterThan(-1);
+    expect(chunkIdx).toBeLessThan(diffIdx);
+  });
 });
 
 describe("ReviewOutputSchema", () => {

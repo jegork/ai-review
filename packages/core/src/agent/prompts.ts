@@ -69,6 +69,7 @@ export function buildUserMessage(
   languageSummary?: string,
   otherPrFiles?: string[],
   openGrepFindings?: OpenGrepFinding[],
+  chunkFiles?: string[],
 ): string {
   const parts: string[] = [];
 
@@ -83,6 +84,17 @@ export function buildUserMessage(
 
   if (prMetadata.description) {
     parts.push(`\n**Description:**\n${prMetadata.description}`);
+  }
+
+  if (chunkFiles && chunkFiles.length > 0) {
+    parts.push("\n## Files in this chunk");
+    parts.push(
+      "These are the only paths your `findings` may reference. Copy each path exactly as written — " +
+        "do not change extensions (e.g. `.ts` → `.js`), do not normalize separators, do not invent " +
+        "siblings. If you cannot anchor an issue to one of these paths and a line in the diff, " +
+        "describe it in the summary or as an `observation` instead of a finding.\n",
+    );
+    parts.push(chunkFiles.map((f) => `- \`${f}\``).join("\n"));
   }
 
   if (ticketContext && ticketContext.length > 0) {
