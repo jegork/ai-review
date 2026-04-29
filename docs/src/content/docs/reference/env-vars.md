@@ -54,6 +54,7 @@ The managed identity vars (`RUSTY_AZURE_*`) take priority over the API-key vars 
 | `RUSTY_TRIAGE_TEMPERATURE` | `RUSTY_LLM_TEMPERATURE` | Temperature override for the triage agent |
 | `RUSTY_JUDGE_TEMPERATURE` | `RUSTY_LLM_TEMPERATURE` | Temperature override for the judge agent |
 | `RUSTY_DESCRIPTION_TEMPERATURE` | `RUSTY_LLM_TEMPERATURE` | Temperature override for the description agent |
+| `RUSTY_TITLE_TEMPERATURE` | `RUSTY_LLM_TEMPERATURE` | Temperature override for the title-rename agent |
 
 Per-agent values override the global setting; omitting any value falls back to the provider default.
 
@@ -91,6 +92,14 @@ See [OpenGrep pre-scan](/guides/opengrep/).
 | `RUSTY_GENERATE_DESCRIPTION` | `false` | Generate a PR description when it's empty or a placeholder |
 
 See [PR description generation](/guides/pr-description/).
+
+## PR title rewriting
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `RUSTY_RENAME_TITLE_TO_CONVENTIONAL` | `false` | Rewrite non-conventional PR titles into Conventional Commits format |
+
+See [PR title rewriting](/guides/pr-title/).
 
 ## Ticket integrations
 
