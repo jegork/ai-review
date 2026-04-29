@@ -48,8 +48,13 @@ export async function generateConventionalTitle(
   const parsed = response.object;
   const tokenCount = response.usage.totalTokens ?? 0;
 
+  const title = formatConventionalTitle(parsed);
+  if (!isConventionalTitle(title)) {
+    throw new Error(`generated title failed conventional commit validation: ${title}`);
+  }
+
   return {
-    title: formatConventionalTitle(parsed),
+    title,
     output: parsed,
     modelUsed: modelName,
     tokenCount,

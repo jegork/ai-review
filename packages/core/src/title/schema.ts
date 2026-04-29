@@ -24,12 +24,14 @@ export const ConventionalTitleOutputSchema = z.object({
   ),
   scope: z
     .string()
+    .min(1)
     .nullable()
     .describe(
       "optional short scope describing the area of the codebase affected (lowercase, no spaces); null when no clear scope applies",
     ),
   subject: z
     .string()
+    .min(1)
     .describe(
       "concise imperative-mood subject line, lowercase first letter, no trailing period, no type prefix",
     ),

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { isConventionalTitle, formatConventionalTitle } from "../title/parse.js";
+import { isConventionalTitle, formatConventionalTitle, MAX_TITLE_LENGTH } from "../title/parse.js";
 import { ConventionalTitleOutputSchema } from "../title/schema.js";
 import { buildTitleUserMessage } from "../title/prompt.js";
 import type { PRMetadata } from "../types.js";
@@ -180,6 +180,59 @@ describe("formatConventionalTitle", () => {
     });
     expect(isConventionalTitle(output)).toBe(true);
   });
+
+  it("leaves a title that fits within the limit unchanged", () => {
+    const subject = "a".repeat(200);
+    const result = formatConventionalTitle({
+      type: "feat",
+      scope: "auth",
+      subject,
+      isBreaking: false,
+    });
+    expect(result.length).toBeLessThanOrEqual(MAX_TITLE_LENGTH);
+    expect(result).toBe(`feat(auth): ${subject}`);
+  });
+
+  it("drops the scope when including it would exceed the title limit", () => {
+    const scope = "a".repeat(50);
+    const subject = "b".repeat(MAX_TITLE_LENGTH - 10);
+    const result = formatConventionalTitle({
+      type: "feat",
+      scope,
+      subject,
+      isBreaking: false,
+    });
+    expect(result.length).toBeLessThanOrEqual(MAX_TITLE_LENGTH);
+    expect(result).not.toContain("(");
+    expect(result).toBe(`feat: ${subject}`);
+  });
+
+  it("truncates the subject when it alone overflows the title limit", () => {
+    const subject = "a".repeat(MAX_TITLE_LENGTH + 100);
+    const result = formatConventionalTitle({
+      type: "feat",
+      scope: null,
+      subject,
+      isBreaking: false,
+    });
+    expect(result.length).toBeLessThanOrEqual(MAX_TITLE_LENGTH);
+    expect(result.startsWith("feat: ")).toBe(true);
+    expect(result.endsWith("…")).toBe(true);
+    expect(isConventionalTitle(result)).toBe(true);
+  });
+
+  it("preserves the breaking marker after truncation", () => {
+    const subject = "a".repeat(MAX_TITLE_LENGTH + 50);
+    const result = formatConventionalTitle({
+      type: "refactor",
+      scope: "api",
+      subject,
+      isBreaking: true,
+    });
+    expect(result.length).toBeLessThanOrEqual(MAX_TITLE_LENGTH);
+    expect(result.startsWith("refactor!: ")).toBe(true);
+    expect(isConventionalTitle(result)).toBe(true);
+  });
 });
 
 describe("ConventionalTitleOutputSchema", () => {
@@ -215,6 +268,26 @@ describe("ConventionalTitleOutputSchema", () => {
 
   it("rejects missing required fields", () => {
     expect(ConventionalTitleOutputSchema.safeParse({ type: "feat" }).success).toBe(false);
+  });
+
+  it("rejects empty subject", () => {
+    const invalid = {
+      type: "feat",
+      scope: null,
+      subject: "",
+      isBreaking: false,
+    };
+    expect(ConventionalTitleOutputSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  it("rejects empty scope (must be null instead)", () => {
+    const invalid = {
+      type: "feat",
+      scope: "",
+      subject: "do thing",
+      isBreaking: false,
+    };
+    expect(ConventionalTitleOutputSchema.safeParse(invalid).success).toBe(false);
   });
 
   it("passes openai strict mode — all properties in required", () => {
