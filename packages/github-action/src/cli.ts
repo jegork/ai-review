@@ -28,6 +28,7 @@ import {
   generateConventionalTitle,
   isConventionalTitle,
   parseDiff,
+  filterAnchorableFindings,
 } from "@rusty-bot/core";
 import { GitHubProvider, createOctokitIssueFetcher } from "@rusty-bot/github";
 import {
@@ -384,12 +385,32 @@ export async function runAction(config: ActionConfig): Promise<number> {
   const summaryMarkdown = formatSummaryComment(review, { ticketResolution });
   await provider.postSummaryComment(summaryMarkdown);
 
-  const inlineFindings = review.findings.filter((f) => f.line > 0);
+  const inlineCandidates = review.findings.filter((f) => f.line > 0);
+  const { anchored: inlineFindings, dropped } = filterAnchorableFindings(
+    inlineCandidates,
+    reviewable,
+  );
+  if (dropped.length > 0) {
+    log.warn(
+      {
+        droppedCount: dropped.length,
+        samples: dropped.slice(0, 5).map((d) => ({
+          file: d.finding.file,
+          line: d.finding.line,
+          reason: d.reason,
+        })),
+      },
+      "dropped findings that don't anchor to the diff before posting inline comments",
+    );
+  }
   if (inlineFindings.length > 0) {
     await provider.postInlineComments(inlineFindings);
   }
 
-  log.info({ inlineComments: inlineFindings.length }, "posted summary and inline comments");
+  log.info(
+    { inlineComments: inlineFindings.length, droppedAnchors: dropped.length },
+    "posted summary and inline comments",
+  );
 
   if (failOnCritical && criticalCount > 0) {
     log.warn({ criticalCount }, "failing action due to critical issues");
