@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ReviewConfig, PRMetadata } from "../types.js";
 
 const generateMock = vi.fn();
@@ -140,5 +140,107 @@ describe("runReview retry on STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED", () => 
 
     await expect(runReview(config, "diff", prMetadata)).rejects.toThrow("provider timeout");
     expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+class FakeApiCallError extends Error {
+  isRetryable: boolean;
+  constructor(message: string, isRetryable: boolean) {
+    super(message);
+    this.name = "AI_APICallError";
+    this.isRetryable = isRetryable;
+  }
+}
+
+describe("runReview retry on transient LLM errors", () => {
+  beforeEach(() => {
+    generateMock.mockReset();
+    delete process.env.RUSTY_LLM_MAX_RETRIES;
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function settle<T>(promise: Promise<T>): Promise<T> {
+    // attach a noop rejection handler so vitest doesn't flag this as
+    // an unhandled rejection while the test suite is awaiting timers
+    promise.catch(() => undefined);
+    await vi.advanceTimersByTimeAsync(10_000);
+    return promise;
+  }
+
+  it("retries when the call throws an isRetryable=true error", async () => {
+    generateMock
+      .mockRejectedValueOnce(new FakeApiCallError("Headers Timeout Error", true))
+      .mockResolvedValueOnce(makeValidResponse());
+
+    const result = await settle(runReview(config, "diff", prMetadata));
+
+    expect(generateMock).toHaveBeenCalledTimes(2);
+    expect(result.recommendation).toBe("looks_good");
+  });
+
+  it("does not retry an error with isRetryable=false", async () => {
+    generateMock.mockRejectedValueOnce(new FakeApiCallError("auth failed", false));
+
+    await expect(settle(runReview(config, "diff", prMetadata))).rejects.toThrow("auth failed");
+    expect(generateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry generic errors that lack the isRetryable marker", async () => {
+    generateMock.mockRejectedValueOnce(new Error("misc network glitch"));
+
+    await expect(settle(runReview(config, "diff", prMetadata))).rejects.toThrow(
+      "misc network glitch",
+    );
+    expect(generateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries up to the default cap (3 attempts total) before giving up", async () => {
+    generateMock.mockRejectedValue(new FakeApiCallError("upstream timeout", true));
+
+    await expect(settle(runReview(config, "diff", prMetadata))).rejects.toThrow("upstream timeout");
+    expect(generateMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("respects RUSTY_LLM_MAX_RETRIES=0 (no retries)", async () => {
+    process.env.RUSTY_LLM_MAX_RETRIES = "0";
+    generateMock.mockRejectedValueOnce(new FakeApiCallError("upstream timeout", true));
+
+    await expect(settle(runReview(config, "diff", prMetadata))).rejects.toThrow("upstream timeout");
+    expect(generateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("clamps RUSTY_LLM_MAX_RETRIES above the built-in backoff schedule", async () => {
+    process.env.RUSTY_LLM_MAX_RETRIES = "99";
+    generateMock.mockRejectedValue(new FakeApiCallError("upstream timeout", true));
+
+    await expect(settle(runReview(config, "diff", prMetadata))).rejects.toThrow("upstream timeout");
+    // built-in schedule has 2 retry slots so total attempts = 1 + 2 = 3
+    expect(generateMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("ignores a non-numeric RUSTY_LLM_MAX_RETRIES and uses the default", async () => {
+    process.env.RUSTY_LLM_MAX_RETRIES = "abc";
+    generateMock
+      .mockRejectedValueOnce(new FakeApiCallError("upstream timeout", true))
+      .mockResolvedValueOnce(makeValidResponse());
+
+    await settle(runReview(config, "diff", prMetadata));
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats a transient retry as compatible with the structured-output retry", async () => {
+    generateMock
+      .mockRejectedValueOnce(new FakeApiCallError("upstream timeout", true))
+      .mockRejectedValueOnce(
+        new FakeMastraError("STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED", "validation failed once"),
+      )
+      .mockResolvedValueOnce(makeValidResponse());
+
+    await settle(runReview(config, "diff", prMetadata));
+    expect(generateMock).toHaveBeenCalledTimes(3);
   });
 });
