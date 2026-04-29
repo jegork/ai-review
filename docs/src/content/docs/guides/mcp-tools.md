@@ -49,17 +49,22 @@ A JSON object keyed by server name. Each server is either a **stdio** transport 
 }
 ```
 
-:::caution[Don't commit real secrets]
-Strings in `mcp-servers.json` are passed through verbatim — Rusty Bot does **not** expand `${VAR}` or any other shell syntax. If you put a real token in this file, treat the file like any other secret: keep it out of git (add it to `.gitignore`), or template it from your secrets manager / deployment platform at runtime.
+:::caution[No `${VAR}` interpolation — render real secrets in, don't commit them]
+String values in `mcp-servers.json` are passed through **verbatim**. Rusty Bot does *not* expand `${VAR}`, `$VAR`, or any other shell syntax — `"FOO": "${MY_TOKEN}"` reaches the spawned process as the literal four-character string `${MY_TOKEN}`, not the value of `$MY_TOKEN`.
 
-For stdio servers, prefer letting the spawned process read its own env vars (don't list them in `env`) so the secret never lands on disk.
+For stdio servers, the spawned process also does *not* automatically inherit arbitrary env vars from Rusty Bot's environment. The underlying MCP SDK only forwards a small safe list (`HOME`, `LOGNAME`, `PATH`, `SHELL`, `TERM`, `USER` on Unix; the equivalent system vars on Windows). Anything else — including any secret you've already exported in your shell or set on the action runner — must be listed explicitly in the `env` block to reach the server.
+
+So real secrets *do* end up in this file. The right move is to:
+
+1. **Render `mcp-servers.json` at startup from your secrets manager / deployment platform** (Kubernetes secrets, GitHub Actions secrets, Azure Key Vault, …) so the rendered file with real values exists only on the running container / runner, never in git.
+2. **Add `mcp-servers.json` to `.gitignore`** alongside any template you check in (e.g. `mcp-servers.example.json`).
 :::
 
 | Field (stdio) | Required | Description |
 | --- | --- | --- |
 | `command` | yes | Executable to spawn (e.g. `npx`, `python`, `node`, an absolute path) |
 | `args` | no | Arguments passed to the command |
-| `env` | no | Extra env vars for the spawned process |
+| `env` | no | Extra env vars set on the spawned process (literal string values; no shell interpolation) |
 
 | Field (HTTP) | Required | Description |
 | --- | --- | --- |
