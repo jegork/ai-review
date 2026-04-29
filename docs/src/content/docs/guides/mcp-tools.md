@@ -35,19 +35,25 @@ A JSON object keyed by server name. Each server is either a **stdio** transport 
     "command": "npx",
     "args": ["-y", "@my-org/mcp-docs-server"],
     "env": {
-      "DOCS_API_TOKEN": "${DOCS_API_TOKEN}"
+      "DOCS_API_TOKEN": "<replace-with-real-token-or-templated-by-your-secrets-manager>"
     }
   },
   "sentry": {
     "url": "https://mcp.sentry.io/sse",
     "requestInit": {
       "headers": {
-        "Authorization": "Bearer ${SENTRY_MCP_TOKEN}"
+        "Authorization": "Bearer <replace-with-real-token>"
       }
     }
   }
 }
 ```
+
+:::caution[Don't commit real secrets]
+Strings in `mcp-servers.json` are passed through verbatim — Rusty Bot does **not** expand `${VAR}` or any other shell syntax. If you put a real token in this file, treat the file like any other secret: keep it out of git (add it to `.gitignore`), or template it from your secrets manager / deployment platform at runtime.
+
+For stdio servers, prefer letting the spawned process read its own env vars (don't list them in `env`) so the secret never lands on disk.
+:::
 
 | Field (stdio) | Required | Description |
 | --- | --- | --- |
@@ -59,8 +65,6 @@ A JSON object keyed by server name. Each server is either a **stdio** transport 
 | --- | --- | --- |
 | `url` | yes | HTTP/SSE endpoint of the remote MCP server |
 | `requestInit` | no | Extra fetch options — `headers` is the most common use |
-
-The `${VAR}` syntax inside string values is **not** auto-expanded — pass real values from your secrets store, or rely on the spawned process to read its own env.
 
 ## How tools reach the agents
 

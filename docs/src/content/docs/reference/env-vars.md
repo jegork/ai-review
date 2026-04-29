@@ -48,7 +48,7 @@ The managed identity vars (`RUSTY_AZURE_*`) take priority over the API-key vars 
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `RUSTY_LLM_MAX_RETRIES` | `2` | Max additional retries after a transient LLM error. Clamped to the built-in backoff schedule (currently 2). Set to `0` to disable retries entirely. |
+| `RUSTY_LLM_MAX_RETRIES` | `2` | Max additional retries after a transient LLM error. Capped at the length of the built-in backoff schedule (2 entries today — values higher than that are silently lowered). Set to `0` to disable retries entirely. |
 
 ## Temperature and top-p
 
