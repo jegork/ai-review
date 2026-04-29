@@ -25,6 +25,8 @@ import {
   extractChangedFilePaths,
   generatePRDescription,
   shouldGenerateDescription,
+  generateConventionalTitle,
+  isConventionalTitle,
   parseDiff,
 } from "@rusty-bot/core";
 import { GitHubProvider, createOctokitIssueFetcher } from "@rusty-bot/github";
@@ -50,6 +52,7 @@ export interface ActionConfig {
   review: ReviewConfig;
   failOnCritical: boolean;
   generateDescription: boolean;
+  renameTitleToConventional: boolean;
 }
 
 interface ParseConfigOptions {
@@ -129,6 +132,7 @@ export function parseConfig({ event, env = process.env }: ParseConfigOptions): A
       .filter(Boolean) ?? [];
   const failOnCritical = env.RUSTY_FAIL_ON_CRITICAL !== "false";
   const generateDescription = env.RUSTY_GENERATE_DESCRIPTION === "true";
+  const renameTitleToConventional = env.RUSTY_RENAME_TITLE_TO_CONVENTIONAL === "true";
 
   const octokit = new Octokit({ auth: token });
 
@@ -145,6 +149,7 @@ export function parseConfig({ event, env = process.env }: ParseConfigOptions): A
     },
     failOnCritical,
     generateDescription,
+    renameTitleToConventional,
   };
 }
 
@@ -219,6 +224,27 @@ export async function runAction(config: ActionConfig): Promise<number> {
     { total: rawPatches.length, reviewed: reviewable.length, skipped: skippedCount },
     "files changed",
   );
+
+  if (config.renameTitleToConventional) {
+    try {
+      if (!isConventionalTitle(metadata.title)) {
+        const titleResult = await generateConventionalTitle(reviewable, metadata);
+        await provider.updatePRTitle(titleResult.title);
+        log.info(
+          {
+            originalTitle: metadata.title,
+            newTitle: titleResult.title,
+            model: titleResult.modelUsed,
+            tokens: titleResult.tokenCount,
+          },
+          "renamed PR title to conventional commit format",
+        );
+        metadata.title = titleResult.title;
+      }
+    } catch (err) {
+      log.warn({ err }, "failed to rename PR title, continuing with review");
+    }
+  }
 
   if (config.generateDescription) {
     try {

@@ -168,6 +168,7 @@ export interface GitProvider {
   postInlineComments(findings: Finding[]): Promise<void>;
   deleteExistingBotComments(): Promise<void>;
   updatePRDescription(description: string): Promise<void>;
+  updatePRTitle(title: string): Promise<void>;
 }
 
 export interface TicketProvider {

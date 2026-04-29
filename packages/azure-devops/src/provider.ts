@@ -383,4 +383,11 @@ export class AzureDevOpsProvider implements GitProvider {
       body: JSON.stringify({ description }),
     });
   }
+
+  async updatePRTitle(title: string): Promise<void> {
+    await this.fetchApi(`${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    });
+  }
 }

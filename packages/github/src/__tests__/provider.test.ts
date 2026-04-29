@@ -393,4 +393,22 @@ describe("GitHubProvider", () => {
       expect(patches).toHaveLength(0);
     });
   });
+
+  describe("updatePRTitle", () => {
+    it("PATCHes the pull request with the new title", async () => {
+      octokit.request.mockResolvedValueOnce({ data: {} });
+
+      await provider.updatePRTitle("feat: new feature");
+
+      expect(octokit.request).toHaveBeenCalledWith(
+        "PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
+        {
+          owner: OWNER,
+          repo: REPO,
+          pull_number: PULL_NUMBER,
+          title: "feat: new feature",
+        },
+      );
+    });
+  });
 });

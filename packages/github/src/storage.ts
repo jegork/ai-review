@@ -11,6 +11,7 @@ export interface RepoConfig {
   consensusPasses?: number;
   consensusThreshold?: number | null;
   generateDescription?: boolean;
+  renameTitleToConventional?: boolean;
 }
 
 export interface RepoConfigWithId extends RepoConfig {
