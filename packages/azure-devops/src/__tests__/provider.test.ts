@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { AzureDevOpsProvider } from "../provider.js";
+import { AzureDevOpsProvider, truncatePRDescription } from "../provider.js";
 import type { Finding } from "@rusty-bot/core";
 
 const ORG_URL = "https://dev.azure.com/test-org";
@@ -819,6 +819,81 @@ describe("AzureDevOpsProvider", () => {
       const oldContentUrl = decodeURIComponent(fetchSpy.mock.calls[4][0] as string);
       expect(oldContentUrl).toContain("src/original.ts");
       expect(oldContentUrl).not.toContain("src/renamed.ts");
+    });
+  });
+
+  describe("updatePRDescription", () => {
+    it("posts the description verbatim when within the 4000-char limit", async () => {
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({}));
+
+      const description = "## Summary\n\nA short description.";
+      await provider.updatePRDescription(description);
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        `${BASE_URL}/pullRequests/${PULL_REQUEST_ID}?${API_VERSION}`,
+        expect.objectContaining({ method: "PATCH" }),
+      );
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(body.description).toBe(description);
+    });
+
+    it("posts a description of exactly 4000 chars verbatim", async () => {
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({}));
+
+      const description = "x".repeat(4000);
+      await provider.updatePRDescription(description);
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(body.description).toBe(description);
+      expect(body.description.length).toBe(4000);
+    });
+
+    it("truncates a description longer than 4000 chars and appends a marker", async () => {
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({}));
+
+      const description = "y".repeat(5000);
+      await provider.updatePRDescription(description);
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(body.description.length).toBe(4000);
+      expect(body.description.endsWith("\n\n…(truncated)")).toBe(true);
+    });
+
+    it("truncates a 4001-char description to 4000 chars", async () => {
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({}));
+
+      const description = "z".repeat(4001);
+      await provider.updatePRDescription(description);
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(body.description.length).toBe(4000);
+      expect(body.description.endsWith("\n\n…(truncated)")).toBe(true);
+    });
+  });
+
+  describe("truncatePRDescription", () => {
+    it("returns the input unchanged when shorter than the limit", () => {
+      expect(truncatePRDescription("hello")).toBe("hello");
+    });
+
+    it("returns the input unchanged at exactly the limit", () => {
+      const s = "a".repeat(4000);
+      expect(truncatePRDescription(s)).toBe(s);
+      expect(truncatePRDescription(s).length).toBe(4000);
+    });
+
+    it("truncates and appends the marker for inputs over the limit", () => {
+      const result = truncatePRDescription("b".repeat(10_000));
+      expect(result.length).toBe(4000);
+      expect(result.endsWith("\n\n…(truncated)")).toBe(true);
+      expect(result.startsWith("b".repeat(100))).toBe(true);
+    });
+
+    it("respects a custom maxLength", () => {
+      const result = truncatePRDescription("c".repeat(500), 100);
+      expect(result.length).toBe(100);
+      expect(result.endsWith("\n\n…(truncated)")).toBe(true);
     });
   });
 

@@ -20,6 +20,19 @@ import {
 
 const BOT_MARKER = "<!-- rusty-bot-review -->";
 const API_VERSION = "api-version=7.0";
+const ADO_MAX_PR_DESCRIPTION_LENGTH = 4000;
+const DESCRIPTION_TRUNCATION_MARKER = "\n\n…(truncated)";
+
+export function truncatePRDescription(
+  description: string,
+  maxLength: number = ADO_MAX_PR_DESCRIPTION_LENGTH,
+): string {
+  if (description.length <= maxLength) return description;
+  return (
+    description.slice(0, maxLength - DESCRIPTION_TRUNCATION_MARKER.length) +
+    DESCRIPTION_TRUNCATION_MARKER
+  );
+}
 
 interface AzureDevOpsProviderConfig {
   orgUrl: string;
@@ -378,9 +391,10 @@ export class AzureDevOpsProvider implements GitProvider {
   }
 
   async updatePRDescription(description: string): Promise<void> {
+    const safeDescription = truncatePRDescription(description);
     await this.fetchApi(`${this.baseUrl}/pullRequests/${this.pullRequestId}?${API_VERSION}`, {
       method: "PATCH",
-      body: JSON.stringify({ description }),
+      body: JSON.stringify({ description: safeDescription }),
     });
   }
 
