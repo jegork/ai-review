@@ -13,6 +13,12 @@ export const AdoPullRequestSchema = z.object({
     .optional(),
   sourceRefName: z.string(),
   targetRefName: z.string(),
+  lastMergeSourceCommit: z
+    .object({
+      commitId: z.string(),
+    })
+    .nullable()
+    .optional(),
   repository: z
     .object({
       webUrl: z.string().optional(),
@@ -20,8 +26,18 @@ export const AdoPullRequestSchema = z.object({
     .optional(),
 });
 
+export const AdoIterationSchema = z.object({
+  id: z.number(),
+  sourceRefCommit: z
+    .object({
+      commitId: z.string(),
+    })
+    .nullable()
+    .optional(),
+});
+
 export const AdoIterationsSchema = z.object({
-  value: z.array(z.object({ id: z.number() })),
+  value: z.array(AdoIterationSchema),
 });
 
 export const AdoChangeEntrySchema = z.object({

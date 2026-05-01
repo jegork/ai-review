@@ -183,6 +183,184 @@ describe("AzureDevOpsProvider", () => {
       const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
       expect(body.comments[0].content).toBe("<!-- rusty-bot-review -->\n");
     });
+
+    it("embeds the last-iteration marker when provided", async () => {
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({}));
+
+      await provider.postSummaryComment("## Review", { lastReviewedIteration: "7" });
+
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(body.comments[0].content).toContain("<!-- rusty-bot-review -->");
+      expect(body.comments[0].content).toContain("<!-- rusty-bot:last-iteration:7 -->");
+      expect(body.comments[0].content).toContain("## Review");
+    });
+  });
+
+  describe("getLastReviewedIteration", () => {
+    it("returns null when no threads have the marker", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          value: [
+            {
+              id: 1,
+              comments: [{ id: 1, content: "<!-- rusty-bot-review -->\nold review" }],
+            },
+            { id: 2, comments: [{ id: 2, content: "human comment" }] },
+          ],
+        }),
+      );
+      const id = await provider.getLastReviewedIteration();
+      expect(id).toBeNull();
+    });
+
+    it("extracts the iteration id from the newest bot thread", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          value: [
+            {
+              id: 1,
+              comments: [
+                {
+                  id: 1,
+                  content:
+                    "<!-- rusty-bot-review -->\n<!-- rusty-bot:last-iteration:3 -->\nReview 1",
+                },
+              ],
+            },
+            { id: 2, comments: [{ id: 2, content: "intermediate human comment" }] },
+            {
+              id: 3,
+              comments: [
+                {
+                  id: 3,
+                  content:
+                    "<!-- rusty-bot-review -->\n<!-- rusty-bot:last-iteration:7 -->\nReview 2",
+                },
+              ],
+            },
+          ],
+        }),
+      );
+      const id = await provider.getLastReviewedIteration();
+      expect(id).toBe("7");
+    });
+
+    it("ignores the marker when no comment in the thread carries the bot marker", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          value: [
+            {
+              id: 1,
+              comments: [
+                {
+                  id: 1,
+                  content: "<!-- rusty-bot:last-iteration:7 -->",
+                },
+              ],
+            },
+          ],
+        }),
+      );
+      const id = await provider.getLastReviewedIteration();
+      expect(id).toBeNull();
+    });
+  });
+
+  describe("getDiffSinceIteration", () => {
+    it("returns null when sinceIterationId is not numeric", async () => {
+      const patches = await provider.getDiffSinceIteration("not-a-number");
+      expect(patches).toBeNull();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("returns an empty array when sinceIteration equals the latest iteration", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          value: [
+            { id: 5, sourceRefCommit: { commitId: "aaa" } },
+            { id: 7, sourceRefCommit: { commitId: "bbb" } },
+          ],
+        }),
+      );
+      const patches = await provider.getDiffSinceIteration("7");
+      expect(patches).toEqual([]);
+    });
+
+    it("returns null when the since iteration is missing or has no source commit", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          value: [
+            { id: 5, sourceRefCommit: { commitId: "aaa" } },
+            { id: 7, sourceRefCommit: { commitId: "bbb" } },
+          ],
+        }),
+      );
+      const missing = await provider.getDiffSinceIteration("99");
+      expect(missing).toBeNull();
+
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          value: [
+            { id: 5, sourceRefCommit: null },
+            { id: 7, sourceRefCommit: { commitId: "bbb" } },
+          ],
+        }),
+      );
+      const noCommit = await provider.getDiffSinceIteration("5");
+      expect(noCommit).toBeNull();
+    });
+
+    it("queries the changes endpoint with $compareTo and builds patches from commit-pinned content", async () => {
+      // call 1: list iterations
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          value: [
+            { id: 5, sourceRefCommit: { commitId: "old-sha" } },
+            { id: 7, sourceRefCommit: { commitId: "new-sha" } },
+          ],
+        }),
+      );
+      // call 2: changes since iteration 5
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          changeEntries: [
+            {
+              changeType: "edit",
+              item: { path: "/src/foo.ts", gitObjectType: "blob" },
+            },
+          ],
+        }),
+      );
+      // call 3: new content at new-sha
+      fetchSpy.mockResolvedValueOnce(mockFileContentResponse("line1\nline2 changed\nline3\n"));
+      // call 4: old content at old-sha
+      fetchSpy.mockResolvedValueOnce(mockFileContentResponse("line1\nline2\nline3\n"));
+
+      const patches = await provider.getDiffSinceIteration("5");
+
+      expect(patches).not.toBeNull();
+      expect(patches).toHaveLength(1);
+      expect(patches?.[0].path).toBe("src/foo.ts");
+      expect(patches?.[0].hunks.length).toBeGreaterThan(0);
+
+      const changesUrl = fetchSpy.mock.calls[1][0] as string;
+      expect(changesUrl).toContain(`/iterations/7/changes`);
+      expect(changesUrl).toContain("$compareTo=5");
+
+      const newContentUrl = fetchSpy.mock.calls[2][0] as string;
+      expect(newContentUrl).toContain("versionDescriptor.versionType=commit");
+      expect(newContentUrl).toContain("versionDescriptor.version=new-sha");
+
+      const oldContentUrl = fetchSpy.mock.calls[3][0] as string;
+      expect(oldContentUrl).toContain("versionDescriptor.versionType=commit");
+      expect(oldContentUrl).toContain("versionDescriptor.version=old-sha");
+    });
+
+    it("returns null when the iterations request errors", async () => {
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ message: "boom" }, false, 500));
+      const patches = await provider.getDiffSinceIteration("5");
+      expect(patches).toBeNull();
+    });
   });
 
   describe("postInlineComments", () => {

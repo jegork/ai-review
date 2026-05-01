@@ -64,3 +64,17 @@ See [Gating merges](/guides/gating-merges/) for the full setup walkthrough.
 ## ADO PAT fallback
 
 For non-container usage (e.g. server mode), set `RUSTY_ADO_PAT` with a Personal Access Token that has **Code: Read** and **Pull Request Threads: Read & Write** scopes. In pipeline mode the `$(System.AccessToken)` is preferred and no PAT is needed.
+
+## Incremental review
+
+When the pipeline runs again after a new iteration is pushed, the task only reviews the diff between the previously-reviewed iteration and the latest iteration instead of re-reviewing the full PR.
+
+How it works:
+
+- After each successful review, the task embeds the latest iteration id in a hidden HTML marker inside the summary thread (`<!-- rusty-bot:last-iteration:7 -->`).
+- On the next run the task reads that marker, calls the iterations changes endpoint with `$compareTo={last-iteration}`, and fetches file contents pinned to each iteration's source-ref commit so old/new are taken from the right commits.
+- If the marker is missing (first run) or the previous iteration can't be resolved, the task falls back to a full review.
+- If the latest iteration is the same as the previously-reviewed one, the run exits without re-posting anything.
+- If the delta has no reviewable files, the task skips the LLM call and posts a one-line summary instead.
+
+Enabled by default. To always review the full PR, set `RUSTY_INCREMENTAL_REVIEW=false` in the step `env:`.

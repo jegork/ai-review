@@ -4,6 +4,7 @@ import type {
   PRMetadata,
   Finding,
   CodeSearchResult,
+  PostSummaryCommentOptions,
 } from "@rusty-bot/core";
 import { formatInlineComment } from "@rusty-bot/core";
 import { structuredPatch } from "diff";
@@ -22,6 +23,15 @@ const BOT_MARKER = "<!-- rusty-bot-review -->";
 const API_VERSION = "api-version=7.0";
 const ADO_MAX_PR_DESCRIPTION_LENGTH = 4000;
 const DESCRIPTION_TRUNCATION_MARKER = "\n\n…(truncated)";
+const LAST_ITERATION_MARKER_RE = /<!--\s*rusty-bot:last-iteration:(\d+)\s*-->/i;
+
+function buildLastShaMarker(sha: string): string {
+  return `<!-- rusty-bot:last-sha:${sha} -->`;
+}
+
+function buildLastIterationMarker(iterationId: string): string {
+  return `<!-- rusty-bot:last-iteration:${iterationId} -->`;
+}
 
 export function truncatePRDescription(
   description: string,
@@ -145,6 +155,27 @@ export class AzureDevOpsProvider implements GitProvider {
     }
   }
 
+  private async getFileContentByCommit(path: string, commitId: string): Promise<string | null> {
+    try {
+      const url =
+        `${this.baseUrl}/items?` +
+        `path=${encodeURIComponent("/" + path)}&` +
+        `versionDescriptor.version=${encodeURIComponent(commitId)}&` +
+        `versionDescriptor.versionType=commit&` +
+        `includeContent=true&${API_VERSION}`;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          Accept: "application/octet-stream",
+        },
+      });
+      if (!response.ok) return null;
+      return await response.text();
+    } catch {
+      return null;
+    }
+  }
+
   private async request<T extends z.ZodType>(
     url: string,
     schema: T,
@@ -153,6 +184,109 @@ export class AzureDevOpsProvider implements GitProvider {
     const response = await this.fetchApi(url, options);
     const json: unknown = await response.json();
     return schema.parse(json) as z.infer<T>;
+  }
+
+  async getLatestIterationId(): Promise<string | null> {
+    const iterations = await this.request(
+      `${this.baseUrl}/pullRequests/${this.pullRequestId}/iterations?${API_VERSION}`,
+      AdoIterationsSchema,
+    );
+    if (iterations.value.length === 0) return null;
+    const last = iterations.value[iterations.value.length - 1];
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive guard against schema changes
+    if (!last) return null;
+    return String(last.id);
+  }
+
+  async getLastReviewedIteration(): Promise<string | null> {
+    const threads = await this.request(
+      `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads?${API_VERSION}`,
+      AdoThreadsSchema,
+    );
+
+    // walk newest-first so a fresher marker wins if multiple bot threads survive
+    for (let i = threads.value.length - 1; i >= 0; i--) {
+      const thread = threads.value[i];
+      const hasBotComment = thread.comments.some((c) => c.content?.includes(BOT_MARKER));
+      if (!hasBotComment) continue;
+      for (const comment of thread.comments) {
+        const match = comment.content ? LAST_ITERATION_MARKER_RE.exec(comment.content) : null;
+        if (match) return match[1];
+      }
+    }
+    return null;
+  }
+
+  async getDiffSinceIteration(sinceIterationId: string): Promise<FilePatch[] | null> {
+    const sinceId = parseInt(sinceIterationId, 10);
+    if (Number.isNaN(sinceId)) return null;
+
+    try {
+      const iterations = await this.request(
+        `${this.baseUrl}/pullRequests/${this.pullRequestId}/iterations?${API_VERSION}`,
+        AdoIterationsSchema,
+      );
+      if (iterations.value.length === 0) return null;
+
+      const sinceIteration = iterations.value.find((it) => it.id === sinceId);
+      const latestIteration = iterations.value[iterations.value.length - 1];
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- defensive guard against schema changes
+      if (!sinceIteration || !latestIteration) return null;
+      if (sinceIteration.id === latestIteration.id) return [];
+
+      const sinceCommitId = sinceIteration.sourceRefCommit?.commitId;
+      const latestCommitId = latestIteration.sourceRefCommit?.commitId;
+      if (!sinceCommitId || !latestCommitId) return null;
+
+      const changes = await this.request(
+        `${this.baseUrl}/pullRequests/${this.pullRequestId}/iterations/${latestIteration.id}/changes?$compareTo=${sinceIteration.id}&${API_VERSION}`,
+        AdoChangesSchema,
+      );
+
+      const patches: FilePatch[] = [];
+
+      for (const entry of changes.changeEntries) {
+        if (!entry.item?.path) continue;
+        if (entry.item.gitObjectType === "tree") continue;
+
+        const filePath = entry.item.path.replace(/^\//, "");
+
+        const isDelete = entry.changeType.includes("delete");
+        const isSourceRename = entry.changeType.includes("sourceRename");
+        if (isDelete || isSourceRename) continue;
+
+        const isAdd = entry.changeType.includes("add");
+        const isRename = entry.changeType.includes("rename");
+        const oldPath =
+          isRename && entry.originalPath ? entry.originalPath.replace(/^\//, "") : filePath;
+
+        const [newContent, oldContent] = await Promise.all([
+          this.getFileContentByCommit(filePath, latestCommitId),
+          isAdd ? Promise.resolve(null) : this.getFileContentByCommit(oldPath, sinceCommitId),
+        ]);
+
+        if (newContent !== null) {
+          this.fileLineCache.set(filePath, newContent.split(/\r?\n/));
+          const patch = buildPatchFromContent(filePath, oldContent, newContent);
+          if (patch.hunks.length > 0) {
+            patches.push(patch);
+            continue;
+          }
+        }
+
+        patches.push({
+          path: filePath,
+          hunks: [],
+          additions: 0,
+          deletions: 0,
+          isBinary: false,
+        });
+      }
+
+      return patches;
+    } catch {
+      return null;
+    }
   }
 
   async getDiff(): Promise<FilePatch[]> {
@@ -244,6 +378,9 @@ export class AzureDevOpsProvider implements GitProvider {
       sourceBranch: data.sourceRefName.replace("refs/heads/", ""),
       targetBranch: data.targetRefName.replace("refs/heads/", ""),
       url: `${this.orgUrl}/${this.project}/_git/${this.repoName}/pullrequest/${this.pullRequestId}`,
+      ...(data.lastMergeSourceCommit?.commitId
+        ? { headSha: data.lastMergeSourceCommit.commitId }
+        : {}),
     };
   }
 
@@ -297,7 +434,15 @@ export class AzureDevOpsProvider implements GitProvider {
     }
   }
 
-  async postSummaryComment(markdown: string): Promise<void> {
+  async postSummaryComment(markdown: string, options?: PostSummaryCommentOptions): Promise<void> {
+    const headerLines = [BOT_MARKER];
+    if (options?.lastReviewedSha) {
+      headerLines.push(buildLastShaMarker(options.lastReviewedSha));
+    }
+    if (options?.lastReviewedIteration) {
+      headerLines.push(buildLastIterationMarker(options.lastReviewedIteration));
+    }
+    const header = headerLines.join("\n");
     await this.fetchApi(
       `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads?${API_VERSION}`,
       {
@@ -306,7 +451,7 @@ export class AzureDevOpsProvider implements GitProvider {
           comments: [
             {
               parentCommentId: 0,
-              content: `${BOT_MARKER}\n${markdown}`,
+              content: `${header}\n${markdown}`,
               commentType: 1,
             },
           ],
