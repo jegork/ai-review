@@ -25,6 +25,7 @@ export type {
   TicketRef,
   CodeSearchResult,
   GitProvider,
+  PostSummaryCommentOptions,
   TicketProvider,
   DroppedFinding,
   ConsensusMetadata,

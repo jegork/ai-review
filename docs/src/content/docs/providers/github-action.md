@@ -74,6 +74,20 @@ The Action exits early (no error, no review) for these PR event types:
 - `closed`, `labeled`, `unlabeled`, `assigned`, `unassigned`
 - Draft PRs — unless `RUSTY_REVIEW_DRAFTS=true` is set in `env:`
 
+## Incremental review
+
+On `synchronize` events (every push after the first review), the Action only reviews the diff between the previously-reviewed commit and the new HEAD instead of re-reviewing the full PR diff. This typically cuts token usage by 60–80% on multi-commit PRs.
+
+How it works:
+
+- After each successful review, the Action embeds the reviewed commit sha in a hidden HTML marker inside the summary comment (`<!-- rusty-bot:last-sha:abc... -->`).
+- On the next push the Action reads that marker, fetches `git compare {last-sha}...{new-head}` from GitHub, and runs the review against only that delta.
+- If the marker is missing (first run) or the previous sha is no longer reachable (force-push or rebase), the Action falls back to a full review.
+- If the new HEAD is identical to the previously-reviewed sha, the run exits without re-posting anything.
+- If the delta has no reviewable files (e.g. only ignored paths changed), the Action skips the LLM call and posts a one-line summary instead.
+
+Enabled by default. To always review the full PR diff, set `RUSTY_INCREMENTAL_REVIEW=false`.
+
 ## Docker image
 
 The Action runs inside `ghcr.io/jegork/rusty-bot:latest`, which includes OpenGrep. The first run in a fresh runner environment adds roughly 20–40s for the image pull; subsequent runs on cached runners skip this entirely.

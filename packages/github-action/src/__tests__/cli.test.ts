@@ -52,6 +52,7 @@ describe("parseConfig", () => {
     expect(config.failOnCritical).toBe(true);
     expect(config.generateDescription).toBe(false);
     expect(config.renameTitleToConventional).toBe(false);
+    expect(config.incrementalReview).toBe(true);
   });
 
   it("throws when GITHUB_TOKEN is missing", () => {
@@ -261,6 +262,25 @@ describe("parseConfig", () => {
     ).toBe(false);
 
     expect(parseConfig({ event: BASE_EVENT, env: makeEnv() }).generateDescription).toBe(false);
+  });
+
+  it("enables incremental review by default and disables only on explicit 'false'", () => {
+    expect(parseConfig({ event: BASE_EVENT, env: makeEnv() }).incrementalReview).toBe(true);
+
+    expect(
+      parseConfig({
+        event: BASE_EVENT,
+        env: makeEnv({ RUSTY_INCREMENTAL_REVIEW: "false" }),
+      }).incrementalReview,
+    ).toBe(false);
+
+    for (const value of ["true", "1", "yes", ""]) {
+      const config = parseConfig({
+        event: BASE_EVENT,
+        env: makeEnv({ RUSTY_INCREMENTAL_REVIEW: value }),
+      });
+      expect(config.incrementalReview).toBe(true);
+    }
   });
 
   it("enables conventional title rename only on exact 'true'", () => {

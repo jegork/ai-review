@@ -103,6 +103,15 @@ export interface PRMetadata {
   sourceBranch: string;
   targetBranch: string;
   url: string;
+  /** sha at the head of the source branch — populated by providers that can fetch it cheaply */
+  headSha?: string;
+}
+
+export interface PostSummaryCommentOptions {
+  /** when set, providers embed a hidden marker so the next run can resume incrementally */
+  lastReviewedSha?: string;
+  /** ADO equivalent of lastReviewedSha — iteration id of the just-completed review */
+  lastReviewedIteration?: string;
 }
 
 export interface Hunk {
@@ -164,11 +173,15 @@ export interface GitProvider {
   getPRMetadata(): Promise<PRMetadata>;
   getFileContent(path: string, ref: string): Promise<string | null>;
   searchCode(query: string): Promise<CodeSearchResult[]>;
-  postSummaryComment(markdown: string): Promise<void>;
+  postSummaryComment(markdown: string, options?: PostSummaryCommentOptions): Promise<void>;
   postInlineComments(findings: Finding[]): Promise<void>;
   deleteExistingBotComments(): Promise<void>;
   updatePRDescription(description: string): Promise<void>;
   updatePRTitle(title: string): Promise<void>;
+  /** read the sha embedded in a previously-posted summary comment, if any */
+  getLastReviewedSha?(): Promise<string | null>;
+  /** fetch only the diff between an earlier sha and the current head; null if unreachable */
+  getDiffSinceSha?(sinceSha: string, headSha: string): Promise<FilePatch[] | null>;
 }
 
 export interface TicketProvider {

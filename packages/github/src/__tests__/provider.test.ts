@@ -39,7 +39,7 @@ describe("GitHubProvider", () => {
           title: "feat: add feature",
           body: "some description",
           user: { login: "octocat" },
-          head: { ref: "feature-branch" },
+          head: { ref: "feature-branch", sha: "deadbeef0000000000000000000000000000beef" },
           base: { ref: "main" },
           html_url: "https://github.com/test-owner/test-repo/pull/42",
         },
@@ -55,6 +55,7 @@ describe("GitHubProvider", () => {
         sourceBranch: "feature-branch",
         targetBranch: "main",
         url: "https://github.com/test-owner/test-repo/pull/42",
+        headSha: "deadbeef0000000000000000000000000000beef",
       });
 
       expect(octokit.request).toHaveBeenCalledWith(
@@ -74,7 +75,7 @@ describe("GitHubProvider", () => {
           title: "pr",
           body: null,
           user: null,
-          head: { ref: "src" },
+          head: { ref: "src", sha: "0".repeat(40) },
           base: { ref: "dst" },
           html_url: "https://example.com",
         },
@@ -102,6 +103,136 @@ describe("GitHubProvider", () => {
           body: "<!-- rusty-bot-review -->\n## Review\nLooks good!",
         }),
       );
+    });
+
+    it("embeds the last-reviewed-sha marker when provided", async () => {
+      octokit.request.mockResolvedValueOnce({ data: {} });
+
+      await provider.postSummaryComment("## Review\nLooks good!", {
+        lastReviewedSha: "abc123def4560000000000000000000000000000",
+      });
+
+      const call = octokit.request.mock.calls[0][1] as { body: string };
+      expect(call.body).toContain("<!-- rusty-bot-review -->");
+      expect(call.body).toContain(
+        "<!-- rusty-bot:last-sha:abc123def4560000000000000000000000000000 -->",
+      );
+      expect(call.body).toContain("## Review\nLooks good!");
+    });
+  });
+
+  describe("getLastReviewedSha", () => {
+    it("returns null when no comments exist", async () => {
+      octokit.request.mockResolvedValueOnce({ data: [] });
+      const sha = await provider.getLastReviewedSha();
+      expect(sha).toBeNull();
+    });
+
+    it("returns null when no bot comment carries the marker", async () => {
+      octokit.request.mockResolvedValueOnce({
+        data: [
+          { id: 1, body: "<!-- rusty-bot-review -->\nold review without marker" },
+          { id: 2, body: "human comment" },
+        ],
+      });
+      const sha = await provider.getLastReviewedSha();
+      expect(sha).toBeNull();
+    });
+
+    it("extracts the sha when a bot comment carries the marker", async () => {
+      octokit.request.mockResolvedValueOnce({
+        data: [
+          {
+            id: 1,
+            body:
+              "<!-- rusty-bot-review -->\n" +
+              "<!-- rusty-bot:last-sha:abc123def4560000000000000000000000000000 -->\n" +
+              "## Review",
+          },
+        ],
+      });
+      const sha = await provider.getLastReviewedSha();
+      expect(sha).toBe("abc123def4560000000000000000000000000000");
+    });
+
+    it("prefers the newest matching comment when multiple bot comments exist", async () => {
+      octokit.request.mockResolvedValueOnce({
+        data: [
+          {
+            id: 1,
+            body:
+              "<!-- rusty-bot-review -->\n" +
+              "<!-- rusty-bot:last-sha:1111111111111111111111111111111111111111 -->",
+          },
+          { id: 2, body: "an unrelated human comment" },
+          {
+            id: 3,
+            body:
+              "<!-- rusty-bot-review -->\n" +
+              "<!-- rusty-bot:last-sha:2222222222222222222222222222222222222222 -->",
+          },
+        ],
+      });
+      const sha = await provider.getLastReviewedSha();
+      expect(sha).toBe("2222222222222222222222222222222222222222");
+    });
+
+    it("ignores the marker when it isn't inside a bot comment", async () => {
+      octokit.request.mockResolvedValueOnce({
+        data: [
+          {
+            id: 1,
+            body: "<!-- rusty-bot:last-sha:abc123def4560000000000000000000000000000 -->",
+          },
+        ],
+      });
+      const sha = await provider.getLastReviewedSha();
+      expect(sha).toBeNull();
+    });
+  });
+
+  describe("getDiffSinceSha", () => {
+    const HEAD_SHA = "feedface0000000000000000000000000000face";
+    const SINCE_SHA = "deadbeef0000000000000000000000000000beef";
+
+    it("returns an empty array when sinceSha equals headSha without calling the API", async () => {
+      const patches = await provider.getDiffSinceSha(HEAD_SHA, HEAD_SHA);
+      expect(patches).toEqual([]);
+      expect(octokit.request).not.toHaveBeenCalled();
+    });
+
+    it("calls the compare API with basehead and parses the resulting diff", async () => {
+      const rawDiff = [
+        "diff --git a/file.ts b/file.ts",
+        "--- a/file.ts",
+        "+++ b/file.ts",
+        "@@ -1,2 +1,2 @@",
+        "-old",
+        "+new",
+        " keep",
+      ].join("\n");
+      octokit.request.mockResolvedValueOnce({ data: rawDiff });
+
+      const patches = await provider.getDiffSinceSha(SINCE_SHA, HEAD_SHA);
+
+      expect(patches).not.toBeNull();
+      expect(patches).toHaveLength(1);
+      expect(patches?.[0].path).toBe("file.ts");
+      expect(octokit.request).toHaveBeenCalledWith(
+        "GET /repos/{owner}/{repo}/compare/{basehead}",
+        expect.objectContaining({
+          owner: OWNER,
+          repo: REPO,
+          basehead: `${SINCE_SHA}...${HEAD_SHA}`,
+        }),
+      );
+    });
+
+    it("returns null when the compare API errors (force-push or unreachable sha)", async () => {
+      octokit.request.mockRejectedValueOnce(Object.assign(new Error("Not Found"), { status: 404 }));
+
+      const patches = await provider.getDiffSinceSha(SINCE_SHA, HEAD_SHA);
+      expect(patches).toBeNull();
     });
   });
 

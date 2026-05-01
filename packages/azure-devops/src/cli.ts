@@ -1,4 +1,4 @@
-import type { FocusArea, ReviewConfig, TicketRef } from "@rusty-bot/core";
+import type { FilePatch, FocusArea, ReviewConfig, TicketRef } from "@rusty-bot/core";
 import { ReviewStyleSchema } from "@rusty-bot/core";
 import {
   filterFiles,
@@ -36,6 +36,7 @@ export function parseConfig(): {
   provider: AzureDevOpsProvider;
   config: ReviewConfig;
   failOnCritical: boolean;
+  incrementalReview: boolean;
   env: { orgUrl: string; project: string; accessToken: string };
 } {
   const pullRequestId = process.env.SYSTEM_PULLREQUEST_PULLREQUESTID;
@@ -64,6 +65,7 @@ export function parseConfig(): {
     []) as FocusArea[];
   const ignorePatterns = process.env.RUSTY_IGNORE_PATTERNS?.split(",").filter(Boolean) ?? [];
   const failOnCritical = process.env.RUSTY_FAIL_ON_CRITICAL !== "false";
+  const incrementalReview = process.env.RUSTY_INCREMENTAL_REVIEW !== "false";
 
   return {
     provider: new AzureDevOpsProvider({
@@ -79,12 +81,13 @@ export function parseConfig(): {
       ignorePatterns,
     },
     failOnCritical,
+    incrementalReview,
     env: { orgUrl, project, accessToken },
   };
 }
 
 async function main(): Promise<void> {
-  const { provider, config, failOnCritical, env } = parseConfig();
+  const { provider, config, failOnCritical, incrementalReview, env } = parseConfig();
 
   const metadata = await provider.getPRMetadata();
   log.info(
@@ -100,16 +103,79 @@ async function main(): Promise<void> {
     config.conventionFile = conventionFile;
   }
 
+  // read incremental marker before deleting old bot comments — otherwise we lose the iteration id
+  let lastReviewedIteration: string | null = null;
+  let latestIteration: string | null = null;
+  if (incrementalReview) {
+    try {
+      [lastReviewedIteration, latestIteration] = await Promise.all([
+        provider.getLastReviewedIteration(),
+        provider.getLatestIterationId(),
+      ]);
+    } catch (err) {
+      log.warn({ err }, "failed to read iteration state, falling back to full review");
+    }
+  } else {
+    try {
+      latestIteration = await provider.getLatestIterationId();
+    } catch (err) {
+      log.warn({ err }, "failed to read latest iteration id, marker will not be embedded");
+    }
+  }
+
+  if (lastReviewedIteration && latestIteration && lastReviewedIteration === latestIteration) {
+    log.info(
+      { iteration: latestIteration },
+      "latest iteration matches last reviewed iteration, skipping review",
+    );
+    return;
+  }
+
   await provider.deleteExistingBotComments();
 
-  const rawPatches = await provider.getDiff();
+  let rawPatches: FilePatch[] | null = null;
+  let incrementalUsed = false;
+  if (lastReviewedIteration) {
+    const incremental = await provider.getDiffSinceIteration(lastReviewedIteration);
+    if (incremental) {
+      rawPatches = incremental;
+      incrementalUsed = true;
+      log.info(
+        {
+          lastReviewedIteration,
+          latestIteration,
+          files: incremental.length,
+        },
+        "running incremental review",
+      );
+    }
+  }
+
+  rawPatches ??= await provider.getDiff();
+
   const filtered = filterFiles(rawPatches, config.ignorePatterns);
   const reviewable = stripDeletionOnlyHunks(filtered);
   const skippedCount = rawPatches.length - reviewable.length;
   log.info(
-    { total: rawPatches.length, reviewed: reviewable.length, skipped: skippedCount },
+    {
+      total: rawPatches.length,
+      reviewed: reviewable.length,
+      skipped: skippedCount,
+      mode: incrementalUsed ? "incremental" : "full",
+    },
     "files changed",
   );
+
+  if (incrementalUsed && reviewable.length === 0 && latestIteration) {
+    log.info(
+      { lastReviewedIteration, latestIteration },
+      "no reviewable changes in incremental delta, skipping LLM review",
+    );
+    await provider.postSummaryComment("No reviewable changes since the last review.", {
+      lastReviewedIteration: latestIteration,
+    });
+    return;
+  }
 
   if (process.env.RUSTY_RENAME_TITLE_TO_CONVENTIONAL === "true") {
     try {
@@ -286,7 +352,10 @@ async function main(): Promise<void> {
   );
 
   const summaryMarkdown = formatSummaryComment(review, { ticketResolution });
-  await provider.postSummaryComment(summaryMarkdown);
+  await provider.postSummaryComment(
+    summaryMarkdown,
+    latestIteration ? { lastReviewedIteration: latestIteration } : undefined,
+  );
 
   const { anchored: inlineFindings, dropped } = filterAnchorableFindings(
     review.findings,

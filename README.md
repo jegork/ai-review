@@ -16,6 +16,7 @@ Built on [Mastra](https://mastra.ai/) (TypeScript).
 - **OpenGrep pre-scan** — runs [OpenGrep](https://opengrep.dev/) SAST on changed files before LLM review, feeds findings for triage (gracefully skipped when not installed)
 - **Multi-provider LLM** — OpenAI, Anthropic, Google, or any provider supported by Mastra
 - **PR description generation** — optionally generate a structured PR description from the diff when the description is empty or a placeholder (off by default)
+- **Incremental review** — on subsequent pushes the bot reviews only the diff since the previously-reviewed state (commit on GitHub, PR iteration on Azure DevOps) instead of the entire PR, cutting tokens on multi-commit PRs (on by default; opt out with `RUSTY_INCREMENTAL_REVIEW=false`)
 - **GitHub + Azure DevOps** — webhook server for GitHub, pipeline task for Azure DevOps, or a drop-in GitHub Action
 - **Web dashboard** — configure repos, review styles, focus areas, and view history
 
@@ -195,6 +196,7 @@ The task exits with code 1 when critical issues are found (configurable via `RUS
 | `RUSTY_IGNORE_PATTERNS` | comma-separated glob patterns to skip | — |
 | `RUSTY_FAIL_ON_CRITICAL` | exit 1 on critical findings (pipeline/action mode) | `true` |
 | `RUSTY_REVIEW_DRAFTS` | review draft PRs in GitHub Action mode | `false` |
+| `RUSTY_INCREMENTAL_REVIEW` | review only the diff since the last reviewed commit (GitHub) or PR iteration (Azure DevOps) | `true` |
 | `RUSTY_JIRA_BASE_URL` | Jira instance URL | — |
 | `RUSTY_JIRA_EMAIL` | Jira auth email | — |
 | `RUSTY_JIRA_API_TOKEN` | Jira API token | — |

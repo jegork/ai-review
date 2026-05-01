@@ -6,10 +6,17 @@ import type {
   Finding,
   Hunk,
   CodeSearchResult,
+  PostSummaryCommentOptions,
 } from "@rusty-bot/core";
-import { formatInlineComment } from "@rusty-bot/core";
+import { formatInlineComment, logger } from "@rusty-bot/core";
 
 const BOT_MARKER = "<!-- rusty-bot-review -->";
+const LAST_SHA_MARKER_RE = /<!--\s*rusty-bot:last-sha:([0-9a-f]{40})\s*-->/i;
+const log = logger.child({ package: "github", component: "provider" });
+
+function buildLastShaMarker(sha: string): string {
+  return `<!-- rusty-bot:last-sha:${sha} -->`;
+}
 
 interface GitHubProviderConfig {
   octokit: Octokit;
@@ -130,6 +137,47 @@ export class GitHubProvider implements GitProvider {
     return parseDiff(raw);
   }
 
+  async getDiffSinceSha(sinceSha: string, headSha: string): Promise<FilePatch[] | null> {
+    if (sinceSha === headSha) return [];
+    try {
+      const response = await this.octokit.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+        owner: this.owner,
+        repo: this.repo,
+        basehead: `${sinceSha}...${headSha}`,
+        headers: {
+          accept: "application/vnd.github.v3.diff",
+        },
+      });
+      return parseDiff(response.data as unknown as string);
+    } catch (err) {
+      log.warn(
+        { err, sinceSha, headSha },
+        "could not fetch incremental diff (sha unreachable, force-push, or rebase)",
+      );
+      return null;
+    }
+  }
+
+  async getLastReviewedSha(): Promise<string | null> {
+    const { data: comments } = await this.octokit.request(
+      "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+      {
+        owner: this.owner,
+        repo: this.repo,
+        issue_number: this.pullNumber,
+      },
+    );
+
+    // walk newest-first so a fresher marker wins if multiple bot comments survive
+    for (let i = comments.length - 1; i >= 0; i--) {
+      const body = comments[i].body;
+      if (!body?.includes(BOT_MARKER)) continue;
+      const match = LAST_SHA_MARKER_RE.exec(body);
+      if (match) return match[1].toLowerCase();
+    }
+    return null;
+  }
+
   async getPRMetadata(): Promise<PRMetadata> {
     const { data } = await this.octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
       owner: this.owner,
@@ -146,6 +194,7 @@ export class GitHubProvider implements GitProvider {
       sourceBranch: data.head.ref,
       targetBranch: data.base.ref,
       url: data.html_url,
+      headSha: data.head.sha,
     };
   }
 
@@ -182,12 +231,15 @@ export class GitHubProvider implements GitProvider {
     }
   }
 
-  async postSummaryComment(markdown: string): Promise<void> {
+  async postSummaryComment(markdown: string, options?: PostSummaryCommentOptions): Promise<void> {
+    const header = options?.lastReviewedSha
+      ? `${BOT_MARKER}\n${buildLastShaMarker(options.lastReviewedSha)}`
+      : BOT_MARKER;
     await this.octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
       owner: this.owner,
       repo: this.repo,
       issue_number: this.pullNumber,
-      body: `${BOT_MARKER}\n${markdown}`,
+      body: `${header}\n${markdown}`,
     });
   }
 

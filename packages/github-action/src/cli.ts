@@ -1,5 +1,11 @@
 import { Octokit } from "octokit";
-import type { FocusArea, ReviewConfig, TicketProvider, TicketRef } from "@rusty-bot/core";
+import type {
+  FilePatch,
+  FocusArea,
+  ReviewConfig,
+  TicketProvider,
+  TicketRef,
+} from "@rusty-bot/core";
 import {
   ReviewStyleSchema,
   filterFiles,
@@ -54,6 +60,7 @@ export interface ActionConfig {
   failOnCritical: boolean;
   generateDescription: boolean;
   renameTitleToConventional: boolean;
+  incrementalReview: boolean;
 }
 
 interface ParseConfigOptions {
@@ -134,6 +141,7 @@ export function parseConfig({ event, env = process.env }: ParseConfigOptions): A
   const failOnCritical = env.RUSTY_FAIL_ON_CRITICAL !== "false";
   const generateDescription = env.RUSTY_GENERATE_DESCRIPTION === "true";
   const renameTitleToConventional = env.RUSTY_RENAME_TITLE_TO_CONVENTIONAL === "true";
+  const incrementalReview = env.RUSTY_INCREMENTAL_REVIEW !== "false";
 
   const octokit = new Octokit({ auth: token });
 
@@ -151,6 +159,7 @@ export function parseConfig({ event, env = process.env }: ParseConfigOptions): A
     failOnCritical,
     generateDescription,
     renameTitleToConventional,
+    incrementalReview,
   };
 }
 
@@ -214,17 +223,65 @@ export async function runAction(config: ActionConfig): Promise<number> {
     reviewConfig.conventionFile = conventionFile;
   }
 
+  // read incremental marker before deleting old bot comments — otherwise we lose the sha
+  let lastReviewedSha: string | null = null;
+  if (config.incrementalReview && metadata.headSha) {
+    try {
+      lastReviewedSha = await provider.getLastReviewedSha();
+    } catch (err) {
+      log.warn({ err }, "failed to read last-reviewed sha, falling back to full review");
+    }
+  }
+
+  if (lastReviewedSha && lastReviewedSha === metadata.headSha) {
+    log.info({ sha: metadata.headSha }, "head sha matches last reviewed sha, skipping review");
+    return 0;
+  }
+
   await provider.deleteExistingBotComments();
 
-  const rawDiff = await provider.getRawDiff();
-  const rawPatches = parseDiff(rawDiff);
+  let rawPatches: FilePatch[] | null = null;
+  let incrementalUsed = false;
+  if (lastReviewedSha && metadata.headSha) {
+    const incremental = await provider.getDiffSinceSha(lastReviewedSha, metadata.headSha);
+    if (incremental) {
+      rawPatches = incremental;
+      incrementalUsed = true;
+      log.info(
+        { lastReviewedSha, headSha: metadata.headSha, files: incremental.length },
+        "running incremental review",
+      );
+    }
+  }
+
+  if (!rawPatches) {
+    const rawDiff = await provider.getRawDiff();
+    rawPatches = parseDiff(rawDiff);
+  }
+
   const filtered = filterFiles(rawPatches, reviewConfig.ignorePatterns);
   const reviewable = stripDeletionOnlyHunks(filtered);
   const skippedCount = rawPatches.length - reviewable.length;
   log.info(
-    { total: rawPatches.length, reviewed: reviewable.length, skipped: skippedCount },
+    {
+      total: rawPatches.length,
+      reviewed: reviewable.length,
+      skipped: skippedCount,
+      mode: incrementalUsed ? "incremental" : "full",
+    },
     "files changed",
   );
+
+  if (incrementalUsed && reviewable.length === 0 && metadata.headSha) {
+    log.info(
+      { lastReviewedSha, headSha: metadata.headSha },
+      "no reviewable changes in incremental delta, skipping LLM review",
+    );
+    await provider.postSummaryComment("No reviewable changes since the last review.", {
+      lastReviewedSha: metadata.headSha,
+    });
+    return 0;
+  }
 
   if (config.renameTitleToConventional) {
     try {
@@ -383,7 +440,10 @@ export async function runAction(config: ActionConfig): Promise<number> {
   );
 
   const summaryMarkdown = formatSummaryComment(review, { ticketResolution });
-  await provider.postSummaryComment(summaryMarkdown);
+  await provider.postSummaryComment(
+    summaryMarkdown,
+    metadata.headSha ? { lastReviewedSha: metadata.headSha } : undefined,
+  );
 
   const inlineCandidates = review.findings.filter((f) => f.line > 0);
   const { anchored: inlineFindings, dropped } = filterAnchorableFindings(
