@@ -35,6 +35,8 @@ export interface ConsensusMetadata {
   agreementRate: number;
   recommendationElevated: boolean;
   passRecommendations: Recommendation[];
+  passModels?: string[];
+  passPlanReason?: string;
   /** number of consensus passes that threw before producing a result */
   failedPasses: number;
 }

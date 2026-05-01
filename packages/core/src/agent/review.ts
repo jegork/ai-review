@@ -10,6 +10,7 @@ import {
   resolveDefaultAgentOptions,
   supportsAnthropicCacheControl,
 } from "./model.js";
+import type { ModelConfig, ModelSettings } from "./model.js";
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
 import type { OpenGrepFinding } from "../opengrep/types.js";
 import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
@@ -98,6 +99,10 @@ export interface RunReviewOptions {
   chunkFiles?: string[];
   /** OpenGrep findings to feed to the LLM for triage. */
   openGrepFindings?: OpenGrepFinding[];
+  /** override used by consensus pass planning; defaults to RUSTY_LLM_MODEL. */
+  modelConfig?: ModelConfig;
+  /** override used by consensus pass planning; defaults to review env settings. */
+  modelSettings?: ModelSettings;
 }
 
 function buildTools(options?: RunReviewOptions): ToolsInput {
@@ -131,7 +136,7 @@ export async function runReview(
     options?.openGrepFindings,
     options?.chunkFiles,
   );
-  const modelConfig = resolveModelConfig();
+  const modelConfig = options?.modelConfig ?? resolveModelConfig();
   const modelName = getModelDisplayName(modelConfig);
 
   const builtInTools = buildTools(options);
@@ -153,7 +158,7 @@ export async function runReview(
 
   const schema = tier === "skim" ? SkimReviewOutputSchema : ReviewOutputSchema;
 
-  const modelSettings = resolveModelSettings("review");
+  const modelSettings = options?.modelSettings ?? resolveModelSettings("review");
   const response = await generateWithTransientRetry(() =>
     generateWithStructuredOutputRetry(() =>
       agent.generate(userMessage, {
