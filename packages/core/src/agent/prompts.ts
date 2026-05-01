@@ -36,6 +36,35 @@ export function buildSystemPrompt(config: ReviewConfig): string {
     .replace("{{convention_instructions}}", conventionInstructions);
 }
 
+export interface CachedSystemMessage {
+  role: "system";
+  content: string;
+  providerOptions?: {
+    anthropic?: { cacheControl: { type: "ephemeral" } };
+  };
+}
+
+/**
+ * wrap the system prompt in Mastra's array-of-system-messages form, marking the
+ * static block as cacheable for Anthropic when the resolved model supports it.
+ */
+export function buildCachedSystemMessages(
+  systemPrompt: string,
+  options: { anthropicCacheControl: boolean } = { anthropicCacheControl: true },
+): CachedSystemMessage[] {
+  const enabled = process.env.RUSTY_PROMPT_CACHE !== "false" && options.anthropicCacheControl;
+  if (!enabled) {
+    return [{ role: "system", content: systemPrompt }];
+  }
+  return [
+    {
+      role: "system",
+      content: systemPrompt,
+      providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+    },
+  ];
+}
+
 function buildOpenGrepSection(findings: OpenGrepFinding[]): string {
   const parts: string[] = [];
   parts.push("## OpenGrep Pre-scan Findings");

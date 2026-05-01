@@ -6,6 +6,7 @@ import {
   resolveModel,
   getModelDisplayName,
   resolveModelSettings,
+  resolveDefaultAgentOptions,
 } from "./model.js";
 import type { Finding, ReviewResult } from "../types.js";
 import { logger } from "../logger.js";
@@ -97,7 +98,10 @@ function resolveJudgeModel(judgeModelOverride?: string) {
   const config = judgeModelOverride
     ? resolveModelConfigWithOverride(judgeModelOverride)
     : resolveModelConfig();
-  return { model: resolveModel(config), displayName: getModelDisplayName(config) };
+  return {
+    displayName: getModelDisplayName(config),
+    config,
+  };
 }
 
 export function resolveJudgeConfig(): JudgeConfig {
@@ -128,18 +132,20 @@ export async function judgeFindings(
     return { accepted: [...findings], rejected: [], evaluations: [], tokenCount: 0 };
   }
 
-  const { model, displayName } = resolveJudgeModel(config.model);
+  const { displayName, config: modelConfig } = resolveJudgeModel(config.model);
 
   log.info(
     { findingCount: findings.length, model: displayName, threshold: config.threshold },
     "running judge pass",
   );
 
+  const defaultOptions = resolveDefaultAgentOptions(modelConfig);
   const agent = new Agent({
     id: "review-judge",
     name: "Rusty Bot Judge",
-    instructions: JUDGE_SYSTEM_PROMPT,
-    model,
+    instructions: () => JUDGE_SYSTEM_PROMPT,
+    model: () => resolveModel(modelConfig),
+    ...(defaultOptions && { defaultOptions }),
   });
 
   const userMessage = formatFindingsForJudge(findings, diff);

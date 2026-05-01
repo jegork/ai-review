@@ -19,6 +19,7 @@ vi.mock("../agent/model.js", () => ({
     config.type === "router" ? (config.model ?? "test-model") : "test-model",
   ),
   resolveModelSettings: vi.fn(() => ({})),
+  resolveDefaultAgentOptions: vi.fn(() => undefined),
 }));
 
 const { judgeFindings, judgeReviewResult, resolveJudgeConfig } = await import("../agent/judge.js");
@@ -268,9 +269,10 @@ describe("judgeFindings", () => {
       model: "anthropic/claude-haiku",
     });
 
-    expect(Agent).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "anthropic/claude-haiku" }),
-    );
+    const agentConfig = vi.mocked(Agent).mock.calls.at(-1)?.[0];
+    expect(agentConfig?.model).toEqual(expect.any(Function));
+    const resolveAgentModel = agentConfig?.model as (() => unknown) | undefined;
+    expect(resolveAgentModel?.()).toBe("anthropic/claude-haiku");
   });
 
   it("routes override model through provider resolution (azure-openai prefix)", async () => {

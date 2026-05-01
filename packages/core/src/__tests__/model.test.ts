@@ -4,6 +4,8 @@ import {
   resolveTriageModelConfig,
   resolveModelConfigWithOverride,
   getModelDisplayName,
+  resolveDefaultAgentOptions,
+  supportsAnthropicCacheControl,
 } from "../agent/model.js";
 
 function clearEnv() {
@@ -16,6 +18,8 @@ function clearEnv() {
   delete process.env.RUSTY_AZURE_DEPLOYMENT;
   delete process.env.RUSTY_LLM_BASE_URL;
   delete process.env.RUSTY_LLM_API_KEY;
+  delete process.env.REQUESTY_API_KEY;
+  delete process.env.RUSTY_PROMPT_CACHE;
 }
 
 describe("resolveModelConfig", () => {
@@ -68,6 +72,109 @@ describe("resolveModelConfig", () => {
 
     const config = resolveModelConfig();
     expect(config.type).toBe("router");
+  });
+
+  it("leaves requesty/ models on the native mastra router", () => {
+    process.env.RUSTY_LLM_MODEL = "requesty/anthropic/claude-sonnet-4";
+
+    const config = resolveModelConfig();
+    expect(config).toEqual({ type: "router", model: "requesty/anthropic/claude-sonnet-4" });
+  });
+});
+
+describe("resolveDefaultAgentOptions", () => {
+  beforeEach(clearEnv);
+
+  it("returns auto_cache providerOptions for requesty/ router models", () => {
+    const opts = resolveDefaultAgentOptions({
+      type: "router",
+      model: "requesty/anthropic/claude-sonnet-4",
+    });
+    expect(opts).toEqual({
+      providerOptions: { requesty: { auto_cache: true } },
+    });
+  });
+
+  it("returns undefined for non-requesty router models", () => {
+    expect(
+      resolveDefaultAgentOptions({ type: "router", model: "anthropic/claude-sonnet" }),
+    ).toBeUndefined();
+  });
+
+  it("returns undefined for non-router configs", () => {
+    expect(
+      resolveDefaultAgentOptions({
+        type: "azure-api-key",
+        resourceName: "r",
+        deploymentName: "d",
+        apiKey: "k",
+      }),
+    ).toBeUndefined();
+    expect(
+      resolveDefaultAgentOptions({
+        type: "openai-compatible",
+        baseUrl: "https://litellm.example.com/v1",
+        model: "anything",
+      }),
+    ).toBeUndefined();
+  });
+
+  it("returns undefined when RUSTY_PROMPT_CACHE=false even for requesty/ models", () => {
+    process.env.RUSTY_PROMPT_CACHE = "false";
+    expect(
+      resolveDefaultAgentOptions({
+        type: "router",
+        model: "requesty/anthropic/claude-sonnet-4",
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe("supportsAnthropicCacheControl", () => {
+  it("returns true for direct anthropic router models", () => {
+    expect(
+      supportsAnthropicCacheControl({
+        type: "router",
+        model: "anthropic/claude-sonnet-4",
+      }),
+    ).toBe(true);
+  });
+
+  it("returns true for requesty-routed anthropic models", () => {
+    expect(
+      supportsAnthropicCacheControl({
+        type: "router",
+        model: "requesty/anthropic/claude-sonnet-4",
+      }),
+    ).toBe(true);
+  });
+
+  it("returns true when anthropic appears later in a router model string", () => {
+    expect(
+      supportsAnthropicCacheControl({
+        type: "router",
+        model: "gateway/vendor/anthropic/claude-sonnet-4",
+      }),
+    ).toBe(true);
+  });
+
+  it("returns false for other requesty-routed providers", () => {
+    expect(
+      supportsAnthropicCacheControl({
+        type: "router",
+        model: "requesty/openai/gpt-5",
+      }),
+    ).toBe(false);
+  });
+
+  it("returns false for non-router configs", () => {
+    expect(
+      supportsAnthropicCacheControl({
+        type: "openai-compatible",
+        baseUrl: "https://example.com/v1",
+        model: "anthropic/claude-sonnet-4",
+      }),
+    ).toBe(false);
   });
 });
 

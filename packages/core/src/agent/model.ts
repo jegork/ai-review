@@ -110,6 +110,20 @@ export function resolveModel(
   }
 }
 
+export function resolveDefaultAgentOptions(
+  config: ModelConfig,
+): { providerOptions: { requesty: { auto_cache: true } } } | undefined {
+  if (process.env.RUSTY_PROMPT_CACHE === "false") return undefined;
+  if (config.type !== "router") return undefined;
+  if (!config.model.startsWith("requesty/")) return undefined;
+  return { providerOptions: { requesty: { auto_cache: true } } };
+}
+
+export function supportsAnthropicCacheControl(config: ModelConfig): boolean {
+  if (config.type !== "router") return false;
+  return config.model.includes("anthropic/");
+}
+
 export interface ModelSettings {
   temperature?: number;
   topP?: number;

@@ -14,6 +14,7 @@ vi.mock("../agent/model.js", () => ({
   resolveModel: vi.fn(() => "test-model"),
   getModelDisplayName: vi.fn(() => "test-model"),
   resolveModelSettings: vi.fn(() => ({})),
+  resolveDefaultAgentOptions: vi.fn(() => undefined),
 }));
 
 const { runReview } = await import("../agent/review.js");

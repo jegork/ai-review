@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { buildSystemPrompt, buildUserMessage } from "../agent/prompts.js";
+import { describe, it, expect, afterEach } from "vitest";
+import {
+  buildSystemPrompt,
+  buildUserMessage,
+  buildCachedSystemMessages,
+} from "../agent/prompts.js";
 import { ReviewOutputSchema } from "../agent/schema.js";
 import type { ReviewConfig, PRMetadata, TicketInfo } from "../types.js";
 
@@ -123,6 +127,40 @@ describe("buildSystemPrompt", () => {
   it("omits convention instructions section when not provided", () => {
     const prompt = buildSystemPrompt(baseConfig);
     expect(prompt).not.toContain("repository maintainer");
+  });
+});
+
+describe("buildCachedSystemMessages", () => {
+  afterEach(() => {
+    delete process.env.RUSTY_PROMPT_CACHE;
+  });
+
+  it("wraps the prompt with anthropic ephemeral cacheControl by default", () => {
+    const messages = buildCachedSystemMessages("hello");
+    expect(messages).toEqual([
+      {
+        role: "system",
+        content: "hello",
+        providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+      },
+    ]);
+  });
+
+  it("omits providerOptions when RUSTY_PROMPT_CACHE=false (kill switch)", () => {
+    process.env.RUSTY_PROMPT_CACHE = "false";
+    const messages = buildCachedSystemMessages("hello");
+    expect(messages).toEqual([{ role: "system", content: "hello" }]);
+  });
+
+  it("omits providerOptions when Anthropic cache control is unsupported", () => {
+    const messages = buildCachedSystemMessages("hello", { anthropicCacheControl: false });
+    expect(messages).toEqual([{ role: "system", content: "hello" }]);
+  });
+
+  it("treats unrecognized RUSTY_PROMPT_CACHE values as enabled", () => {
+    process.env.RUSTY_PROMPT_CACHE = "yes";
+    const messages = buildCachedSystemMessages("hello");
+    expect(messages[0].providerOptions?.anthropic?.cacheControl.type).toBe("ephemeral");
   });
 });
 
