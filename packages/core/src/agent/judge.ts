@@ -139,13 +139,13 @@ export async function judgeFindings(
     "running judge pass",
   );
 
-  const defaultGenerateOptionsLegacy = resolveDefaultAgentOptions(modelConfig);
+  const defaultOptions = resolveDefaultAgentOptions(modelConfig);
   const agent = new Agent({
     id: "review-judge",
     name: "Rusty Bot Judge",
     instructions: () => JUDGE_SYSTEM_PROMPT,
     model: () => resolveModel(modelConfig),
-    ...(defaultGenerateOptionsLegacy && { defaultGenerateOptionsLegacy }),
+    ...(defaultOptions && { defaultOptions }),
   });
 
   const userMessage = formatFindingsForJudge(findings, diff);

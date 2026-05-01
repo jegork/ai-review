@@ -137,7 +137,7 @@ export async function runReview(
   const builtInTools = buildTools(options);
   const extraTools = tier === "skim" ? {} : (options?.extraTools ?? {});
 
-  const defaultGenerateOptionsLegacy = resolveDefaultAgentOptions(modelConfig);
+  const defaultOptions = resolveDefaultAgentOptions(modelConfig);
 
   const agent = new Agent({
     id: "review-agent",
@@ -148,7 +148,7 @@ export async function runReview(
       }),
     model: () => resolveModel(modelConfig),
     tools: { ...builtInTools, ...extraTools },
-    ...(defaultGenerateOptionsLegacy && { defaultGenerateOptionsLegacy }),
+    ...(defaultOptions && { defaultOptions }),
   });
 
   const schema = tier === "skim" ? SkimReviewOutputSchema : ReviewOutputSchema;

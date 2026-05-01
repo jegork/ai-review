@@ -111,13 +111,13 @@ export async function runTriage(
     overflowFiles = applyOverflowDefaults(patches, triageablePatches);
   }
 
-  const defaultGenerateOptionsLegacy = resolveDefaultAgentOptions(modelConfig);
+  const defaultOptions = resolveDefaultAgentOptions(modelConfig);
   const agent = new Agent({
     id: "triage-agent",
     name: "Rusty Bot Triage",
     instructions: () => systemPrompt,
     model: () => resolveModel(modelConfig),
-    ...(defaultGenerateOptionsLegacy && { defaultGenerateOptionsLegacy }),
+    ...(defaultOptions && { defaultOptions }),
   });
 
   const triageMessage = buildTriageUserMessage(triageablePatches);
