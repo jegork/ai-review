@@ -8,6 +8,7 @@ import {
   resolveModel,
   getModelDisplayName,
   resolveModelSettings,
+  resolveDefaultAgentOptions,
 } from "../agent/model.js";
 import { normalizePath } from "../agent/multi-call.js";
 import { countTokens } from "../diff/compress.js";
@@ -80,7 +81,6 @@ export async function runTriage(
     throw new Error("triage model not configured");
   }
 
-  const model = resolveModel(modelConfig);
   const modelName = getModelDisplayName(modelConfig);
   const systemPrompt = buildTriageSystemPrompt();
 
@@ -111,11 +111,13 @@ export async function runTriage(
     overflowFiles = applyOverflowDefaults(patches, triageablePatches);
   }
 
+  const defaultGenerateOptionsLegacy = resolveDefaultAgentOptions(modelConfig);
   const agent = new Agent({
     id: "triage-agent",
     name: "Rusty Bot Triage",
-    instructions: systemPrompt,
-    model,
+    instructions: () => systemPrompt,
+    model: () => resolveModel(modelConfig),
+    ...(defaultGenerateOptionsLegacy && { defaultGenerateOptionsLegacy }),
   });
 
   const triageMessage = buildTriageUserMessage(triageablePatches);

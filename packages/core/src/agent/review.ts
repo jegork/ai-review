@@ -1,12 +1,14 @@
 import { Agent } from "@mastra/core/agent";
 import type { ToolsInput } from "@mastra/core/agent";
 import { ReviewOutputSchema, SkimReviewOutputSchema } from "./schema.js";
-import { buildSystemPrompt, buildUserMessage } from "./prompts.js";
+import { buildSystemPrompt, buildUserMessage, buildCachedSystemMessages } from "./prompts.js";
 import {
   resolveModelConfig,
   resolveModel,
   getModelDisplayName,
   resolveModelSettings,
+  resolveDefaultAgentOptions,
+  supportsAnthropicCacheControl,
 } from "./model.js";
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
 import type { OpenGrepFinding } from "../opengrep/types.js";
@@ -130,18 +132,23 @@ export async function runReview(
     options?.chunkFiles,
   );
   const modelConfig = resolveModelConfig();
-  const model = resolveModel(modelConfig);
   const modelName = getModelDisplayName(modelConfig);
 
   const builtInTools = buildTools(options);
   const extraTools = tier === "skim" ? {} : (options?.extraTools ?? {});
 
+  const defaultGenerateOptionsLegacy = resolveDefaultAgentOptions(modelConfig);
+
   const agent = new Agent({
     id: "review-agent",
     name: "Rusty Bot Reviewer",
-    instructions: systemPrompt,
-    model,
+    instructions: () =>
+      buildCachedSystemMessages(systemPrompt, {
+        anthropicCacheControl: supportsAnthropicCacheControl(modelConfig),
+      }),
+    model: () => resolveModel(modelConfig),
     tools: { ...builtInTools, ...extraTools },
+    ...(defaultGenerateOptionsLegacy && { defaultGenerateOptionsLegacy }),
   });
 
   const schema = tier === "skim" ? SkimReviewOutputSchema : ReviewOutputSchema;

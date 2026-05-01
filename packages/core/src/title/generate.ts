@@ -27,14 +27,13 @@ export async function generateConventionalTitle(
   const { compressed } = compressDiff(patches, MAX_TITLE_TOKENS);
 
   const modelConfig = resolveModelConfig();
-  const model = resolveModel(modelConfig);
   const modelName = getModelDisplayName(modelConfig);
 
   const agent = new Agent({
     id: "title-agent",
     name: "Rusty Bot Title Generator",
-    instructions: buildTitleSystemPrompt(),
-    model,
+    instructions: () => buildTitleSystemPrompt(),
+    model: () => resolveModel(modelConfig),
   });
 
   const userMessage = buildTitleUserMessage(compressed, prMetadata);

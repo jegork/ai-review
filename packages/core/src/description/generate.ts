@@ -99,14 +99,13 @@ export async function generatePRDescription(
   const { compressed } = compressDiff(patches, MAX_DESCRIPTION_TOKENS);
 
   const modelConfig = resolveModelConfig();
-  const model = resolveModel(modelConfig);
   const modelName = getModelDisplayName(modelConfig);
 
   const agent = new Agent({
     id: "description-agent",
     name: "Rusty Bot Description Generator",
-    instructions: buildDescriptionSystemPrompt(),
-    model,
+    instructions: () => buildDescriptionSystemPrompt(),
+    model: () => resolveModel(modelConfig),
   });
 
   const userMessage = buildDescriptionUserMessage(compressed, prMetadata, existingDescription);
