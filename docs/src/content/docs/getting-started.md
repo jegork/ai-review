@@ -57,7 +57,10 @@ underlying Docker image is published per release tag.
 
 ## Next steps
 
-- [Full GitHub Action reference](/providers/github-action/) — complete inputs, skipped events, and Docker image details
-- [GitHub App (self-hosted)](/providers/github-app/) — run as a webhook server for multiple repos
-- [Azure DevOps](/providers/azure-devops/) — run in Azure Pipelines
-- [LLM providers](/guides/llm-providers/) — connect Azure OpenAI, OpenAI-compatible endpoints, or any of 99+ providers
+- [Full GitHub Action reference](/providers/github-action/) — every input and env var, skipped event types, and how to pin the Docker image
+- [GitHub App (self-hosted)](/providers/github-app/) — run as a webhook server when you want one deployment to cover many repos
+- [Azure DevOps](/providers/azure-devops/) — drop the same review into Azure Pipelines with PR threads instead of GitHub comments
+- [LLM providers](/guides/llm-providers/) — swap to Azure OpenAI, an OpenAI-compatible endpoint, or any of 99+ providers via LiteLLM
+- [Convention files](/guides/convention-files/) — teach the bot your house rules with a `REVIEW-BOT.md` checked into the repo
+- [Gating merges](/guides/gating-merges/) — fail the check on critical findings so PRs can't merge until they're resolved
+- [Tuning cost & noise](/guides/cascading-review/) — control how many files get the deep-review treatment vs. skipped outright

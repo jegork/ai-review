@@ -45,6 +45,12 @@ The managed identity vars (`RUSTY_AZURE_*`) take priority over the API-key vars 
 | `RUSTY_LLM_BASE_URL` | Base URL of an OpenAI-compatible endpoint (LiteLLM, vLLM, Ollama, …) |
 | `RUSTY_LLM_API_KEY` | API key for the custom endpoint (optional for unauthenticated local instances) |
 
+## Retries
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `RUSTY_LLM_MAX_RETRIES` | `2` | Max additional retries after a transient LLM error. Capped at the length of the built-in backoff schedule (2 entries today — values higher than that are silently lowered). Set to `0` to disable retries entirely. |
+
 ## Temperature and top-p
 
 | Variable | Default | Description |
@@ -101,6 +107,21 @@ See [PR description generation](/guides/pr-description/).
 | `RUSTY_RENAME_TITLE_TO_CONVENTIONAL` | `false` | Rewrite non-conventional PR titles into Conventional Commits format |
 
 See [PR title rewriting](/guides/pr-title/).
+
+## MCP tools
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `RUSTY_MCP_CONFIG` | `./mcp-servers.json` | Path to a JSON file declaring MCP servers (stdio or HTTP). Missing file disables MCP silently. |
+
+See [MCP tools](/guides/mcp-tools/).
+
+## Dashboard (self-hosted only)
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `RUSTY_DASHBOARD` | `false` | Serve the embedded dashboard from the GitHub App webhook server when set to `true`. |
+| `RUSTY_DASHBOARD_DIR` | bundled | Override the directory served when the dashboard is enabled. Used for development. |
 
 ## Ticket integrations
 
