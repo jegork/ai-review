@@ -23,6 +23,19 @@ RUSTY_REVIEW_TEMPERATURES=0.2,0.2,0.3
 
 When fewer models are provided than passes, missing entries fall back to `RUSTY_LLM_MODEL`.
 
+Example balanced multi-model setup:
+
+```bash
+RUSTY_LLM_TRIAGE_MODEL=requesty/google/gemini-3.1-flash-lite-preview
+RUSTY_REVIEW_MODELS=requesty/anthropic/claude-sonnet-4-6,requesty/openai/gpt-5-mini,requesty/google/gemini-3.1-pro
+RUSTY_REVIEW_TEMPERATURES=0.2,0.2,0.3
+RUSTY_JUDGE_MODEL=requesty/anthropic/claude-sonnet-4-6
+RUSTY_JUDGE_TEMPERATURE=0
+RUSTY_REVIEW_ADAPTIVE_PASSES=true
+```
+
+Treat model IDs as provider-specific configuration. If your router uses different current aliases, keep the same role split: cheap structured model for triage, diverse review models for consensus, and a well-calibrated model for the judge.
+
 Adaptive pass planning is opt-in:
 
 ```bash
