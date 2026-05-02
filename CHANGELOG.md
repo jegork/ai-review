@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.1.0](https://github.com/jegork/rusty-bot/compare/v1.0.1...v1.1.0) (2026-05-02)
+
+
+### Features
+
+* incremental review against last-reviewed state ([cd180ef](https://github.com/jegork/rusty-bot/commit/cd180ef34ca47246ce6aa340f0f961f5883e3910))
+* incremental review against last-reviewed state ([971482b](https://github.com/jegork/rusty-bot/commit/971482b6db4d53516968ae046dd9086df7066b0d))
+* rewrite non-conventional PR titles into conventional commits ([a4014ef](https://github.com/jegork/rusty-bot/commit/a4014ef86abf31915e3122ba52f8e3249a548e87))
+* rewrite non-conventional PR titles via RUSTY_RENAME_TITLE_TO_CONVENTIONAL ([26af07d](https://github.com/jegork/rusty-bot/commit/26af07df0570f4498bd557c2665d90982c26ad33))
+* support adaptive multi-model consensus ([6baf183](https://github.com/jegork/rusty-bot/commit/6baf183e2f31efdf1d23131e93636229d731be1d))
+* support per-pass models and adaptive consensus passes ([5b50200](https://github.com/jegork/rusty-bot/commit/5b50200c934ebc1e267fb96c14137fe49be6727f))
+
+
+### Bug Fixes
+
+* configure provider cache options dynamically ([a7edd72](https://github.com/jegork/rusty-bot/commit/a7edd72965154f6d5918e5b3794d1bcc41922b1c))
+* configure provider cache options dynamically ([3e047a3](https://github.com/jegork/rusty-bot/commit/3e047a351001ac897456315681a56e9b4e4122ba))
+* constrain reviewer finding paths to the chunk's file set ([9dc11b7](https://github.com/jegork/rusty-bot/commit/9dc11b72fe171e886b419050bd8fa0d039776047))
+* constrain reviewer finding paths to the chunk's file set ([ba4e344](https://github.com/jegork/rusty-bot/commit/ba4e344c35e908d64ec6e9750296abf6b207f03d))
+* drop findings that don't anchor to the diff ([9223458](https://github.com/jegork/rusty-bot/commit/92234585e8d21afaa388d192b36994ebdeb7057b))
+* drop findings that don't anchor to the diff before posting inline comments ([b44af97](https://github.com/jegork/rusty-bot/commit/b44af97f672a5da82b9a6bb922d4d9bebce895fc))
+* harden title rewriting against length limits and empty fields ([d3c5bc2](https://github.com/jegork/rusty-bot/commit/d3c5bc284d69ef25e0aeebdc85da4e3939f3f2a9))
+* prefix docs base path on getting-started links ([e894f55](https://github.com/jegork/rusty-bot/commit/e894f55947868e7c5a47733f50d5dba0e1168b25))
+* prefix docs base path on getting-started links ([040b9ff](https://github.com/jegork/rusty-bot/commit/040b9ff0715940536d4d49a5a6c520adc37e28af))
+* preserve droppedFindings through mergeResults ([9e905f2](https://github.com/jegork/rusty-bot/commit/9e905f27a736649d4875ae9b4ca6cbb5d0f9767e))
+* preserve droppedFindings through mergeResults ([8e30fe0](https://github.com/jegork/rusty-bot/commit/8e30fe09c1e7380b4eabf86f14abf346bf25d27b)), closes [#84](https://github.com/jegork/rusty-bot/issues/84)
+* retry consensus passes on transient LLM errors ([4bd5c06](https://github.com/jegork/rusty-bot/commit/4bd5c06dfa4364a7e262d22575567042ec762ea6))
+* retry consensus passes on transient LLM errors with bounded backoff ([bf950db](https://github.com/jegork/rusty-bot/commit/bf950dbf3b4c253188d1f96cee8ad86bca4f708c))
+* truncate generated PR description to ADO 4000-char limit ([432a797](https://github.com/jegork/rusty-bot/commit/432a797f8e6fba32f7383ae2ed890da9d9efa788))
+* truncate generated PR description to ADO 4000-char limit ([0083cdd](https://github.com/jegork/rusty-bot/commit/0083cdd3e22b5a11148309422c2c6917d63f7637)), closes [#86](https://github.com/jegork/rusty-bot/issues/86)
+* use current agent default options ([59733ea](https://github.com/jegork/rusty-bot/commit/59733ea7256374ff1673cbccdb5899dd01f34b64))
+
+
+### Documentation
+
+* add MCP tools guide and document missing env vars ([f122739](https://github.com/jegork/rusty-bot/commit/f12273936a79330872671d9291a69e8c9d4d250e))
+* add multi-model review preset ([9aebc37](https://github.com/jegork/rusty-bot/commit/9aebc37f0a955c43e2afb654776aa61f11a39cf7))
+* add PR title rewriting guide and env-var reference ([dfaf1bc](https://github.com/jegork/rusty-bot/commit/dfaf1bcde48f15a4ba0ac192fcc6b9ce3b7faad2))
+* address bot review on mcp-tools guide and env-vars phrasing ([d787756](https://github.com/jegork/rusty-bot/commit/d787756c16d45e10c3385c804788b1c0c528ca92))
+* correct mcp env-inheritance — secrets must live in the env block ([62c6f69](https://github.com/jegork/rusty-bot/commit/62c6f69f6eeb14064b2feccda56f8e952657682a))
+* document PR title rewriting feature ([577e700](https://github.com/jegork/rusty-bot/commit/577e7002574a08a9bb5331a3522f53e1e4dde7d8))
+* link landing-page feature cards and richer getting-started next steps ([a63e920](https://github.com/jegork/rusty-bot/commit/a63e920b5328ce730e9101d20730ac6875b6240e))
+* polish landing page, add MCP tools guide, document missing env vars ([4b51886](https://github.com/jegork/rusty-bot/commit/4b518865779793ede5096f1cd450e2cbf2be7f76))
+
 ## [1.0.1](https://github.com/jegork/ai-review/compare/v1.0.0...v1.0.1) (2026-04-24)
 
 
