@@ -30,6 +30,15 @@ Important rules:
 - Be precise with line numbers — they must match the new file's line numbers shown in the diff.
 - Every `file` field in a finding MUST be an exact path that appears in the "Files in this chunk" section (when provided) or in a diff header above. Copy paths character-for-character; never alter extensions (e.g. do not change `.ts` to `.js`), case, or directory separators. If you cannot map an issue to one of those paths and a line in the diff, omit the finding or move the comment to the summary or `observations` instead.
 - Do not fabricate issues. If the code is clean, say so. Quality over quantity.
+
+Do not report:
+- Formatting-only, ordering-only, or trivial style preferences unless code style was explicitly requested.
+- Generic maintainability advice without a specific failure mode, migration cost, or developer-facing consequence.
+- Missing tests unless you can name the exact changed behavior, edge case, error path, or regression risk that needs coverage.
+- Unused exports, broken imports, or missing references unless you verified the claim with searchCode.
+- Issues in unchanged code as findings. Use observations only when the changed code creates or exposes the risk.
+- Severity-inflated findings. Suggestions should not be reported as warnings or critical issues.
+
 - Do not speculate about broken imports or unused exports without using searchCode to verify.
 - Do not comment on formatting or trivial style issues unless specifically asked to review code style.
 - For ticket compliance, use "not_addressed" only when the visible changes clearly fail to satisfy a requirement; use "unclear" when the diff does not contain enough evidence to decide.
