@@ -232,7 +232,7 @@ describe("expandToScopeBoundaries", () => {
     expect(result).toBeNull();
   });
 
-  it("returns null when scope exceeds maxScopeLines", async () => {
+  it("uses a medium tier for scopes just over maxScopeLines", async () => {
     const lines = [
       "function huge() {",
       ...Array.from({ length: 300 }, (_, i) => `  const x${i} = ${i};`),
@@ -247,7 +247,29 @@ describe("expandToScopeBoundaries", () => {
       200,
     );
 
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.scopes).toEqual([{ startLine: 140, endLine: 160 }]);
+    expect(result!.siblingSignatures).toContainEqual({ line: 1, text: "function huge() {" });
+  });
+
+  it("uses a tighter large tier for very large scopes", async () => {
+    const lines = [
+      "function huge() {",
+      ...Array.from({ length: 500 }, (_, i) => `  const x${i} = ${i};`),
+      "}",
+    ];
+    const bigFile = lines.join("\n");
+
+    const result = await expandToScopeBoundaries(
+      bigFile,
+      [{ startLine: 250, endLine: 250 }],
+      "big.js",
+      200,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.scopes).toEqual([{ startLine: 247, endLine: 253 }]);
+    expect(result!.siblingSignatures).toContainEqual({ line: 1, text: "function huge() {" });
   });
 
   it("handles empty file content gracefully", async () => {
@@ -444,6 +466,47 @@ describe("expandContext with tree-sitter", () => {
     // falls back to ±3 fixed lines
     expect(result[0].hunks[0].newStart).toBe(1);
     expect(result[0].hunks[0].content).toContain("export function processData");
+  });
+
+  it("keeps large function context bounded without shifting new-file line numbers", async () => {
+    const lines = [
+      "function huge() {",
+      ...Array.from({ length: 500 }, (_, i) => `  const x${i} = ${i};`),
+      "}",
+    ];
+    const bigFile = lines.join("\n");
+    const patch: FilePatch = {
+      path: "src/big.js",
+      additions: 1,
+      deletions: 0,
+      isBinary: false,
+      hunks: [
+        {
+          oldStart: 250,
+          oldLines: 1,
+          newStart: 250,
+          newLines: 2,
+          content: " const x248 = 248;\n+  const touched = true;",
+        },
+      ],
+    };
+
+    const result = await expandContext([patch], () => Promise.resolve(bigFile), 10);
+    const hunk = result[0].hunks[0];
+
+    expect(hunk.newStart).toBe(248);
+    expect(hunk.content).toContain("~ // ... function huge() {");
+    expect(hunk.content).toContain(" const x246 = 246;");
+    expect(hunk.content).not.toContain(" const x0 = 0;");
+
+    const bodyRowCount = hunk.content.split("\n").filter((l) => !l.startsWith("~")).length;
+    expect(hunk.newLines).toBe(bodyRowCount);
+
+    const { compressDiff } = await import("../diff/compress.js");
+    const { compressed } = compressDiff(result, 10000);
+    const labelled = compressed.split("\n").find((l) => l.startsWith("250 "));
+    expect(labelled).toBeDefined();
+    expect(labelled).toContain("const x248 = 248");
   });
 });
 
