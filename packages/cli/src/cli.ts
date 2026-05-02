@@ -5,6 +5,7 @@ import {
   filterAnchorableFindings,
   filterFiles,
   flushLogger,
+  formatInlineComment,
   formatSummaryComment,
   isCascadeEnabled,
   loadMcpServerConfigsFromEnv,
@@ -31,15 +32,9 @@ function renderInlineFindings(findings: Finding[]): string {
   const lines: string[] = ["", "## Inline findings", ""];
   for (const f of findings) {
     const range = f.endLine && f.endLine !== f.line ? `${f.line}-${f.endLine}` : `${f.line}`;
-    lines.push(`### \`${f.file}:${range}\` — ${f.severity} (${f.category})`);
+    lines.push(`### \`${f.file}:${range}\``);
     lines.push("");
-    lines.push(f.message);
-    if (f.suggestedFix) {
-      lines.push("");
-      lines.push("```");
-      lines.push(f.suggestedFix);
-      lines.push("```");
-    }
+    lines.push(formatInlineComment(f));
     lines.push("");
   }
   return lines.join("\n");
@@ -176,7 +171,7 @@ export async function run(args: CliArgs): Promise<number> {
 async function main(): Promise<number> {
   let args: CliArgs;
   try {
-    args = parseArgs(process.argv.slice(2));
+    args = parseArgs(process.argv.slice(2), process.env);
   } catch (err) {
     process.stderr.write(`${(err as Error).message}\n\n${HELP_TEXT}`);
     return 2;

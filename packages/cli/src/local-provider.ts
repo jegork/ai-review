@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { join, isAbsolute } from "node:path";
 import { promisify } from "node:util";
 import {
+  logger,
   parseDiff,
   type CodeSearchResult,
   type FilePatch,
@@ -11,6 +12,8 @@ import {
 } from "@rusty-bot/core";
 
 const execFileAsync = promisify(execFile);
+
+const log = logger.child({ package: "cli", module: "local-provider" });
 
 const SEARCH_RESULT_LIMIT = 50;
 
@@ -77,10 +80,10 @@ export class LocalGitProvider implements GitProvider {
   }
 
   async getFileContent(path: string, ref: string): Promise<string | null> {
-    // when the caller asks for the head ref we serve the working tree, which
-    // matches what `git diff` was computed against and is friendlier to
-    // uncommitted edits. for any other ref we go through `git show`.
-    if (ref === this.opts.headRef) {
+    // only short-circuit to the working tree when the user explicitly chose
+    // HEAD as the head ref. for any other ref the working tree may be on a
+    // different branch and would return content that does not match the diff.
+    if (ref === this.opts.headRef && this.opts.headRef === "HEAD") {
       try {
         const abs = isAbsolute(path) ? path : join(this.opts.repoPath, path);
         return await readFile(abs, "utf8");
@@ -123,6 +126,10 @@ export class LocalGitProvider implements GitProvider {
           "--fixed-strings",
           "--",
           query,
+          // pass the cwd explicitly: when rg is invoked via execFile its stdin
+          // is a pipe (not a tty), and without a path argument it would read
+          // patterns from stdin and hang forever.
+          ".",
         ],
         { cwd: this.opts.repoPath, maxBuffer: 16 * 1024 * 1024 },
       );
@@ -151,7 +158,11 @@ export class LocalGitProvider implements GitProvider {
       return parseGitGrepOutput(stdout);
     } catch (err) {
       const code = (err as { code?: number | string }).code;
+      // `git grep` exits 1 when there are no matches — that's a normal "empty result"
+      // and not worth logging. anything else (ENOENT, non-repo cwd, broken pipe, ...)
+      // is a real failure that the LLM cannot distinguish from "no matches", so warn.
       if (code === 1) return [];
+      log.warn({ err, query }, "git grep failed, returning no results");
       return [];
     }
   }
