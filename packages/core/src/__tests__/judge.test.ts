@@ -125,6 +125,28 @@ describe("judgeFindings", () => {
     expect(generateMock).not.toHaveBeenCalled();
   });
 
+  it("uses an adversarial judge prompt", async () => {
+    const { Agent } = await import("@mastra/core/agent");
+    const findings = [makeFinding()];
+
+    generateMock.mockResolvedValueOnce({
+      object: {
+        evaluations: [{ index: 0, confidence: 9, reasoning: "valid" }],
+      },
+      usage: { totalTokens: 200 },
+    });
+
+    await judgeFindings(findings, DIFF, enabledConfig);
+
+    const agentConfig = vi.mocked(Agent).mock.calls.at(-1)?.[0];
+    const instructions = agentConfig?.instructions as (() => string) | undefined;
+    const prompt = instructions?.();
+    expect(prompt).toContain("Default to rejection");
+    expect(prompt).toContain("missing-test complaints");
+    expect(prompt).toContain("severity-inflated findings");
+    expect(prompt).toContain("suggested fixes that contain prose");
+  });
+
   it("filters findings below threshold", async () => {
     const findings = [
       makeFinding({ message: "real bug" }),

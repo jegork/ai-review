@@ -39,7 +39,17 @@ describe("buildSystemPrompt", () => {
   it("includes strict style instructions", () => {
     const prompt = buildSystemPrompt({ ...baseConfig, style: "strict" });
     expect(prompt).toContain("STRICT");
-    expect(prompt).toContain("every potential issue");
+    expect(prompt).toContain("every evidence-backed issue");
+    expect(prompt).not.toContain("better to flag a false positive");
+  });
+
+  it("includes negative review constraints", () => {
+    const prompt = buildSystemPrompt(baseConfig);
+    expect(prompt).toContain("Do not report:");
+    expect(prompt).toContain("Formatting-only");
+    expect(prompt).toContain("Generic maintainability advice");
+    expect(prompt).toContain("Missing tests unless");
+    expect(prompt).toContain("Severity-inflated findings");
   });
 
   it("includes lenient style instructions", () => {
