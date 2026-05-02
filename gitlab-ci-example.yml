@@ -1,0 +1,23 @@
+# Drop this snippet into your existing .gitlab-ci.yml (or use it as the
+# whole file). The job runs only on merge_request_event pipelines, so it
+# fires on every push to an open MR but never on regular branch builds.
+#
+# Required CI/CD variables (Settings → CI/CD → Variables):
+#   RUSTY_GITLAB_TOKEN  — project access token with the 'api' scope.
+#                          CI_JOB_TOKEN works for read APIs but cannot post
+#                          MR notes/discussions on most installs.
+#   ANTHROPIC_API_KEY   — (or the matching key for whichever LLM you pick).
+
+rusty-bot-review:
+  stage: test
+  image: ghcr.io/jegork/rusty-bot:latest
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    RUSTY_MODE: gitlab
+    RUSTY_LLM_MODEL: anthropic/claude-sonnet-4-20250514
+    RUSTY_REVIEW_STYLE: balanced
+    RUSTY_FOCUS_AREAS: security,bugs,performance
+    RUSTY_FAIL_ON_CRITICAL: "true"
+  script:
+    - node /app/packages/gitlab/dist/cli.js
