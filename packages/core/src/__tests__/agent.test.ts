@@ -315,6 +315,24 @@ describe("buildUserMessage", () => {
     expect(chunkIdx).toBeGreaterThan(-1);
     expect(chunkIdx).toBeLessThan(diffIdx);
   });
+
+  it("includes ranked context before the diff when provided", () => {
+    const msg = buildUserMessage(
+      "diff content here",
+      prMetadata,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ["src/foo.ts"],
+      "## Graph-ranked Context\n### src/bar.ts",
+    );
+
+    const contextIdx = msg.indexOf("## Graph-ranked Context");
+    const diffIdx = msg.indexOf("## Diff");
+    expect(contextIdx).toBeGreaterThan(-1);
+    expect(contextIdx).toBeLessThan(diffIdx);
+  });
 });
 
 describe("ReviewOutputSchema", () => {

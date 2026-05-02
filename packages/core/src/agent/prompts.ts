@@ -99,6 +99,7 @@ export function buildUserMessage(
   otherPrFiles?: string[],
   openGrepFindings?: OpenGrepFinding[],
   chunkFiles?: string[],
+  rankedContext?: string,
 ): string {
   const parts: string[] = [];
 
@@ -167,6 +168,11 @@ export function buildUserMessage(
   if (openGrepFindings && openGrepFindings.length > 0) {
     parts.push("");
     parts.push(buildOpenGrepSection(openGrepFindings));
+  }
+
+  if (rankedContext) {
+    parts.push("");
+    parts.push(rankedContext);
   }
 
   parts.push("\n## Diff\n");

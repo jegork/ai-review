@@ -88,6 +88,16 @@ See [Judge / filter pass](/guides/judge-pass/).
 
 See [Cascading review](/guides/cascading-review/).
 
+## Graph-ranked context
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `RUSTY_GRAPH_CONTEXT` | `false` | Enable GraphSift-style ranked context selection for deep-review prompts |
+| `RUSTY_GRAPH_CONTEXT_TOKEN_BUDGET` | `2000` | Hard token budget for selected dependency context |
+| `RUSTY_GRAPH_CONTEXT_MAX_CANDIDATES` | `8` | Maximum directly related files to consider after ranking |
+
+See [Graph-ranked context](/guides/graph-ranked-context/).
+
 ## OpenGrep
 
 | Variable | Default | Description |

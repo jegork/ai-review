@@ -144,6 +144,43 @@ describe("runReview retry on STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED", () => 
   });
 });
 
+describe("runReview ranked context", () => {
+  beforeEach(() => {
+    generateMock.mockReset();
+  });
+
+  it("includes ranked context for deep-review calls", async () => {
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata, undefined, {
+      tier: "deep-review",
+      rankedContext: "## Graph-ranked Context\n### src/helper.ts",
+    });
+
+    expect(generateMock.mock.calls[0][0]).toContain("## Graph-ranked Context");
+  });
+
+  it("omits ranked context for skim calls", async () => {
+    generateMock.mockResolvedValueOnce({
+      object: {
+        summary: "looks fine",
+        recommendation: "looks_good",
+        findings: [],
+        observations: [],
+        filesReviewed: ["a.ts"],
+      },
+      usage: { totalTokens: 100 },
+    });
+
+    await runReview(config, "diff", prMetadata, undefined, {
+      tier: "skim",
+      rankedContext: "## Graph-ranked Context\n### src/helper.ts",
+    });
+
+    expect(generateMock.mock.calls[0][0]).not.toContain("## Graph-ranked Context");
+  });
+});
+
 class FakeApiCallError extends Error {
   isRetryable: boolean;
   constructor(message: string, isRetryable: boolean) {
