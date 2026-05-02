@@ -108,6 +108,35 @@ describe("extractTicketRefs", () => {
     });
   });
 
+  describe("gitlab refs", () => {
+    it("extracts a standard group/project URL", () => {
+      const refs = extractTicketRefs("see https://gitlab.com/acme/widgets/-/issues/42", "main");
+      expect(refs).toContainEqual(
+        expect.objectContaining({ id: "acme/widgets#42", source: "gitlab" }),
+      );
+    });
+
+    it("extracts a nested subgroup URL", () => {
+      const refs = extractTicketRefs(
+        "https://gitlab.com/group/subgroup/project/-/issues/9",
+        "main",
+      );
+      expect(refs).toContainEqual(
+        expect.objectContaining({ id: "group/subgroup/project#9", source: "gitlab" }),
+      );
+    });
+
+    it("extracts a single-segment (root-level) project URL", () => {
+      const refs = extractTicketRefs("https://gitlab.com/widgets/-/issues/123", "main");
+      expect(refs).toContainEqual(expect.objectContaining({ id: "widgets#123", source: "gitlab" }));
+    });
+
+    it("extracts a self-hosted http URL with a port", () => {
+      const refs = extractTicketRefs("http://gitlab.example.com:8080/team/api/-/issues/7", "main");
+      expect(refs).toContainEqual(expect.objectContaining({ id: "team/api#7", source: "gitlab" }));
+    });
+  });
+
   describe("branch name extraction", () => {
     it("extracts github-style feature/123-desc", () => {
       const refs = extractTicketRefs("", "feature/123-add-login");

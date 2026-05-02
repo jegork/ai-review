@@ -45,8 +45,10 @@ function extractFromDescription(text: string): TicketRef[] {
   }
 
   // gitlab issue URL: https://gitlab.com/group/sub/project/-/issues/123 (any host with /-/issues/)
-  // capture project path (any number of slash-separated segments) and issue id
-  for (const m of text.matchAll(/https:\/\/[\w.-]+\/((?:[\w.-]+\/)+[\w.-]+)\/-\/issues\/(\d+)/g)) {
+  // capture project path (one or more slash-separated segments) and issue id
+  for (const m of text.matchAll(
+    /https?:\/\/[\w.-]+(?::\d+)?\/((?:[\w.-]+\/)*[\w.-]+)\/-\/issues\/(\d+)/g,
+  )) {
     refs.push({ id: `${m[1]}#${m[2]}`, source: "gitlab", url: m[0] });
   }
 
