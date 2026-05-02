@@ -6,3 +6,5 @@ export type { GitHubTicketProviderConfig, IssueFetcher } from "./providers/githu
 export { JiraTicketProvider } from "./providers/jira.js";
 export { LinearTicketProvider } from "./providers/linear.js";
 export { AzureDevOpsTicketProvider } from "./providers/azure-devops.js";
+export { GitLabTicketProvider } from "./providers/gitlab.js";
+export type { GitLabTicketProviderConfig } from "./providers/gitlab.js";

@@ -156,7 +156,7 @@ export interface TicketResolutionStatus {
   consideredFetchFailed: number;
 }
 
-export type TicketSource = "github" | "jira" | "linear" | "azure-devops";
+export type TicketSource = "github" | "jira" | "linear" | "azure-devops" | "gitlab";
 
 export interface TicketRef {
   id: string;
