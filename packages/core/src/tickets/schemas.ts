@@ -40,3 +40,10 @@ export const AdoWorkItemSchema = z.object({
   id: z.number().optional(),
   fields: z.record(z.string(), z.unknown()).optional(),
 });
+
+export const GitLabIssueSchema = z.object({
+  iid: z.number(),
+  title: z.string(),
+  description: z.string().nullable().optional(),
+  labels: z.array(z.string()).optional(),
+});

@@ -1,6 +1,6 @@
 # Rusty Bot
 
-AI-powered PR review bot with configurable review styles, focus areas, and ticket compliance checking. Works with GitHub and Azure DevOps.
+AI-powered PR review bot with configurable review styles, focus areas, and ticket compliance checking. Works with GitHub, GitLab, and Azure DevOps.
 
 Built on [Mastra](https://mastra.ai/) (TypeScript).
 
@@ -17,7 +17,7 @@ Built on [Mastra](https://mastra.ai/) (TypeScript).
 - **Multi-provider LLM** — OpenAI, Anthropic, Google, or any provider supported by Mastra
 - **PR description generation** — optionally generate a structured PR description from the diff when the description is empty or a placeholder (off by default)
 - **Incremental review** — on subsequent pushes the bot reviews only the diff since the previously-reviewed state (commit on GitHub, PR iteration on Azure DevOps) instead of the entire PR, cutting tokens on multi-commit PRs (on by default; opt out with `RUSTY_INCREMENTAL_REVIEW=false`)
-- **GitHub + Azure DevOps** — webhook server for GitHub, pipeline task for Azure DevOps, or a drop-in GitHub Action
+- **GitHub + GitLab + Azure DevOps** — webhook server for GitHub, pipeline task for Azure DevOps, GitLab CI job, or a drop-in GitHub Action
 - **Web dashboard** — configure repos, review styles, focus areas, and view history
 
 ## Quick Start
@@ -65,6 +65,7 @@ packages/
 ├── github/         # GitHub App webhook server + config API
 ├── github-action/  # One-shot CLI driven by GitHub Actions env + event payload
 ├── azure-devops/   # Azure DevOps pipeline task (Docker entrypoint)
+├── gitlab/         # GitLab CI task — provider + CLI driven by CI_MERGE_REQUEST_* env
 └── dashboard/      # React SPA for configuration and review history
 ```
 
@@ -176,6 +177,42 @@ Set `RUSTY_LLM_MODEL`, `ANTHROPIC_API_KEY`, and other variables as pipeline vari
 
 The task exits with code 1 when critical issues are found (configurable via `RUSTY_FAIL_ON_CRITICAL`), which can gate PR merges.
 
+## GitLab CI Setup
+
+Rusty Bot ships with a GitLab CI integration that runs as a job inside the published Docker image. The job reads GitLab's predefined `CI_*` variables (`CI_MERGE_REQUEST_IID`, `CI_PROJECT_PATH`, `CI_API_V4_URL`) so there's nothing to configure beyond a token and an LLM key. See [`gitlab-ci-example.yml`](./gitlab-ci-example.yml) for the full snippet.
+
+```yaml
+rusty-bot-review:
+  stage: test
+  image: ghcr.io/jegork/rusty-bot:latest
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    RUSTY_MODE: gitlab
+    RUSTY_LLM_MODEL: anthropic/claude-sonnet-4-20250514
+    RUSTY_REVIEW_STYLE: balanced
+    RUSTY_FOCUS_AREAS: security,bugs,performance
+    RUSTY_FAIL_ON_CRITICAL: "true"
+  script:
+    - node /app/packages/gitlab/dist/cli.js
+```
+
+**Authentication:** Set `RUSTY_GITLAB_TOKEN` to a [project access token](https://docs.gitlab.com/ee/user/project/settings/project_access_tokens.html) with the `api` scope as a CI/CD variable (Settings → CI/CD → Variables). `CI_JOB_TOKEN` is read-only on most installs and cannot post MR notes or discussions.
+
+**LLM key:** Set the matching key for your chosen provider as a CI/CD variable too (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, etc.).
+
+**Self-hosted GitLab:** No extra config needed — `CI_API_V4_URL` is populated by the runner. Set `RUSTY_GITLAB_API_URL` only when invoking the CLI outside of GitLab CI.
+
+**What the bot does on GitLab:**
+
+- Posts a structured summary as an MR note (severity table, missing tests, ticket compliance)
+- Posts inline review comments on the MR diff via the discussions API
+- Updates the MR title/description when `RUSTY_RENAME_TITLE_TO_CONVENTIONAL=true` or `RUSTY_GENERATE_DESCRIPTION=true`
+- Resolves linked closing issues (`Closes #123`) via the GitLab `closes_issues` endpoint
+- Supports incremental review via head SHA — subsequent pushes only review the delta
+
+The job exits with code 1 when critical issues are found (configurable via `RUSTY_FAIL_ON_CRITICAL`), which can gate MR merges when the job is on the merge train or required.
+
 ## Configuration
 
 ### Environment Variables
@@ -202,6 +239,10 @@ The task exits with code 1 when critical issues are found (configurable via `RUS
 | `RUSTY_JIRA_API_TOKEN` | Jira API token | — |
 | `RUSTY_LINEAR_API_KEY` | Linear API key | — |
 | `RUSTY_ADO_PAT` | Azure DevOps PAT (server mode) | — |
+| `RUSTY_GITLAB_TOKEN` | GitLab project/personal access token (`api` scope) used by the GitLab CI job | falls back to `CI_JOB_TOKEN` |
+| `RUSTY_GITLAB_API_URL` | GitLab API v4 base URL (override for self-hosted; defaults to `CI_API_V4_URL`) | — |
+| `RUSTY_GITLAB_PROJECT_PATH` | Override `CI_PROJECT_PATH` when invoking the GitLab CLI outside of GitLab CI | — |
+| `RUSTY_GITLAB_MR_IID` | Override `CI_MERGE_REQUEST_IID` when invoking the GitLab CLI outside of GitLab CI | — |
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI API key (or `AZURE_API_KEY`) | — |
 | `AZURE_OPENAI_RESOURCE_NAME` | Azure OpenAI resource name | — |
 | `RUSTY_AZURE_RESOURCE_NAME` | Azure OpenAI resource (managed identity mode) | — |
@@ -542,6 +583,7 @@ Rusty Bot discovers linked tickets through three mechanisms:
 **1. Regex extraction** — scans PR descriptions and branch names for ticket patterns:
 
 - **GitHub Issues**: `#123`, `owner/repo#123`, full URL
+- **GitLab Issues**: `https://gitlab.example.com/group/project/-/issues/123` (in GitLab CI mode, bare `#123` is treated as a GitLab issue)
 - **Jira**: `PROJ-123`, Jira browse URL
 - **Linear**: Linear issue URL
 - **Azure DevOps**: `AB#123`, ADO work item URL
@@ -551,7 +593,9 @@ Rusty Bot discovers linked tickets through three mechanisms:
 
 **3. Azure DevOps linked work items** — calls the PR work items API endpoint to find work items formally linked through the ADO UI, even when they aren't mentioned in the description or branch name.
 
-All three sources are merged and deduplicated before resolution. When tickets are found and the corresponding provider is configured, the review summary includes a compliance assessment.
+**4. GitLab linked closing issues** — calls the MR `closes_issues` API endpoint to find issues closed by the MR via closing keywords (`Closes #123`, `Fixes group/project#456`).
+
+All sources are merged and deduplicated before resolution. When tickets are found and the corresponding provider is configured, the review summary includes a compliance assessment.
 
 ## Development
 

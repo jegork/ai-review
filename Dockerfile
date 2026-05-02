@@ -9,6 +9,7 @@ COPY packages/core/package.json ./packages/core/
 COPY packages/github/package.json ./packages/github/
 COPY packages/github-action/package.json ./packages/github-action/
 COPY packages/azure-devops/package.json ./packages/azure-devops/
+COPY packages/gitlab/package.json ./packages/gitlab/
 COPY packages/dashboard/package.json ./packages/dashboard/
 
 RUN pnpm install --frozen-lockfile
@@ -44,6 +45,7 @@ COPY packages/core/package.json ./packages/core/
 COPY packages/github/package.json ./packages/github/
 COPY packages/github-action/package.json ./packages/github-action/
 COPY packages/azure-devops/package.json ./packages/azure-devops/
+COPY packages/gitlab/package.json ./packages/gitlab/
 COPY packages/dashboard/package.json ./packages/dashboard/
 
 RUN pnpm install --frozen-lockfile --prod --ignore-scripts
@@ -52,6 +54,7 @@ COPY --from=build /app/packages/core/dist ./packages/core/dist
 COPY --from=build /app/packages/github/dist ./packages/github/dist
 COPY --from=build /app/packages/github-action/dist ./packages/github-action/dist
 COPY --from=build /app/packages/azure-devops/dist ./packages/azure-devops/dist
+COPY --from=build /app/packages/gitlab/dist ./packages/gitlab/dist
 COPY --from=build /app/packages/dashboard/dist ./packages/dashboard/dist
 
 # copy prompt files that are bundled alongside dist
@@ -78,6 +81,9 @@ case "$RUSTY_MODE" in
     ;;
   github-action)
     exec node /app/packages/github-action/dist/cli.js
+    ;;
+  gitlab)
+    exec node /app/packages/gitlab/dist/cli.js
     ;;
   *)
     exec node /app/packages/github/dist/server.js
