@@ -55,6 +55,9 @@ const GRAMMAR_TO_PACKAGE: Record<string, { pkg: string; wasm: string }> = {
 };
 
 const DEFAULT_MAX_SCOPE_LINES = 200;
+const MEDIUM_SCOPE_MULTIPLIER = 2;
+const MEDIUM_SCOPE_CONTEXT_LINES = 10;
+const LARGE_SCOPE_CONTEXT_LINES = 3;
 
 let parserInitialized = false;
 const languageCache = new Map<string, Language>();
@@ -68,7 +71,7 @@ export interface ExpandedScope {
 
 export interface TreeSitterExpansion {
   scopes: ExpandedScope[];
-  /** collapsed signature lines from sibling scopes for orientation */
+  /** collapsed signature lines from sibling scopes or tiered scopes for orientation */
   siblingSignatures: { line: number; text: string }[];
 }
 
@@ -182,10 +185,55 @@ function collectSiblingSignatures(
   return [];
 }
 
+function buildScopeExpansion(
+  scopeNode: Node,
+  range: { startLine: number; endLine: number },
+  fileLines: string[],
+  maxScopeLines: number,
+): { scope: ExpandedScope; signature: { line: number; text: string } | null; dedupeKey: string } {
+  const scopeStartLine = scopeNode.startPosition.row + 1;
+  const scopeEndLine = scopeNode.endPosition.row + 1;
+  const scopeLines = scopeEndLine - scopeStartLine + 1;
+
+  if (scopeLines <= maxScopeLines) {
+    return {
+      scope: {
+        startLine: scopeStartLine,
+        endLine: scopeEndLine,
+      },
+      signature: null,
+      dedupeKey: `${scopeNode.id}:full`,
+    };
+  }
+
+  const contextLines =
+    scopeLines <= maxScopeLines * MEDIUM_SCOPE_MULTIPLIER
+      ? MEDIUM_SCOPE_CONTEXT_LINES
+      : LARGE_SCOPE_CONTEXT_LINES;
+  const startLine = Math.max(scopeStartLine, range.startLine - contextLines);
+  const endLine = Math.min(scopeEndLine, range.endLine + contextLines);
+  const signatureText = getSignatureLine(scopeNode, fileLines);
+
+  return {
+    scope: {
+      startLine,
+      endLine,
+    },
+    signature:
+      signatureText && scopeStartLine < startLine
+        ? {
+            line: scopeStartLine,
+            text: signatureText,
+          }
+        : null,
+    dedupeKey: `${scopeNode.id}:${startLine}:${endLine}`,
+  };
+}
+
 /**
  * Try to expand changed line ranges to enclosing function/class boundaries
  * using tree-sitter. Returns null if tree-sitter can't handle this file
- * (unsupported language, parse failure, scope too large).
+ * (unsupported language, parse failure, no enclosing scope).
  */
 export async function expandToScopeBoundaries(
   fileContent: string,
@@ -212,7 +260,7 @@ export async function expandToScopeBoundaries(
     const fileLines = fileContent.split("\n");
     const scopes: ExpandedScope[] = [];
     const allSiblingSignatures: { line: number; text: string }[] = [];
-    const seenScopeIds = new Set<number>();
+    const seenScopeKeys = new Set<string>();
     const seenSignatureLines = new Set<number>();
 
     for (const range of changedRanges) {
@@ -223,16 +271,17 @@ export async function expandToScopeBoundaries(
 
       if (!scopeNode) return null;
 
-      const scopeLines = scopeNode.endPosition.row - scopeNode.startPosition.row + 1;
-      if (scopeLines > maxScopeLines) return null;
+      const expansion = buildScopeExpansion(scopeNode, range, fileLines, maxScopeLines);
 
-      if (seenScopeIds.has(scopeNode.id)) continue;
-      seenScopeIds.add(scopeNode.id);
+      if (seenScopeKeys.has(expansion.dedupeKey)) continue;
+      seenScopeKeys.add(expansion.dedupeKey);
 
-      scopes.push({
-        startLine: scopeNode.startPosition.row + 1,
-        endLine: scopeNode.endPosition.row + 1,
-      });
+      scopes.push(expansion.scope);
+
+      if (expansion.signature && !seenSignatureLines.has(expansion.signature.line)) {
+        seenSignatureLines.add(expansion.signature.line);
+        allSiblingSignatures.push(expansion.signature);
+      }
 
       for (const sig of collectSiblingSignatures(scopeNode, scopeTypes, fileLines)) {
         if (!seenSignatureLines.has(sig.line)) {
