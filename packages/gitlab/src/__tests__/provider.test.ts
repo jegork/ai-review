@@ -116,22 +116,31 @@ describe("GitLabProvider", () => {
   });
 
   describe("getDiff", () => {
-    it("parses /changes response into FilePatch[] with hunk content", async () => {
+    it("parses paginated /diffs response into FilePatch[] with hunk content", async () => {
+      // page 1 with 2 entries (less than per_page → no follow-up page expected)
+      fetchSpy.mockResolvedValueOnce(
+        jsonResponse([
+          {
+            old_path: "src/a.ts",
+            new_path: "src/a.ts",
+            diff: "@@ -1,2 +1,3 @@\n line1\n+added\n line2\n",
+          },
+          {
+            old_path: "src/gone.ts",
+            new_path: "src/gone.ts",
+            deleted_file: true,
+            diff: "",
+          },
+        ]),
+      );
+      // diff_refs lookup (ensureDiffRefs) — single MR endpoint
       fetchSpy.mockResolvedValueOnce(
         jsonResponse({
-          changes: [
-            {
-              old_path: "src/a.ts",
-              new_path: "src/a.ts",
-              diff: "@@ -1,2 +1,3 @@\n line1\n+added\n line2\n",
-            },
-            {
-              old_path: "src/gone.ts",
-              new_path: "src/gone.ts",
-              deleted_file: true,
-              diff: "",
-            },
-          ],
+          iid: 42,
+          title: "t",
+          description: null,
+          source_branch: "s",
+          target_branch: "main",
           diff_refs: { base_sha: "b", start_sha: "s", head_sha: "h" },
         }),
       );
@@ -146,22 +155,103 @@ describe("GitLabProvider", () => {
       });
       expect(patches[0].hunks[0].newStart).toBe(1);
       expect(patches[0].hunks[0].newLines).toBe(3);
+
+      const firstUrl = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(firstUrl).toBe(`${MR_BASE}/diffs?per_page=50&page=1&unidiff=true`);
+    });
+
+    it("loops pagination until a short page is returned", async () => {
+      // page 1: full page (per_page=50) → keep going
+      const page1 = Array.from({ length: 50 }, (_, i) => ({
+        old_path: `src/f${i}.ts`,
+        new_path: `src/f${i}.ts`,
+        diff: `@@ -1 +1,2 @@\n line\n+added${i}\n`,
+      }));
+      fetchSpy.mockResolvedValueOnce(jsonResponse(page1));
+      // page 2: short page → stop after this
+      fetchSpy.mockResolvedValueOnce(
+        jsonResponse([
+          {
+            old_path: "src/last.ts",
+            new_path: "src/last.ts",
+            diff: "@@ -1 +1,2 @@\n x\n+y\n",
+          },
+        ]),
+      );
+      // ensureDiffRefs
+      fetchSpy.mockResolvedValueOnce(
+        jsonResponse({
+          iid: 42,
+          title: "t",
+          description: null,
+          source_branch: "s",
+          target_branch: "main",
+        }),
+      );
+
+      const patches = await provider.getDiff();
+      expect(patches).toHaveLength(51);
+      const page2Url = fetchSpy.mock.calls[1]?.[0] as string;
+      expect(page2Url).toBe(`${MR_BASE}/diffs?per_page=50&page=2&unidiff=true`);
     });
 
     it("flags binary files instead of trying to parse the diff", async () => {
       fetchSpy.mockResolvedValueOnce(
+        jsonResponse([
+          {
+            old_path: "image.png",
+            new_path: "image.png",
+            diff: "Binary files a/image.png and b/image.png differ\n",
+          },
+        ]),
+      );
+      // ensureDiffRefs
+      fetchSpy.mockResolvedValueOnce(
         jsonResponse({
-          changes: [
-            {
-              old_path: "image.png",
-              new_path: "image.png",
-              diff: "Binary files a/image.png and b/image.png differ\n",
-            },
-          ],
+          iid: 42,
+          title: "t",
+          description: null,
+          source_branch: "s",
+          target_branch: "main",
         }),
       );
       const patches = await provider.getDiff();
       expect(patches[0]).toMatchObject({ path: "image.png", isBinary: true, hunks: [] });
+    });
+  });
+
+  describe("getDiffSinceSha", () => {
+    it("calls /repository/compare with unidiff=true and parses .diffs[]", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        jsonResponse({
+          diffs: [
+            {
+              old_path: "src/a.ts",
+              new_path: "src/a.ts",
+              diff: "@@ -1 +1,2 @@\n line\n+added\n",
+            },
+            {
+              old_path: "src/removed.ts",
+              new_path: "src/removed.ts",
+              deleted_file: true,
+              diff: "",
+            },
+          ],
+        }),
+      );
+
+      const patches = await provider.getDiffSinceSha("aaa1111", "bbb2222");
+      expect(patches).not.toBeNull();
+      expect(patches).toHaveLength(1);
+      expect(patches?.[0].path).toBe("src/a.ts");
+      const url = fetchSpy.mock.calls[0]?.[0] as string;
+      expect(url).toContain("/repository/compare?from=aaa1111&to=bbb2222&unidiff=true");
+    });
+
+    it("returns [] when from === to without making a request", async () => {
+      const patches = await provider.getDiffSinceSha("same", "same");
+      expect(patches).toEqual([]);
+      expect(fetchSpy).not.toHaveBeenCalled();
     });
   });
 

@@ -11,7 +11,8 @@ import { formatInlineComment, logger } from "@rusty-bot/core";
 import type { z } from "zod";
 import {
   GitLabMergeRequestSchema,
-  GitLabMergeRequestChangesSchema,
+  GitLabMergeRequestDiffsSchema,
+  GitLabRepositoryCompareSchema,
   GitLabNotesSchema,
   GitLabDiscussionsSchema,
   GitLabClosesIssuesSchema,
@@ -179,30 +180,34 @@ export class GitLabProvider implements GitProvider {
   }
 
   async getDiff(): Promise<FilePatch[]> {
-    // /changes returns full diff bodies in one request — preferred over paginated /diffs
-    const data = await this.request(`${this.mrBase}/changes`, GitLabMergeRequestChangesSchema);
-
-    if (data.diff_refs?.base_sha && data.diff_refs.start_sha && data.diff_refs.head_sha) {
-      this.cachedDiffRefs = {
-        base_sha: data.diff_refs.base_sha,
-        start_sha: data.diff_refs.start_sha,
-        head_sha: data.diff_refs.head_sha,
-      };
-    }
-
+    // /merge_requests/:iid/diffs (paginated, flat array). The deprecated
+    // /changes endpoint is removed in API v5 — use this instead. unidiff=true
+    // forces the portable unified diff format.
+    const PER_PAGE = 50;
     const patches: FilePatch[] = [];
-    for (const change of data.changes) {
-      if (change.deleted_file) continue;
-
-      const path = change.new_path;
-      if (change.diff.includes("Binary files") && change.diff.includes("differ")) {
-        patches.push({ path, hunks: [], additions: 0, deletions: 0, isBinary: true });
-        continue;
+    for (let page = 1; ; page++) {
+      const url = `${this.mrBase}/diffs?per_page=${PER_PAGE}&page=${page}&unidiff=true`;
+      const entries = await this.request(url, GitLabMergeRequestDiffsSchema);
+      if (entries.length === 0) break;
+      for (const entry of entries) {
+        if (entry.deleted_file) continue;
+        const path = entry.new_path;
+        if (entry.diff.includes("Binary files") && entry.diff.includes("differ")) {
+          patches.push({ path, hunks: [], additions: 0, deletions: 0, isBinary: true });
+          continue;
+        }
+        const { hunks, additions, deletions } = parseGitLabFileDiff(entry.diff);
+        patches.push({ path, hunks, additions, deletions, isBinary: false });
       }
-
-      const { hunks, additions, deletions } = parseGitLabFileDiff(change.diff);
-      patches.push({ path, hunks, additions, deletions, isBinary: false });
+      if (entries.length < PER_PAGE) break;
     }
+
+    // /diffs doesn't include diff_refs — fetch them from the MR endpoint so
+    // postInlineComments has them available for positioned discussions.
+    if (!this.cachedDiffRefs) {
+      await this.ensureDiffRefs();
+    }
+
     return patches;
   }
 
@@ -212,21 +217,17 @@ export class GitLabProvider implements GitProvider {
       const url = `${this.projectBase}/repository/compare?from=${encodeURIComponent(
         sinceSha,
       )}&to=${encodeURIComponent(headSha)}&unidiff=true`;
-      const res = await this.fetchApi(url);
-      const raw: unknown = await res.json();
-      const compare = raw as { diffs?: { old_path: string; new_path: string; diff: string }[] };
-      const diffs = compare.diffs ?? [];
+      const compare = await this.request(url, GitLabRepositoryCompareSchema);
       const patches: FilePatch[] = [];
-      for (const d of diffs) {
-        if (!d.diff) continue;
+      for (const d of compare.diffs ?? []) {
+        if (d.deleted_file || !d.diff) continue;
+        const path = d.new_path;
+        if (d.diff.includes("Binary files") && d.diff.includes("differ")) {
+          patches.push({ path, hunks: [], additions: 0, deletions: 0, isBinary: true });
+          continue;
+        }
         const { hunks, additions, deletions } = parseGitLabFileDiff(d.diff);
-        patches.push({
-          path: d.new_path,
-          hunks,
-          additions,
-          deletions,
-          isBinary: false,
-        });
+        patches.push({ path, hunks, additions, deletions, isBinary: false });
       }
       return patches;
     } catch (err) {

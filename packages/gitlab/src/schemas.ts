@@ -29,20 +29,26 @@ export const GitLabMergeRequestSchema = z.object({
   diff_refs: GitLabDiffRefsSchema.nullable().optional(),
 });
 
-export const GitLabMergeRequestChangeSchema = z.object({
+export const GitLabDiffEntrySchema = z.object({
   old_path: z.string(),
   new_path: z.string(),
-  a_mode: z.string().optional(),
-  b_mode: z.string().optional(),
+  a_mode: z.string().nullable().optional(),
+  b_mode: z.string().nullable().optional(),
   new_file: z.boolean().optional(),
   renamed_file: z.boolean().optional(),
   deleted_file: z.boolean().optional(),
+  generated_file: z.boolean().optional(),
+  collapsed: z.boolean().optional(),
+  too_large: z.boolean().optional(),
   diff: z.string(),
 });
 
-export const GitLabMergeRequestChangesSchema = z.object({
-  changes: z.array(GitLabMergeRequestChangeSchema),
-  diff_refs: GitLabDiffRefsSchema.nullable().optional(),
+/** Response shape for GET /merge_requests/:iid/diffs — flat paginated array. */
+export const GitLabMergeRequestDiffsSchema = z.array(GitLabDiffEntrySchema);
+
+/** Response shape for GET /repository/compare — diffs are nested under .diffs */
+export const GitLabRepositoryCompareSchema = z.object({
+  diffs: z.array(GitLabDiffEntrySchema).optional(),
 });
 
 export const GitLabNoteSchema = z.object({
