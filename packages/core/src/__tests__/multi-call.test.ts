@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { countTokens } from "../diff/compress.js";
-import type { FilePatch, ReviewConfig, ReviewResult, TicketInfo, Observation } from "../types.js";
+import type {
+  FilePatch,
+  ReviewConfig,
+  ReviewResult,
+  TicketInfo,
+  Observation,
+  GitProvider,
+} from "../types.js";
 import type { OpenGrepFinding } from "../opengrep/types.js";
 
 function makeMockReview(diff: string): ReviewResult {
@@ -87,6 +94,7 @@ describe("runMultiCallReview", () => {
   beforeEach(() => {
     runReviewMock.mockReset();
     runReviewMock.mockImplementation(async (_config, diff) => makeMockReview(diff));
+    delete process.env.RUSTY_GRAPH_CONTEXT;
   });
 
   it("uses single call when diff fits in budget", async () => {
@@ -698,6 +706,29 @@ describe("runCascadeReview", () => {
 
     const deepOpts = deepCalls[0][4];
     expect(deepOpts?.otherPrFiles).toBeUndefined();
+  });
+
+  it("injects graph-ranked context into deep-review tier when enabled", async () => {
+    process.env.RUSTY_GRAPH_CONTEXT = "true";
+    const files = new Map([
+      [
+        "src/auth.ts",
+        'import { validateToken } from "./token";\nexport function auth() { return validateToken("x"); }',
+      ],
+      ["src/token.ts", "export function validateToken(token: string) { return token.length > 0; }"],
+    ]);
+    const provider = {
+      getFileContent: async (path: string) => files.get(path) ?? null,
+    } as unknown as GitProvider;
+
+    await runCascadeReview([], [makePatch("src/auth.ts", 20)], config, prMetadata, undefined, {
+      provider,
+      sourceRef: "feature/auth",
+    });
+
+    const deepCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier !== "skim");
+    expect(deepCalls[0][4]?.rankedContext).toContain("## Graph-ranked Context");
+    expect(deepCalls[0][4]?.rankedContext).toContain("src/token.ts");
   });
 
   function makeFinding(file: string): OpenGrepFinding {

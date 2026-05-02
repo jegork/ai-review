@@ -1,4 +1,9 @@
 import { compressDiff, countTokens } from "../diff/compress.js";
+import {
+  buildGraphRankedContext,
+  resolveGraphContextConfig,
+  type GraphContextConfig,
+} from "../diff/graph-context.js";
 import type {
   FilePatch,
   ReviewConfig,
@@ -75,6 +80,45 @@ function estimateTicketContextTokens(ticketContext?: TicketInfo[]): number {
     .join("\n\n");
 
   return countTokens(serialized);
+}
+
+async function buildRankedContextForPatches(
+  patches: FilePatch[],
+  prMetadata: PRMetadata,
+  options: RunReviewOptions,
+  config: GraphContextConfig,
+): Promise<string | undefined> {
+  if (!config.enabled || patches.length === 0 || !options.provider || !options.sourceRef) {
+    return undefined;
+  }
+
+  const provider = options.provider;
+  const sourceRef = options.sourceRef;
+  const result = await buildGraphRankedContext(
+    patches,
+    (path) => provider.getFileContent(path, sourceRef),
+    prMetadata,
+    config,
+  );
+
+  if (!result.renderedContext) return undefined;
+
+  logger.info(
+    {
+      selected: result.selections.map((s) => ({
+        path: s.path,
+        score: s.score,
+        mode: s.mode,
+        tokens: s.tokens,
+        reasons: s.reasons,
+      })),
+      tokenCount: result.tokenCount,
+      tokenBudget: config.tokenBudget,
+    },
+    "selected graph-ranked context",
+  );
+
+  return result.renderedContext;
 }
 
 export function normalizePath(file: string): string {
@@ -250,6 +294,7 @@ async function runTieredReview(
   resolvedOptions: RunReviewOptions,
   maxTokens: number,
   tier: ReviewTier,
+  graphContextConfig: GraphContextConfig,
 ): Promise<ReviewResult[]> {
   if (patches.length === 0) return [];
 
@@ -288,6 +333,12 @@ async function runTieredReview(
   }
 
   // deep-review: consensus + ticket compliance
+  const rankedContext = await buildRankedContextForPatches(
+    patches,
+    prMetadata,
+    resolvedOptions,
+    graphContextConfig,
+  );
   const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
   if (skippedFiles.length === 0) {
     const result = await runConsensusReview(
@@ -296,7 +347,7 @@ async function runTieredReview(
       prMetadata,
       compressed,
       ticketContext,
-      { ...tierOptions, chunkFiles: patches.map((p) => p.path) },
+      { ...tierOptions, rankedContext, chunkFiles: patches.map((p) => p.path) },
     );
     return [result];
   }
@@ -306,6 +357,12 @@ async function runTieredReview(
   for (const group of groups) {
     const groupPaths = new Set(group.map((p) => p.path));
     const groupOpenGrep = filterOpenGrepForFiles(resolvedOptions.openGrepFindings, groupPaths);
+    const groupRankedContext = await buildRankedContextForPatches(
+      group,
+      prMetadata,
+      resolvedOptions,
+      graphContextConfig,
+    );
     const groupCompressed = compressDiff(group, maxTokens).compressed;
     const groupResult = await runConsensusReview(
       group,
@@ -313,7 +370,12 @@ async function runTieredReview(
       prMetadata,
       groupCompressed,
       ticketContext,
-      { ...tierOptions, openGrepFindings: groupOpenGrep, chunkFiles: [...groupPaths] },
+      {
+        ...tierOptions,
+        openGrepFindings: groupOpenGrep,
+        rankedContext: groupRankedContext,
+        chunkFiles: [...groupPaths],
+      },
     );
     results.push(groupResult);
   }
@@ -329,6 +391,7 @@ export async function runMultiCallReview(
 ): Promise<ReviewResult> {
   const { mcpServers, maxTokens: maxTokensOpt, ...reviewOptions } = options ?? {};
   const maxTokens = maxTokensOpt ?? DEFAULT_MAX_TOKENS;
+  const graphContextConfig = resolveGraphContextConfig();
 
   let mcpDisconnect: (() => Promise<void>) | undefined;
   let resolvedOptions: RunReviewOptions = reviewOptions;
@@ -348,12 +411,19 @@ export async function runMultiCallReview(
 
   try {
     const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
+    const rankedContext = await buildRankedContextForPatches(
+      patches,
+      prMetadata,
+      resolvedOptions,
+      graphContextConfig,
+    );
 
     let result: ReviewResult;
 
     if (skippedFiles.length === 0) {
       result = await runConsensusReview(patches, config, prMetadata, compressed, ticketContext, {
         ...resolvedOptions,
+        rankedContext,
         chunkFiles: patches.map((p) => p.path),
       });
     } else {
@@ -378,6 +448,12 @@ export async function runMultiCallReview(
         const groupPaths = new Set(group.map((p) => p.path));
         const otherPrFiles = allPaths.filter((f) => !groupPaths.has(f));
         const groupOpenGrep = filterOpenGrepForFiles(resolvedOptions.openGrepFindings, groupPaths);
+        const groupRankedContext = await buildRankedContextForPatches(
+          group,
+          prMetadata,
+          resolvedOptions,
+          graphContextConfig,
+        );
         const groupCompressed = compressDiff(group, maxTokens).compressed;
         const groupResult = await runConsensusReview(
           group,
@@ -389,6 +465,7 @@ export async function runMultiCallReview(
             ...resolvedOptions,
             otherPrFiles,
             openGrepFindings: groupOpenGrep,
+            rankedContext: groupRankedContext,
             chunkFiles: [...groupPaths],
           },
         );
@@ -434,6 +511,7 @@ export async function runCascadeReview(
 ): Promise<ReviewResult> {
   const { mcpServers, maxTokens: maxTokensOpt, ...reviewOptions } = options ?? {};
   const maxTokens = maxTokensOpt ?? DEFAULT_MAX_TOKENS;
+  const graphContextConfig = resolveGraphContextConfig();
 
   let mcpDisconnect: (() => Promise<void>) | undefined;
   let resolvedOptions: RunReviewOptions = reviewOptions;
@@ -468,6 +546,7 @@ export async function runCascadeReview(
       resolvedOptions,
       maxTokens,
       "skim",
+      graphContextConfig,
     );
     allResults.push(...skimResults);
 
@@ -491,6 +570,7 @@ export async function runCascadeReview(
       deepOptionsWithSkimContext,
       maxTokens,
       "deep-review",
+      graphContextConfig,
     );
     allResults.push(...deepResults);
 

@@ -99,6 +99,8 @@ export interface RunReviewOptions {
   chunkFiles?: string[];
   /** OpenGrep findings to feed to the LLM for triage. */
   openGrepFindings?: OpenGrepFinding[];
+  /** Ranked dependency context selected under a token budget for deep review. */
+  rankedContext?: string;
   /** override used by consensus pass planning; defaults to RUSTY_LLM_MODEL. */
   modelConfig?: ModelConfig;
   /** override used by consensus pass planning; defaults to review env settings. */
@@ -135,6 +137,7 @@ export async function runReview(
     options?.otherPrFiles,
     options?.openGrepFindings,
     options?.chunkFiles,
+    tier === "deep-review" ? options?.rankedContext : undefined,
   );
   const modelConfig = options?.modelConfig ?? resolveModelConfig();
   const modelName = getModelDisplayName(modelConfig);
