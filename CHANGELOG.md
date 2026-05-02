@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/jegork/rusty-bot/compare/v1.1.0...v1.2.0) (2026-05-02)
+
+
+### Features
+
+* add graph-ranked review context ([84802f7](https://github.com/jegork/rusty-bot/commit/84802f7097ca54d81e1f746b455a5715f902e862))
+* add graph-ranked review context ([8660e55](https://github.com/jegork/rusty-bot/commit/8660e557d5336ca88e1ed59274fd543b026c014d))
+* add tiered tree-sitter context expansion ([712cee7](https://github.com/jegork/rusty-bot/commit/712cee74abdd18891fe503407d23ae4b1e44a577))
+* add tiered tree-sitter context expansion ([5caa297](https://github.com/jegork/rusty-bot/commit/5caa2979684086aa08086794229ec54c5a8b9f5c))
+* tighten review finding filters ([65e9fcd](https://github.com/jegork/rusty-bot/commit/65e9fcddae53412dc4505298f3fe53ed05035fe7))
+* tighten review finding filters ([c10f8ad](https://github.com/jegork/rusty-bot/commit/c10f8ad11cf56f62b6c5e459fd1f8792b66fad4c))
+
 ## [1.1.0](https://github.com/jegork/rusty-bot/compare/v1.0.1...v1.1.0) (2026-05-02)
 
 
