@@ -6,12 +6,18 @@ import {
   filterFiles,
   flushLogger,
   formatSummaryComment,
+  isCascadeEnabled,
+  loadMcpServerConfigsFromEnv,
   logger,
+  runCascadeReview,
   runMultiCallReview,
+  runTriage,
+  splitByClassification,
   stripDeletionOnlyHunks,
   summarizeLanguages,
   type Finding,
   type ReviewConfig,
+  type ReviewResult,
 } from "@rusty-bot/core";
 import { LocalGitProvider } from "./local-provider.js";
 import { parseArgs, HELP_TEXT, type CliArgs } from "./args.js";
@@ -82,18 +88,63 @@ export async function run(args: CliArgs): Promise<number> {
     return 0;
   }
 
-  const expanded = await expandContext(reviewable, (path) =>
-    provider.getFileContent(path, metadata.sourceBranch),
-  );
-
   const languageSummary = summarizeLanguages(reviewable);
+  const mcpServers = await loadMcpServerConfigsFromEnv();
 
-  const review = await runMultiCallReview(expanded, reviewConfig, metadata, undefined, {
-    provider,
-    sourceRef: metadata.sourceBranch,
-    languageSummary,
-    maxTokens: MAX_TOKENS,
-  });
+  let review: ReviewResult | undefined;
+
+  if (isCascadeEnabled()) {
+    log.info({ fileCount: reviewable.length }, "cascade enabled, running triage");
+
+    let triageResult;
+    try {
+      triageResult = await runTriage(reviewable);
+    } catch (err) {
+      log.warn({ err }, "triage failed, falling back to full review");
+    }
+
+    if (triageResult) {
+      const { skip, skim, deepReview } = splitByClassification(reviewable, triageResult.files);
+      log.info(
+        { skipped: skip.length, skimmed: skim.length, deepReview: deepReview.length },
+        "triage classification",
+      );
+
+      const expandedDeep = await expandContext(deepReview, (path) =>
+        provider.getFileContent(path, metadata.sourceBranch),
+      );
+
+      review = await runCascadeReview(skim, expandedDeep, reviewConfig, metadata, undefined, {
+        provider,
+        sourceRef: metadata.sourceBranch,
+        languageSummary,
+        mcpServers,
+        maxTokens: MAX_TOKENS,
+      });
+
+      review.triageStats = {
+        filesSkipped: skip.length,
+        filesSkimmed: skim.length,
+        filesDeepReviewed: deepReview.length,
+        triageModelUsed: triageResult.modelUsed,
+        triageTokenCount: triageResult.tokenCount,
+      };
+    }
+  }
+
+  if (!review) {
+    const expanded = await expandContext(reviewable, (path) =>
+      provider.getFileContent(path, metadata.sourceBranch),
+    );
+
+    review = await runMultiCallReview(expanded, reviewConfig, metadata, undefined, {
+      provider,
+      sourceRef: metadata.sourceBranch,
+      languageSummary,
+      mcpServers,
+      maxTokens: MAX_TOKENS,
+    });
+  }
 
   const criticalCount = review.findings.filter((f) => f.severity === "critical").length;
   log.info(

@@ -2,9 +2,17 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join, isAbsolute } from "node:path";
 import { promisify } from "node:util";
-import { parseDiff, type FilePatch, type GitProvider, type PRMetadata } from "@rusty-bot/core";
+import {
+  parseDiff,
+  type CodeSearchResult,
+  type FilePatch,
+  type GitProvider,
+  type PRMetadata,
+} from "@rusty-bot/core";
 
 const execFileAsync = promisify(execFile);
+
+const SEARCH_RESULT_LIMIT = 50;
 
 export interface LocalGitProviderOptions {
   repoPath: string;
@@ -88,10 +96,64 @@ export class LocalGitProvider implements GitProvider {
     }
   }
 
-  searchCode(): Promise<[]> {
-    // a local grep-backed implementation is straightforward but unnecessary
-    // for the MVP; the agent simply won't have this tool available.
-    return Promise.resolve([]);
+  async searchCode(query: string): Promise<CodeSearchResult[]> {
+    if (!query.trim()) return [];
+
+    // prefer ripgrep when available — it's faster, respects gitignore, and
+    // produces a stable column-prefixed format. fall back to `git grep`,
+    // which is always present alongside git itself.
+    const rgResults = await this.searchWithRipgrep(query);
+    if (rgResults !== null) return rgResults;
+    return this.searchWithGitGrep(query);
+  }
+
+  private async searchWithRipgrep(query: string): Promise<CodeSearchResult[] | null> {
+    try {
+      const { stdout } = await execFileAsync(
+        "rg",
+        [
+          "--no-heading",
+          "--with-filename",
+          "--line-number",
+          "--color=never",
+          "--max-count",
+          "5",
+          "--max-columns",
+          "300",
+          "--fixed-strings",
+          "--",
+          query,
+        ],
+        { cwd: this.opts.repoPath, maxBuffer: 16 * 1024 * 1024 },
+      );
+      return parseRipgrepOutput(stdout);
+    } catch (err) {
+      const code = (err as { code?: number | string }).code;
+      // ripgrep exits 1 when there are no matches — treat as empty result, not a fallback.
+      if (code === 1) return [];
+      // ENOENT or any other failure means rg is unavailable; let the caller fall back.
+      return null;
+    }
+  }
+
+  private async searchWithGitGrep(query: string): Promise<CodeSearchResult[]> {
+    try {
+      const stdout = await this.git([
+        "grep",
+        "--no-color",
+        "-n",
+        "-I",
+        "--fixed-strings",
+        "--max-count=5",
+        "--",
+        query,
+      ]);
+      return parseGitGrepOutput(stdout);
+    } catch (err) {
+      const code = (err as { code?: number | string }).code;
+      if (code === 1) return [];
+      return [];
+    }
   }
 
   async postSummaryComment(): Promise<void> {
@@ -113,4 +175,33 @@ export class LocalGitProvider implements GitProvider {
   async updatePRTitle(): Promise<void> {
     // no-op — there is no PR to update locally.
   }
+}
+
+// ripgrep --no-heading lines look like `path:line:content` (column suppressed when --column is omitted).
+function parseRipgrepOutput(stdout: string): CodeSearchResult[] {
+  return parseGrepLines(stdout);
+}
+
+// `git grep -n` produces the same `path:line:content` format.
+function parseGitGrepOutput(stdout: string): CodeSearchResult[] {
+  return parseGrepLines(stdout);
+}
+
+function parseGrepLines(stdout: string): CodeSearchResult[] {
+  const results: CodeSearchResult[] = [];
+  for (const raw of stdout.split("\n")) {
+    if (!raw) continue;
+    const firstColon = raw.indexOf(":");
+    if (firstColon === -1) continue;
+    const secondColon = raw.indexOf(":", firstColon + 1);
+    if (secondColon === -1) continue;
+    const file = raw.slice(0, firstColon);
+    const lineStr = raw.slice(firstColon + 1, secondColon);
+    const line = Number.parseInt(lineStr, 10);
+    if (!Number.isFinite(line)) continue;
+    const content = raw.slice(secondColon + 1);
+    results.push({ file, line, content });
+    if (results.length >= SEARCH_RESULT_LIMIT) break;
+  }
+  return results;
 }
