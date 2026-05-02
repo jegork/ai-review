@@ -1,0 +1,116 @@
+import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { join, isAbsolute } from "node:path";
+import { promisify } from "node:util";
+import { parseDiff, type FilePatch, type GitProvider, type PRMetadata } from "@rusty-bot/core";
+
+const execFileAsync = promisify(execFile);
+
+export interface LocalGitProviderOptions {
+  repoPath: string;
+  baseRef: string;
+  headRef: string;
+  prTitle?: string;
+  prDescription?: string;
+  prAuthor?: string;
+  prUrl?: string;
+}
+
+// Local provider that backs the review with `git` and the working tree.
+// Network-only operations (posting comments, updating PR fields) are no-ops;
+// the CLI prints results to stdout instead.
+export class LocalGitProvider implements GitProvider {
+  constructor(private readonly opts: LocalGitProviderOptions) {}
+
+  private async git(args: string[]): Promise<string> {
+    const { stdout } = await execFileAsync("git", args, {
+      cwd: this.opts.repoPath,
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    return stdout;
+  }
+
+  async getDiff(): Promise<FilePatch[]> {
+    const raw = await this.git([
+      "diff",
+      "--no-color",
+      `${this.opts.baseRef}...${this.opts.headRef}`,
+    ]);
+    return parseDiff(raw);
+  }
+
+  async getPRMetadata(): Promise<PRMetadata> {
+    let headSha: string | undefined;
+    try {
+      headSha = (await this.git(["rev-parse", this.opts.headRef])).trim();
+    } catch {
+      headSha = undefined;
+    }
+
+    let author = this.opts.prAuthor;
+    if (!author) {
+      try {
+        author = (await this.git(["log", "-1", "--format=%an", this.opts.headRef])).trim();
+      } catch {
+        author = "unknown";
+      }
+    }
+
+    return {
+      id: headSha?.slice(0, 7) ?? "local",
+      title: this.opts.prTitle ?? `Local review: ${this.opts.baseRef}...${this.opts.headRef}`,
+      description: this.opts.prDescription ?? "",
+      author,
+      sourceBranch: this.opts.headRef,
+      targetBranch: this.opts.baseRef,
+      url: this.opts.prUrl ?? "",
+      headSha,
+    };
+  }
+
+  async getFileContent(path: string, ref: string): Promise<string | null> {
+    // when the caller asks for the head ref we serve the working tree, which
+    // matches what `git diff` was computed against and is friendlier to
+    // uncommitted edits. for any other ref we go through `git show`.
+    if (ref === this.opts.headRef) {
+      try {
+        const abs = isAbsolute(path) ? path : join(this.opts.repoPath, path);
+        return await readFile(abs, "utf8");
+      } catch {
+        // fall through to git show
+      }
+    }
+
+    try {
+      return await this.git(["show", `${ref}:${path}`]);
+    } catch {
+      return null;
+    }
+  }
+
+  searchCode(): Promise<[]> {
+    // a local grep-backed implementation is straightforward but unnecessary
+    // for the MVP; the agent simply won't have this tool available.
+    return Promise.resolve([]);
+  }
+
+  async postSummaryComment(): Promise<void> {
+    // no-op — CLI prints the summary to stdout instead.
+  }
+
+  async postInlineComments(): Promise<void> {
+    // no-op — CLI prints inline findings to stdout instead.
+  }
+
+  async deleteExistingBotComments(): Promise<void> {
+    // no-op — there are no existing comments to clean up locally.
+  }
+
+  async updatePRDescription(): Promise<void> {
+    // no-op — there is no PR to update locally.
+  }
+
+  async updatePRTitle(): Promise<void> {
+    // no-op — there is no PR to update locally.
+  }
+}
