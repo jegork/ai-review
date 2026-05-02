@@ -48,6 +48,7 @@ export interface GitLabCliConfig {
   incrementalReview: boolean;
   apiBaseUrl: string;
   token: string;
+  isJobToken: boolean;
   projectPath: string;
 }
 
@@ -138,6 +139,7 @@ export function parseConfig({ env = process.env }: ParseEnvOptions = {}): GitLab
     incrementalReview,
     apiBaseUrl,
     token,
+    isJobToken,
     projectPath,
   };
 }
@@ -145,6 +147,7 @@ export function parseConfig({ env = process.env }: ParseEnvOptions = {}): GitLab
 function buildTicketProviders(
   apiBaseUrl: string,
   token: string,
+  isJobToken: boolean,
   projectPath: string,
   env: NodeJS.ProcessEnv,
 ): Map<string, TicketProvider> {
@@ -155,6 +158,7 @@ function buildTicketProviders(
     new GitLabTicketProvider({
       baseUrl: apiBaseUrl,
       token,
+      isJobToken,
       defaultProjectPath: projectPath,
     }),
   );
@@ -322,6 +326,7 @@ export async function runReview(config: GitLabCliConfig): Promise<number> {
   const ticketProviders = buildTicketProviders(
     config.apiBaseUrl,
     config.token,
+    config.isJobToken,
     config.projectPath,
     process.env,
   );

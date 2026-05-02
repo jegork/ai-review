@@ -8,6 +8,8 @@ export interface GitLabTicketProviderConfig {
   baseUrl: string;
   /** Personal access token, project access token, or CI_JOB_TOKEN */
   token: string;
+  /** When true, send token via JOB-TOKEN header (CI job token); else PRIVATE-TOKEN */
+  isJobToken?: boolean;
   /** Default project path (e.g. "group/sub/project") used when a ref is bare numeric */
   defaultProjectPath?: string;
 }
@@ -20,11 +22,13 @@ export interface GitLabTicketProviderConfig {
 export class GitLabTicketProvider implements TicketProvider {
   private readonly baseUrl: string;
   private readonly token: string;
+  private readonly tokenHeader: string;
   private readonly defaultProjectPath?: string;
 
   constructor(config: GitLabTicketProviderConfig) {
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
     this.token = config.token;
+    this.tokenHeader = config.isJobToken ? "JOB-TOKEN" : "PRIVATE-TOKEN";
     if (config.defaultProjectPath) {
       this.defaultProjectPath = config.defaultProjectPath;
     }
@@ -40,7 +44,7 @@ export class GitLabTicketProvider implements TicketProvider {
     try {
       res = await fetch(url, {
         headers: {
-          "PRIVATE-TOKEN": this.token,
+          [this.tokenHeader]: this.token,
           Accept: "application/json",
         },
       });
