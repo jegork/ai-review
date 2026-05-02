@@ -257,10 +257,7 @@ export class GitLabProvider implements GitProvider {
       const url = `${this.projectBase}/repository/files/${encodeURIComponent(
         path,
       )}/raw?ref=${encodeURIComponent(ref)}`;
-      const res = await fetch(url, {
-        headers: { [this.tokenHeader]: this.token, Accept: "text/plain" },
-      });
-      if (!res.ok) return null;
+      const res = await this.fetchApi(url, { headers: { Accept: "text/plain" } });
       return await res.text();
     } catch {
       return null;
