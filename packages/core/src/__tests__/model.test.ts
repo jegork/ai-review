@@ -3,6 +3,7 @@ import {
   resolveModelConfig,
   resolveTriageModelConfig,
   resolveModelConfigWithOverride,
+  resolveReviewPassModelConfigs,
   getModelDisplayName,
   resolveDefaultAgentOptions,
   supportsAnthropicCacheControl,
@@ -11,6 +12,13 @@ import {
 function clearEnv() {
   delete process.env.RUSTY_LLM_MODEL;
   delete process.env.RUSTY_LLM_TRIAGE_MODEL;
+  delete process.env.RUSTY_REVIEW_MODELS;
+  delete process.env.RUSTY_REVIEW_TEMPERATURES;
+  delete process.env.RUSTY_REVIEW_TOP_PS;
+  delete process.env.RUSTY_REVIEW_TEMPERATURE;
+  delete process.env.RUSTY_REVIEW_TOP_P;
+  delete process.env.RUSTY_LLM_TEMPERATURE;
+  delete process.env.RUSTY_LLM_TOP_P;
   delete process.env.AZURE_API_KEY;
   delete process.env.AZURE_OPENAI_API_KEY;
   delete process.env.AZURE_OPENAI_RESOURCE_NAME;
@@ -79,6 +87,50 @@ describe("resolveModelConfig", () => {
 
     const config = resolveModelConfig();
     expect(config).toEqual({ type: "router", model: "requesty/anthropic/claude-sonnet-4" });
+  });
+});
+
+describe("resolveReviewPassModelConfigs", () => {
+  beforeEach(clearEnv);
+
+  it("uses the default review model for every pass when no per-pass models are set", () => {
+    process.env.RUSTY_LLM_MODEL = "anthropic/claude-sonnet";
+
+    const configs = resolveReviewPassModelConfigs(3);
+
+    expect(configs.map((c) => c.displayName)).toEqual([
+      "anthropic/claude-sonnet",
+      "anthropic/claude-sonnet",
+      "anthropic/claude-sonnet",
+    ]);
+  });
+
+  it("resolves per-pass models and falls back to RUSTY_LLM_MODEL for missing entries", () => {
+    process.env.RUSTY_LLM_MODEL = "anthropic/default";
+    process.env.RUSTY_REVIEW_MODELS = "anthropic/pass-1, openai/pass-2";
+
+    const configs = resolveReviewPassModelConfigs(3);
+
+    expect(configs.map((c) => c.displayName)).toEqual([
+      "anthropic/pass-1",
+      "openai/pass-2",
+      "anthropic/default",
+    ]);
+  });
+
+  it("applies per-pass temperature and top-p overrides", () => {
+    process.env.RUSTY_REVIEW_TEMPERATURE = "0.5";
+    process.env.RUSTY_REVIEW_TOP_P = "0.8";
+    process.env.RUSTY_REVIEW_TEMPERATURES = "0.1,0.2";
+    process.env.RUSTY_REVIEW_TOP_PS = "0.9";
+
+    const configs = resolveReviewPassModelConfigs(3);
+
+    expect(configs.map((c) => c.settings)).toEqual([
+      { temperature: 0.1, topP: 0.9 },
+      { temperature: 0.2, topP: 0.8 },
+      { temperature: 0.5, topP: 0.8 },
+    ]);
   });
 });
 

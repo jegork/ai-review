@@ -80,6 +80,11 @@ describe("runConsensusReview", () => {
   beforeEach(() => {
     callCount = 0;
     mockBehavior = "default";
+    delete process.env.RUSTY_REVIEW_MODELS;
+    delete process.env.RUSTY_REVIEW_TEMPERATURES;
+    delete process.env.RUSTY_REVIEW_TOP_PS;
+    delete process.env.RUSTY_REVIEW_ADAPTIVE_PASSES;
+    delete process.env.RUSTY_LLM_MODEL;
     vi.clearAllMocks();
   });
 
@@ -137,6 +142,76 @@ describe("runConsensusReview", () => {
     const { runReview } = await import("../agent/review.js");
     expect(runReview).toHaveBeenCalledTimes(3);
     expect(result.consensusMetadata?.passes).toBe(3);
+  });
+
+  it("passes per-pass model configs and settings to each review pass", async () => {
+    process.env.RUSTY_LLM_MODEL = "anthropic/default";
+    process.env.RUSTY_REVIEW_MODELS = "anthropic/pass-1,openai/pass-2";
+    process.env.RUSTY_REVIEW_TEMPERATURES = "0.1,0.2";
+
+    const consensusConfig = { ...config, consensusPasses: 3 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+    const { runReview } = await import("../agent/review.js");
+    const calls = (runReview as ReturnType<typeof vi.fn>).mock.calls;
+
+    expect(calls[0][4]?.modelConfig).toEqual({ type: "router", model: "anthropic/pass-1" });
+    expect(calls[0][4]?.modelSettings).toEqual({ temperature: 0.1 });
+    expect(calls[1][4]?.modelConfig).toEqual({ type: "router", model: "openai/pass-2" });
+    expect(calls[1][4]?.modelSettings).toEqual({ temperature: 0.2 });
+    expect(calls[2][4]?.modelConfig).toEqual({ type: "router", model: "anthropic/default" });
+    expect(result.consensusMetadata?.passModels).toEqual([
+      "anthropic/pass-1",
+      "openai/pass-2",
+      "anthropic/default",
+    ]);
+  });
+
+  it("reduces ordinary deep-review chunks to two passes when adaptive pass planning is enabled", async () => {
+    process.env.RUSTY_REVIEW_ADAPTIVE_PASSES = "true";
+
+    const patches = [
+      {
+        path: "src/service.ts",
+        additions: 20,
+        deletions: 5,
+        isBinary: false,
+        hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, content: "+x" }],
+      },
+    ];
+    const result = await runConsensusReview(patches, config, prMetadata, "diff content");
+    const { runReview } = await import("../agent/review.js");
+
+    expect(runReview).toHaveBeenCalledTimes(2);
+    expect(result.consensusMetadata?.passes).toBe(2);
+    expect(result.consensusMetadata?.threshold).toBe(2);
+    expect(result.consensusMetadata?.passPlanReason).toBe("ordinary deep-review chunk");
+  });
+
+  it("uses strict majority as the default threshold for two-pass consensus", async () => {
+    const consensusConfig = { ...config, consensusPasses: 2 };
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+
+    expect(result.consensusMetadata?.threshold).toBe(2);
+  });
+
+  it("keeps three adaptive passes for security-sensitive chunks", async () => {
+    process.env.RUSTY_REVIEW_ADAPTIVE_PASSES = "true";
+
+    const patches = [
+      {
+        path: "src/auth/session.ts",
+        additions: 20,
+        deletions: 5,
+        isBinary: false,
+        hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, content: "+x" }],
+      },
+    ];
+    const result = await runConsensusReview(patches, config, prMetadata, "diff content");
+    const { runReview } = await import("../agent/review.js");
+
+    expect(runReview).toHaveBeenCalledTimes(3);
+    expect(result.consensusMetadata?.passes).toBe(3);
+    expect(result.consensusMetadata?.passPlanReason).toBe("security-sensitive file");
   });
 
   it("populates droppedFindings for clusters below threshold", async () => {

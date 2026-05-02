@@ -9,10 +9,40 @@ By default, each review runs 3 independent passes with shuffled diff ordering (f
 
 Configure via per-repo config in the dashboard or API:
 
-| Setting | Description | Default |
-| --- | --- | --- |
-| `consensusPasses` | Number of independent review passes (set to `1` to disable) | `3` |
-| `consensusThreshold` | Minimum votes to keep a finding | `ceil(passes/2)` |
+| Setting              | Description                                                 | Default                               |
+| -------------------- | ----------------------------------------------------------- | ------------------------------------- |
+| `consensusPasses`    | Number of independent review passes (set to `1` to disable) | `3`                                   |
+| `consensusThreshold` | Minimum votes to keep a finding                             | strict majority (`floor(passes/2)+1`) |
+
+You can also set per-pass review models with `RUSTY_REVIEW_MODELS`, for example:
+
+```bash
+RUSTY_REVIEW_MODELS=anthropic/claude-sonnet-4-20250514,openai/gpt-5-mini,google/gemini-3.1-pro
+RUSTY_REVIEW_TEMPERATURES=0.2,0.2,0.3
+```
+
+When fewer models are provided than passes, missing entries fall back to `RUSTY_LLM_MODEL`.
+
+Example balanced multi-model setup:
+
+```bash
+RUSTY_LLM_TRIAGE_MODEL=requesty/google/gemini-3.1-flash-lite-preview
+RUSTY_REVIEW_MODELS=requesty/anthropic/claude-sonnet-4-6,requesty/openai/gpt-5-mini,requesty/google/gemini-3.1-pro
+RUSTY_REVIEW_TEMPERATURES=0.2,0.2,0.3
+RUSTY_JUDGE_MODEL=requesty/anthropic/claude-sonnet-4-6
+RUSTY_JUDGE_TEMPERATURE=0
+RUSTY_REVIEW_ADAPTIVE_PASSES=true
+```
+
+Treat model IDs as provider-specific configuration. If your router uses different current aliases, keep the same role split: cheap structured model for triage, diverse review models for consensus, and a well-calibrated model for the judge.
+
+Adaptive pass planning is opt-in:
+
+```bash
+RUSTY_REVIEW_ADAPTIVE_PASSES=true
+```
+
+With adaptive planning enabled, ordinary deep-review chunks use 2 passes, while large or security-sensitive chunks keep up to 3 passes. Explicit `consensusPasses` still caps the maximum number of passes.
 
 ## How it works
 

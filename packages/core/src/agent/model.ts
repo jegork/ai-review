@@ -163,6 +163,53 @@ export function resolveModelSettings(agentKind: AgentKind = "review"): ModelSett
   return settings;
 }
 
+function readCsvEnv(key: string): string[] {
+  return (
+    process.env[key]
+      ?.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) ?? []
+  );
+}
+
+function readNumericCsvEnv(key: string): number[] {
+  return readCsvEnv(key)
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+}
+
+export interface ReviewPassModelConfig {
+  config: ModelConfig;
+  settings: ModelSettings;
+  displayName: string;
+}
+
+export function resolveReviewPassModelConfigs(passCount: number): ReviewPassModelConfig[] {
+  const reviewModels = readCsvEnv("RUSTY_REVIEW_MODELS");
+  const reviewTemperatures = readNumericCsvEnv("RUSTY_REVIEW_TEMPERATURES");
+  const reviewTopPs = readNumericCsvEnv("RUSTY_REVIEW_TOP_PS");
+  const defaultSettings = resolveModelSettings("review");
+
+  return Array.from({ length: passCount }, (_, index) => {
+    const model = reviewModels[index];
+    const config = model ? resolveModelConfigWithOverride(model) : resolveModelConfig();
+    const settings: ModelSettings = { ...defaultSettings };
+
+    if (index < reviewTemperatures.length) {
+      settings.temperature = reviewTemperatures[index];
+    }
+    if (index < reviewTopPs.length) {
+      settings.topP = reviewTopPs[index];
+    }
+
+    return {
+      config,
+      settings,
+      displayName: getModelDisplayName(config),
+    };
+  });
+}
+
 export function getModelDisplayName(config: ModelConfig): string {
   switch (config.type) {
     case "router":

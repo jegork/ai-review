@@ -14,9 +14,12 @@ import { shufflePatches } from "../diff/shuffle.js";
 import { clusterFindings, clusterObservations } from "./cluster.js";
 import { runReview, type RunReviewOptions } from "./review.js";
 import { mergeMissingTests } from "./multi-call.js";
+import { resolveReviewPassModelConfigs } from "./model.js";
 import { logger } from "../logger.js";
 
 const DEFAULT_CONSENSUS_PASSES = 3;
+const LARGE_REVIEW_LINE_THRESHOLD = 300;
+const SECURITY_SENSITIVE_PATH = /\b(auth|crypto|payment|permission|token|session|policy|secret)\b/i;
 
 const RECOMMENDATION_SEVERITY: Record<Recommendation, number> = {
   looks_good: 0,
@@ -56,6 +59,44 @@ function deriveRecommendation(
   return "looks_good";
 }
 
+function isAdaptivePassPlanningEnabled(): boolean {
+  const raw = process.env.RUSTY_REVIEW_ADAPTIVE_PASSES;
+  return raw === "true" || raw === "1";
+}
+
+function isSecuritySensitivePatch(patch: FilePatch): boolean {
+  return SECURITY_SENSITIVE_PATH.test(patch.path);
+}
+
+function planConsensusPasses(
+  patches: FilePatch[],
+  configuredPasses: number,
+): { passes: number; reason?: string } {
+  if (!isAdaptivePassPlanningEnabled() || configuredPasses <= 1) {
+    return { passes: configuredPasses };
+  }
+
+  const hasSecuritySensitiveFile = patches.some(isSecuritySensitivePatch);
+  if (hasSecuritySensitiveFile) {
+    return { passes: Math.min(configuredPasses, 3), reason: "security-sensitive file" };
+  }
+
+  const changedLines = patches.reduce((sum, patch) => sum + patch.additions + patch.deletions, 0);
+  const hasLargeFile = patches.some(
+    (patch) => patch.additions + patch.deletions >= LARGE_REVIEW_LINE_THRESHOLD,
+  );
+
+  if (changedLines >= LARGE_REVIEW_LINE_THRESHOLD || hasLargeFile) {
+    return { passes: Math.min(configuredPasses, 3), reason: "large deep-review chunk" };
+  }
+
+  return { passes: Math.min(configuredPasses, 2), reason: "ordinary deep-review chunk" };
+}
+
+function deriveConsensusThreshold(configuredThreshold: number | null | undefined, passes: number) {
+  return Math.min(configuredThreshold ?? Math.floor(passes / 2) + 1, passes);
+}
+
 export async function runConsensusReview(
   patches: FilePatch[],
   config: ReviewConfig,
@@ -64,22 +105,39 @@ export async function runConsensusReview(
   ticketContext?: TicketInfo[],
   options?: RunReviewOptions,
 ): Promise<ReviewResult> {
-  const passes = config.consensusPasses ?? DEFAULT_CONSENSUS_PASSES;
+  const configuredPasses = config.consensusPasses ?? DEFAULT_CONSENSUS_PASSES;
+  const passPlan = planConsensusPasses(patches, configuredPasses);
+  const passes = passPlan.passes;
 
   if (passes <= 1) {
     return runReview(config, diff, prMetadata, ticketContext, options);
   }
 
-  const threshold = config.consensusThreshold ?? Math.ceil(passes / 2);
+  const threshold = deriveConsensusThreshold(config.consensusThreshold, passes);
   const baseSeed = deriveBaseSeed(prMetadata);
+  const passModelConfigs = resolveReviewPassModelConfigs(passes);
 
-  logger.info({ passes, threshold, prId: prMetadata.id }, "starting consensus review");
+  logger.info(
+    {
+      passes,
+      threshold,
+      prId: prMetadata.id,
+      passPlanReason: passPlan.reason,
+      passModels: passModelConfigs.map((m) => m.displayName),
+    },
+    "starting consensus review",
+  );
 
   const passPromises = Array.from({ length: passes }, (_, i) => {
     const shuffled = shufflePatches(patches, baseSeed + i);
     const { compressed } = compressDiff(shuffled, Infinity);
     const tickets = i === 0 ? ticketContext : undefined;
-    return runReview(config, compressed, prMetadata, tickets, options);
+    const passModel = passModelConfigs[i];
+    return runReview(config, compressed, prMetadata, tickets, {
+      ...options,
+      modelConfig: passModel.config,
+      modelSettings: passModel.settings,
+    });
   });
 
   const settled = await Promise.allSettled(passPromises);
@@ -183,6 +241,8 @@ export async function runConsensusReview(
       agreementRate,
       recommendationElevated,
       passRecommendations,
+      passModels: passModelConfigs.map((m) => m.displayName),
+      ...(passPlan.reason ? { passPlanReason: passPlan.reason } : {}),
       failedPasses,
     },
     droppedFindings: droppedFindings.length > 0 ? droppedFindings : undefined,
