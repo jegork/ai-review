@@ -19,6 +19,7 @@
     { "path": "packages/core" },
     { "path": "packages/github" },
     { "path": "packages/github-action" },
-    { "path": "packages/azure-devops" }
+    { "path": "packages/azure-devops" },
+    { "path": "packages/cli" }
   ]
 }

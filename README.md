@@ -17,7 +17,7 @@ Built on [Mastra](https://mastra.ai/) (TypeScript).
 - **Multi-provider LLM** — OpenAI, Anthropic, Google, or any provider supported by Mastra
 - **PR description generation** — optionally generate a structured PR description from the diff when the description is empty or a placeholder (off by default)
 - **Incremental review** — on subsequent pushes the bot reviews only the diff since the previously-reviewed state (commit on GitHub, PR iteration on Azure DevOps) instead of the entire PR, cutting tokens on multi-commit PRs (on by default; opt out with `RUSTY_INCREMENTAL_REVIEW=false`)
-- **GitHub + GitLab + Azure DevOps** — webhook server for GitHub, pipeline task for Azure DevOps, GitLab CI job, or a drop-in GitHub Action
+- **GitHub + GitLab + Azure DevOps + local CLI** — webhook server for GitHub, pipeline task for Azure DevOps, GitLab CI job, a drop-in GitHub Action, or a `rusty-bot` CLI that runs reviews against any local git repo
 - **Web dashboard** — configure repos, review styles, focus areas, and view history
 
 ## Quick Start
@@ -66,6 +66,7 @@ packages/
 ├── github-action/  # One-shot CLI driven by GitHub Actions env + event payload
 ├── azure-devops/   # Azure DevOps pipeline task (Docker entrypoint)
 ├── gitlab/         # GitLab CI task — provider + CLI driven by CI_MERGE_REQUEST_* env
+├── cli/            # `rusty-bot` CLI for local terminal-based reviews against any git repo
 └── dashboard/      # React SPA for configuration and review history
 ```
 
@@ -212,6 +213,40 @@ rusty-bot-review:
 - Supports incremental review via head SHA — subsequent pushes only review the delta
 
 The job exits with code 1 when critical issues are found (configurable via `RUSTY_FAIL_ON_CRITICAL`), which can gate MR merges when the job is on the merge train or required.
+
+## Local CLI
+
+The `@rusty-bot/cli` package adds a `rusty-bot` binary that runs the review pipeline against a local git repo with no GitHub/Azure DevOps harness. Useful for previewing what the bot would say on a branch before opening a PR, scripting reviews in pre-commit/pre-push hooks, or running the bot in CI environments that aren't GitHub or Azure DevOps.
+
+```bash
+# from the repo root, after pnpm install + pnpm -r build
+pnpm --filter @rusty-bot/cli start -- --base main --head HEAD
+
+# or, after npm/pnpm linking the bin
+rusty-bot --repo /path/to/repo --base main --head feature-branch --format markdown
+```
+
+The CLI reuses the same review engine, prompts, triage, MCP wiring, convention-file loading, and judge pass as the GitHub/Azure DevOps harnesses. Comment-posting is a no-op — findings are printed to stdout (markdown summary + collapsible inline findings, or JSON).
+
+**Flags:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--repo <path>` | path to the git repo | cwd |
+| `--base <ref>` | base ref to diff against | `main` |
+| `--head <ref>` | head ref to review | `HEAD` |
+| `--style <style>` | `strict` \| `balanced` \| `lenient` \| `roast` \| `thorough` | `balanced` |
+| `--focus <list>` | comma-separated focus areas (`security,performance,bugs,style,tests,docs`) | all |
+| `--ignore <list>` | comma-separated glob patterns to skip | — |
+| `--format <fmt>` | `markdown` or `json` | `markdown` |
+| `--fail-on-critical` | exit non-zero when any critical finding is present | off |
+| `-h`, `--help` | show help text | — |
+
+**Environment:**
+
+The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, the matching provider API key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.), `RUSTY_LLM_TRIAGE_MODEL`, `RUSTY_CASCADE_ENABLED`, `RUSTY_JUDGE_*`, `RUSTY_OPENGREP_RULES`, MCP server configs, etc. See the [Configuration](#configuration) section for the full list.
+
+**`searchCode` tool:** the CLI's `LocalGitProvider` shells out to `ripgrep` when available (preferred for speed and gitignore awareness) and falls back to `git grep` otherwise. PR-mutation methods (post comment, update title/description, etc.) are no-ops in the CLI since there is no PR to mutate.
 
 ## Configuration
 
