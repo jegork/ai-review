@@ -24,7 +24,8 @@ Options:
   --repo <path>          path to the git repo (default: cwd)
   --base <ref>           base ref to diff against (default: main)
   --head <ref>           head ref to review (default: HEAD)
-  --style <style>        review style: strict | balanced | lenient (default: balanced)
+  --style <style>        review style: strict | balanced | lenient | roast | thorough
+                         (default: balanced)
   --focus <list>         comma-separated focus areas: ${ALL_FOCUS_AREAS.join(",")}
                          (default: all)
   --ignore <list>        comma-separated glob patterns to exclude
