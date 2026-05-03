@@ -333,7 +333,12 @@ export function formatSummaryComment(
   lines.push("");
   lines.push("---");
   lines.push("");
-  const parts = [`Reviewed by ${review.modelUsed} · ${review.tokenCount} tokens (review)`];
+  const passModels = review.consensusMetadata?.passModels;
+  const reviewerLabel =
+    passModels && passModels.length > 0
+      ? Array.from(new Set(passModels)).join(", ")
+      : review.modelUsed;
+  const parts = [`Reviewed by ${reviewerLabel} · ${review.tokenCount} tokens (review)`];
   if (review.judgeTokenCount !== undefined) {
     parts.push(`${review.judgeTokenCount} tokens (judge)`);
   }

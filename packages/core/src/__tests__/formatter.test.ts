@@ -86,6 +86,85 @@ describe("formatSummaryComment", () => {
     expect(result).toContain("Reviewed by claude-opus-4-20250514 · 50000 tokens");
   });
 
+  it("renders all distinct pass models in the footer when consensus ran multiple models", () => {
+    const review = makeReview({
+      modelUsed: "openai/gpt-5-mini",
+      tokenCount: 30000,
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 0.6,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good", "looks_good", "address_before_merge"],
+        passModels: ["openai/gpt-5-mini", "moonshot/kimi-k2.5", "minimaxi/MiniMax-M2.7"],
+        failedPasses: 0,
+      },
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).toContain(
+      "Reviewed by openai/gpt-5-mini, moonshot/kimi-k2.5, minimaxi/MiniMax-M2.7 · 30000 tokens",
+    );
+  });
+
+  it("dedupes pass models when the same model ran multiple passes", () => {
+    const review = makeReview({
+      modelUsed: "anthropic/claude-sonnet-4-6",
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        agreementRate: 1,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good", "looks_good", "looks_good"],
+        passModels: [
+          "anthropic/claude-sonnet-4-6",
+          "anthropic/claude-sonnet-4-6",
+          "anthropic/claude-sonnet-4-6",
+        ],
+        failedPasses: 0,
+      },
+    });
+
+    const footerLine = formatSummaryComment(review)
+      .split("\n")
+      .find((l) => l.startsWith("Reviewed by "));
+    expect(footerLine).toBeDefined();
+    const occurrences = footerLine!.match(/anthropic\/claude-sonnet-4-6/g) ?? [];
+    expect(occurrences).toHaveLength(1);
+  });
+
+  it("falls back to modelUsed in the footer when consensusMetadata is absent", () => {
+    const review = makeReview({
+      modelUsed: "openai/gpt-5-mini",
+      tokenCount: 12345,
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).toContain("Reviewed by openai/gpt-5-mini · 12345 tokens");
+  });
+
+  it("falls back to modelUsed when passModels is an empty array", () => {
+    const review = makeReview({
+      modelUsed: "openai/gpt-5-mini",
+      tokenCount: 12345,
+      consensusMetadata: {
+        passes: 1,
+        threshold: 1,
+        agreementRate: 1,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good"],
+        passModels: [],
+        failedPasses: 0,
+      },
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).toContain("Reviewed by openai/gpt-5-mini · 12345 tokens");
+  });
+
   it("renders a clean review with zero findings", () => {
     const review = makeReview({
       recommendation: "looks_good",
