@@ -126,10 +126,43 @@ describe("formatSummaryComment", () => {
       },
     });
 
+    const footerLine = formatSummaryComment(review)
+      .split("\n")
+      .find((l) => l.startsWith("Reviewed by "));
+    expect(footerLine).toBeDefined();
+    const occurrences = footerLine!.match(/anthropic\/claude-sonnet-4-6/g) ?? [];
+    expect(occurrences).toHaveLength(1);
+  });
+
+  it("falls back to modelUsed in the footer when consensusMetadata is absent", () => {
+    const review = makeReview({
+      modelUsed: "openai/gpt-5-mini",
+      tokenCount: 12345,
+    });
+
     const result = formatSummaryComment(review);
 
-    expect(result).toContain("Reviewed by anthropic/claude-sonnet-4-6 ·");
-    expect(result).not.toContain("anthropic/claude-sonnet-4-6, anthropic/claude-sonnet-4-6");
+    expect(result).toContain("Reviewed by openai/gpt-5-mini · 12345 tokens");
+  });
+
+  it("falls back to modelUsed when passModels is an empty array", () => {
+    const review = makeReview({
+      modelUsed: "openai/gpt-5-mini",
+      tokenCount: 12345,
+      consensusMetadata: {
+        passes: 1,
+        threshold: 1,
+        agreementRate: 1,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good"],
+        passModels: [],
+        failedPasses: 0,
+      },
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).toContain("Reviewed by openai/gpt-5-mini · 12345 tokens");
   });
 
   it("renders a clean review with zero findings", () => {
