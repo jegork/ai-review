@@ -5,6 +5,7 @@ import {
   resolveModel,
   getModelDisplayName,
   resolveModelSettings,
+  applyModelConstraints,
 } from "../agent/model.js";
 import { PRDescriptionOutputSchema, type PRDescriptionOutput } from "./schema.js";
 import { buildDescriptionSystemPrompt, buildDescriptionUserMessage } from "./prompt.js";
@@ -110,7 +111,7 @@ export async function generatePRDescription(
 
   const userMessage = buildDescriptionUserMessage(compressed, prMetadata, existingDescription);
 
-  const modelSettings = resolveModelSettings("description");
+  const modelSettings = applyModelConstraints(modelConfig, resolveModelSettings("description"));
   const response = await agent.generate(userMessage, {
     structuredOutput: { schema: PRDescriptionOutputSchema },
     ...(Object.keys(modelSettings).length > 0 && { modelSettings }),

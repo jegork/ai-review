@@ -7,6 +7,7 @@ import {
   getModelDisplayName,
   resolveDefaultAgentOptions,
   supportsAnthropicCacheControl,
+  applyModelConstraints,
 } from "../agent/model.js";
 
 function clearEnv() {
@@ -131,6 +132,54 @@ describe("resolveReviewPassModelConfigs", () => {
       { temperature: 0.2, topP: 0.8 },
       { temperature: 0.5, topP: 0.8 },
     ]);
+  });
+
+  it("forces temperature=1 for kimi-k2.5 even when the per-pass list says otherwise", () => {
+    process.env.RUSTY_REVIEW_MODELS = "anthropic/claude-sonnet,requesty/moonshot/kimi-k2.5";
+    process.env.RUSTY_REVIEW_TEMPERATURES = "0.2,0.2";
+
+    const configs = resolveReviewPassModelConfigs(2);
+
+    expect(configs[0].settings.temperature).toBe(0.2);
+    expect(configs[1].settings.temperature).toBe(1);
+  });
+});
+
+describe("applyModelConstraints", () => {
+  beforeEach(clearEnv);
+
+  it("forces temperature=1 for moonshot/kimi-k2.5 router models", () => {
+    const settings = applyModelConstraints(
+      { type: "router", model: "requesty/moonshot/kimi-k2.5" },
+      { temperature: 0.2, topP: 0.9 },
+    );
+    expect(settings).toEqual({ temperature: 1, topP: 0.9 });
+  });
+
+  it("matches kimi-k2.5 even without a routing prefix", () => {
+    const settings = applyModelConstraints(
+      { type: "router", model: "moonshot/kimi-k2.5" },
+      { temperature: 0.4 },
+    );
+    expect(settings.temperature).toBe(1);
+  });
+
+  it("leaves settings unchanged when temperature is already at the locked value", () => {
+    const original = { temperature: 1, topP: 0.5 };
+    const settings = applyModelConstraints(
+      { type: "router", model: "requesty/moonshot/kimi-k2.5" },
+      original,
+    );
+    expect(settings).toBe(original);
+  });
+
+  it("returns settings unchanged for unaffected models", () => {
+    const original = { temperature: 0.2 };
+    const settings = applyModelConstraints(
+      { type: "router", model: "anthropic/claude-sonnet-4-6" },
+      original,
+    );
+    expect(settings).toBe(original);
   });
 });
 

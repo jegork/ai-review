@@ -20,6 +20,7 @@ vi.mock("../agent/model.js", () => ({
   ),
   resolveModelSettings: vi.fn(() => ({})),
   resolveDefaultAgentOptions: vi.fn(() => undefined),
+  applyModelConstraints: vi.fn((_config, settings) => settings),
 }));
 
 const { judgeFindings, judgeReviewResult, resolveJudgeConfig } = await import("../agent/judge.js");

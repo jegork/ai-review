@@ -96,6 +96,23 @@ describe("runConsensusReview", () => {
     expect(result.consensusMetadata).toBeUndefined();
   });
 
+  it("uses RUSTY_REVIEW_MODELS[0] / RUSTY_REVIEW_TEMPERATURES[0] on the single-pass path", async () => {
+    process.env.RUSTY_REVIEW_MODELS = "anthropic/single-pass-model,requesty/moonshot/kimi-k2.5";
+    process.env.RUSTY_REVIEW_TEMPERATURES = "0.2,1";
+    process.env.RUSTY_LLM_MODEL = "requesty/moonshot/kimi-k2.5";
+
+    const singlePassConfig = { ...config, consensusPasses: 1 };
+    await runConsensusReview([], singlePassConfig, prMetadata, "diff content");
+    const { runReview } = await import("../agent/review.js");
+    const calls = (runReview as ReturnType<typeof vi.fn>).mock.calls;
+
+    expect(calls[0][4]?.modelConfig).toEqual({
+      type: "router",
+      model: "anthropic/single-pass-model",
+    });
+    expect(calls[0][4]?.modelSettings).toEqual({ temperature: 0.2 });
+  });
+
   it("runs N passes and filters by majority vote", async () => {
     const consensusConfig = { ...config, consensusPasses: 3 };
     const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");

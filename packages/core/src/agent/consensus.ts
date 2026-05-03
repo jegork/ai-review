@@ -110,7 +110,12 @@ export async function runConsensusReview(
   const passes = passPlan.passes;
 
   if (passes <= 1) {
-    return runReview(config, diff, prMetadata, ticketContext, options);
+    const [singlePassModel] = resolveReviewPassModelConfigs(1);
+    return runReview(config, diff, prMetadata, ticketContext, {
+      ...options,
+      modelConfig: options?.modelConfig ?? singlePassModel.config,
+      modelSettings: options?.modelSettings ?? singlePassModel.settings,
+    });
   }
 
   const threshold = deriveConsensusThreshold(config.consensusThreshold, passes);

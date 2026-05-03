@@ -9,6 +9,7 @@ import {
   resolveModelSettings,
   resolveDefaultAgentOptions,
   supportsAnthropicCacheControl,
+  applyModelConstraints,
 } from "./model.js";
 import type { ModelConfig, ModelSettings } from "./model.js";
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
@@ -161,7 +162,8 @@ export async function runReview(
 
   const schema = tier === "skim" ? SkimReviewOutputSchema : ReviewOutputSchema;
 
-  const modelSettings = options?.modelSettings ?? resolveModelSettings("review");
+  const rawModelSettings = options?.modelSettings ?? resolveModelSettings("review");
+  const modelSettings = applyModelConstraints(modelConfig, rawModelSettings);
   const response = await generateWithTransientRetry(() =>
     generateWithStructuredOutputRetry(() =>
       agent.generate(userMessage, {

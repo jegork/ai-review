@@ -21,6 +21,7 @@ import type { OpenGrepFinding } from "../opengrep/types.js";
 import { runReview, type RunReviewOptions, type ReviewTier } from "./review.js";
 import { runConsensusReview } from "./consensus.js";
 import { judgeReviewResult, resolveJudgeConfig } from "./judge.js";
+import { resolveReviewPassModelConfigs } from "./model.js";
 import type { McpServerConfig } from "../mcp/types.js";
 import { connectMcpServers } from "../mcp/client.js";
 import { logger } from "../logger.js";
@@ -307,10 +308,16 @@ async function runTieredReview(
   };
 
   if (tier === "skim") {
+    const [skimPassModel] = resolveReviewPassModelConfigs(1);
+    const skimOptions: RunReviewOptions = {
+      ...tierOptions,
+      modelConfig: tierOptions.modelConfig ?? skimPassModel.config,
+      modelSettings: tierOptions.modelSettings ?? skimPassModel.settings,
+    };
     const { compressed, skippedFiles } = compressDiff(patches, maxTokens);
     if (skippedFiles.length === 0) {
       const result = await runReview(config, compressed, prMetadata, ticketContext, {
-        ...tierOptions,
+        ...skimOptions,
         chunkFiles: patches.map((p) => p.path),
       });
       return [result];
@@ -323,7 +330,7 @@ async function runTieredReview(
       const { compressed: groupDiff } = compressDiff(groups[i], maxTokens);
       const groupTickets = i === 0 ? ticketContext : undefined;
       const result = await runReview(config, groupDiff, prMetadata, groupTickets, {
-        ...tierOptions,
+        ...skimOptions,
         openGrepFindings: groupOpenGrep,
         chunkFiles: [...groupPaths],
       });
