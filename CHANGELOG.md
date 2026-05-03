@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0](https://github.com/jegork/rusty-bot/compare/v1.2.0...v1.3.0) (2026-05-03)
+
+
+### Features
+
+* add @rusty-bot/cli and multi-model review stack ([#111](https://github.com/jegork/rusty-bot/issues/111)) ([2177a01](https://github.com/jegork/rusty-bot/commit/2177a01e8f6bd7134c54b99b75cef45c8f318a3e))
+* add GitLab + GitLab CI integration ([#108](https://github.com/jegork/rusty-bot/issues/108)) ([3e1e4fd](https://github.com/jegork/rusty-bot/commit/3e1e4fdf02516a2a3a5c8d32176236aadf7fda00))
+* **cli:** add @rusty-bot/cli for local terminal-based reviews ([#106](https://github.com/jegork/rusty-bot/issues/106)) ([f94368e](https://github.com/jegork/rusty-bot/commit/f94368e62524b4d3ecc6ca545ef66388036e3b93))
+
+
+### Bug Fixes
+
+* **ci:** set kimi-k2.5 review pass temperature to 1 ([#130](https://github.com/jegork/rusty-bot/issues/130)) ([fdca1b6](https://github.com/jegork/rusty-bot/commit/fdca1b639f148012e83fe7d4b922f30d3b8bcfb3))
+* **formatter:** show all reviewer models in summary footer ([#128](https://github.com/jegork/rusty-bot/issues/128)) ([00c9366](https://github.com/jegork/rusty-bot/commit/00c9366df2c6ca033309860b8fa605829fee1636))
+
 ## [1.2.0](https://github.com/jegork/rusty-bot/compare/v1.1.0...v1.2.0) (2026-05-02)
 
 
