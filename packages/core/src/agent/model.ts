@@ -204,10 +204,30 @@ export function resolveReviewPassModelConfigs(passCount: number): ReviewPassMode
 
     return {
       config,
-      settings,
+      settings: applyModelConstraints(config, settings),
       displayName: getModelDisplayName(config),
     };
   });
+}
+
+interface HardTemperatureLock {
+  pattern: RegExp;
+  temperature: number;
+}
+
+const HARD_TEMPERATURE_LOCKS: HardTemperatureLock[] = [
+  { pattern: /moonshot\/kimi-k2\.5/i, temperature: 1 },
+];
+
+function findHardTemperatureLock(displayName: string): HardTemperatureLock | undefined {
+  return HARD_TEMPERATURE_LOCKS.find((entry) => entry.pattern.test(displayName));
+}
+
+export function applyModelConstraints(config: ModelConfig, settings: ModelSettings): ModelSettings {
+  const lock = findHardTemperatureLock(getModelDisplayName(config));
+  if (!lock) return settings;
+  if (settings.temperature === lock.temperature) return settings;
+  return { ...settings, temperature: lock.temperature };
 }
 
 export function getModelDisplayName(config: ModelConfig): string {

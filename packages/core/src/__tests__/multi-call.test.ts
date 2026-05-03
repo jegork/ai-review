@@ -809,4 +809,32 @@ describe("runCascadeReview", () => {
       expect(call[4]?.openGrepFindings).toBeUndefined();
     }
   });
+
+  it("routes the skim tier through RUSTY_REVIEW_MODELS[0] / RUSTY_REVIEW_TEMPERATURES[0]", async () => {
+    process.env.RUSTY_REVIEW_MODELS = "anthropic/skim-model,requesty/moonshot/kimi-k2.5";
+    process.env.RUSTY_REVIEW_TEMPERATURES = "0.2,1";
+    process.env.RUSTY_LLM_MODEL = "requesty/moonshot/kimi-k2.5";
+    process.env.RUSTY_REVIEW_TEMPERATURE = "0.2";
+
+    try {
+      await runCascadeReview(
+        [makePatch("tests/test_auth.py", 20)],
+        [],
+        config,
+        prMetadata,
+        undefined,
+      );
+
+      const skimCalls = runReviewMock.mock.calls.filter((call) => call[4]?.tier === "skim");
+      expect(skimCalls.length).toBeGreaterThanOrEqual(1);
+      const skimOpts = skimCalls[0][4];
+      expect(skimOpts?.modelConfig).toEqual({ type: "router", model: "anthropic/skim-model" });
+      expect(skimOpts?.modelSettings).toEqual({ temperature: 0.2 });
+    } finally {
+      delete process.env.RUSTY_REVIEW_MODELS;
+      delete process.env.RUSTY_REVIEW_TEMPERATURES;
+      delete process.env.RUSTY_LLM_MODEL;
+      delete process.env.RUSTY_REVIEW_TEMPERATURE;
+    }
+  });
 });

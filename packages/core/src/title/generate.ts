@@ -5,6 +5,7 @@ import {
   resolveModel,
   getModelDisplayName,
   resolveModelSettings,
+  applyModelConstraints,
 } from "../agent/model.js";
 import { ConventionalTitleOutputSchema, type ConventionalTitleOutput } from "./schema.js";
 import { buildTitleSystemPrompt, buildTitleUserMessage } from "./prompt.js";
@@ -38,7 +39,7 @@ export async function generateConventionalTitle(
 
   const userMessage = buildTitleUserMessage(compressed, prMetadata);
 
-  const modelSettings = resolveModelSettings("title");
+  const modelSettings = applyModelConstraints(modelConfig, resolveModelSettings("title"));
   const response = await agent.generate(userMessage, {
     structuredOutput: { schema: ConventionalTitleOutputSchema },
     ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
