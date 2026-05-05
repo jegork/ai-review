@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
-    "@mastra/hono": "^1.0.0",
+    "@mastra/hono": "^1.4.13",
     "@octokit/app": "^16.1.2",
     "@rusty-bot/core": "workspace:*",
     "hono": "^4.12.14",
