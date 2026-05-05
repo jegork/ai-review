@@ -133,6 +133,7 @@ const NATIVE_STRUCTURED_OUTPUT_ROUTER_PREFIXES = [
   "requesty/anthropic/",
   "requesty/google/",
   "requesty/moonshot/",
+  "requesty/fireworks/",
 ];
 
 export function supportsNativeStructuredOutput(config: ModelConfig): boolean {

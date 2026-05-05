@@ -363,7 +363,7 @@ Mastra asks the model to return findings as a typed JSON object via `response_fo
 
 Rusty Bot detects this automatically and falls back to **prompt-injected JSON** for non-supported model strings (Mastra's `jsonPromptInjection: true`) — the schema is added to the system prompt and Mastra parses the JSON out of the text response. The default rule is:
 
-- Native `json_schema`: any model whose ID starts with `openai/`, `anthropic/`, `google/`, `azure-openai/`, `requesty/openai/`, `requesty/anthropic/`, `requesty/google/`, or `requesty/moonshot/`. Azure (API key or managed identity) and OpenAI-compatible endpoints also default to native.
+- Native `json_schema`: any model whose ID starts with `openai/`, `anthropic/`, `google/`, `azure-openai/`, `requesty/openai/`, `requesty/anthropic/`, `requesty/google/`, `requesty/moonshot/`, or `requesty/fireworks/`. Azure (API key or managed identity) and OpenAI-compatible endpoints also default to native.
 - Prompt injection: everything else (e.g. `requesty/minimaxi/...`, `requesty/deepseek/...`, `requesty/qwen/...`).
 
 Override the default per model with two env vars (CSV; trailing-`*` matches a prefix):

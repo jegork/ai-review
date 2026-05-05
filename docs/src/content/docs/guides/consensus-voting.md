@@ -59,12 +59,14 @@ Generation runs on cheap open-weight models (3 different vendors for diversity);
 
 ```bash
 RUSTY_LLM_TRIAGE_MODEL=requesty/google/gemini-3.1-flash-lite-preview
-RUSTY_REVIEW_MODELS=requesty/deepseek/deepseek-v4-pro,requesty/moonshot/kimi-k2.6,requesty/minimaxi/MiniMax-M2.7
-RUSTY_REVIEW_TEMPERATURES=0.2,0.2,0.3
+RUSTY_REVIEW_MODELS=requesty/fireworks/deepseek-v4-pro,requesty/moonshot/kimi-k2.6,requesty/minimaxi/MiniMax-M2.7
+RUSTY_REVIEW_TEMPERATURES=0.2,1,0.3
 RUSTY_JUDGE_MODEL=requesty/anthropic/claude-sonnet-4-6
 RUSTY_JUDGE_TEMPERATURE=0
 RUSTY_REVIEW_ADAPTIVE_PASSES=true
 ```
+
+> Use the `requesty/fireworks/` route for DeepSeek V4 Pro. Fireworks proxies `json_schema` natively and exposes the model's reasoning in a separate `reasoning_content` field, so structured output stays intact while thinking still happens. The direct `requesty/deepseek/` route currently corrupts JSON when thinking mode is on ([vllm-project/vllm#41132](https://github.com/vllm-project/vllm/issues/41132)).
 
 ### 💰 Budget — fully open-weight (~$0.05–$0.20/PR)
 
@@ -72,9 +74,9 @@ No proprietary spend. Judge moves to DeepSeek V4 Pro — the strongest open-weig
 
 ```bash
 RUSTY_LLM_TRIAGE_MODEL=requesty/google/gemini-3.1-flash-lite-preview
-RUSTY_REVIEW_MODELS=requesty/deepseek/deepseek-v4-pro,requesty/moonshot/kimi-k2.6,requesty/minimaxi/MiniMax-M2.7
-RUSTY_REVIEW_TEMPERATURES=0.2,0.2,0.3
-RUSTY_JUDGE_MODEL=requesty/deepseek/deepseek-v4-pro
+RUSTY_REVIEW_MODELS=requesty/fireworks/deepseek-v4-pro,requesty/moonshot/kimi-k2.6,requesty/minimaxi/MiniMax-M2.7
+RUSTY_REVIEW_TEMPERATURES=0.2,1,0.3
+RUSTY_JUDGE_MODEL=requesty/fireworks/deepseek-v4-pro
 RUSTY_JUDGE_TEMPERATURE=0
 RUSTY_REVIEW_ADAPTIVE_PASSES=true
 ```
@@ -114,7 +116,7 @@ Consensus uses `Promise.allSettled` so a single flaky pass does not fail the who
 
 ## Structured output compatibility
 
-Some models in the Balanced and Budget stacks above (notably `requesty/minimaxi/MiniMax-M2.7` and `requesty/deepseek/deepseek-v4-pro`) do not support native `response_format: json_schema` — Requesty's `json_schema` only proxies for OpenAI, Anthropic, Google, and Moonshot. Rusty Bot detects this automatically and falls back to Mastra's `jsonPromptInjection: true` (schema injected into the system prompt; JSON parsed from the text response).
+Some models in the Balanced and Budget stacks above (notably `requesty/minimaxi/MiniMax-M2.7`) do not support native `response_format: json_schema` — Requesty's `json_schema` only proxies for OpenAI, Anthropic, Google, Moonshot, and Fireworks. Rusty Bot detects this automatically and falls back to Mastra's `jsonPromptInjection: true` (schema injected into the system prompt; JSON parsed from the text response).
 
 Override the default with `RUSTY_LLM_JSON_PROMPT_INJECTION` (force prompt injection) or `RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT` (force native `json_schema`). Both accept CSV with trailing-`*` prefix wildcards. See the README's _Structured Output Compatibility_ section for details.
 
