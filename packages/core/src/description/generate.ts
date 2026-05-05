@@ -5,6 +5,7 @@ import {
   resolveModel,
   getModelDisplayName,
   resolveModelSettings,
+  resolveJsonPromptInjection,
   applyModelConstraints,
 } from "../agent/model.js";
 import { PRDescriptionOutputSchema, type PRDescriptionOutput } from "./schema.js";
@@ -112,8 +113,9 @@ export async function generatePRDescription(
   const userMessage = buildDescriptionUserMessage(compressed, prMetadata, existingDescription);
 
   const modelSettings = applyModelConstraints(modelConfig, resolveModelSettings("description"));
+  const jsonPromptInjection = resolveJsonPromptInjection(modelConfig);
   const response = await agent.generate(userMessage, {
-    structuredOutput: { schema: PRDescriptionOutputSchema },
+    structuredOutput: { schema: PRDescriptionOutputSchema, jsonPromptInjection },
     ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
   });
 

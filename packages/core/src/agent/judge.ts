@@ -7,6 +7,7 @@ import {
   getModelDisplayName,
   resolveModelSettings,
   resolveDefaultAgentOptions,
+  resolveJsonPromptInjection,
   applyModelConstraints,
 } from "./model.js";
 import type { Finding, ReviewResult } from "../types.js";
@@ -161,8 +162,9 @@ export async function judgeFindings(
   let tokenCount = 0;
   try {
     const modelSettings = applyModelConstraints(modelConfig, resolveModelSettings("judge"));
+    const jsonPromptInjection = resolveJsonPromptInjection(modelConfig);
     const response = await agent.generate(userMessage, {
-      structuredOutput: { schema: JudgeOutputSchema },
+      structuredOutput: { schema: JudgeOutputSchema, jsonPromptInjection },
       ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
     });
     evaluations = response.object.evaluations;

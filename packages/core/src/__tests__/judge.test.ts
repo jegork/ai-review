@@ -9,6 +9,8 @@ vi.mock("@mastra/core/agent", () => ({
   }),
 }));
 
+const resolveJsonPromptInjectionMock = vi.fn(() => false);
+
 vi.mock("../agent/model.js", () => ({
   resolveModelConfig: vi.fn(() => ({ type: "router", model: "test-model" })),
   resolveModelConfigWithOverride: vi.fn((model: string) => ({ type: "router", model })),
@@ -20,6 +22,7 @@ vi.mock("../agent/model.js", () => ({
   ),
   resolveModelSettings: vi.fn(() => ({})),
   resolveDefaultAgentOptions: vi.fn(() => undefined),
+  resolveJsonPromptInjection: resolveJsonPromptInjectionMock,
   applyModelConstraints: vi.fn((_config, settings) => settings),
 }));
 
@@ -495,5 +498,38 @@ describe("judgeReviewResult", () => {
 
     const result = await judgeReviewResult(review, DIFF, { enabled: true, threshold: 6 });
     expect(result.droppedFindings).toEqual(review.droppedFindings);
+  });
+});
+
+describe("judgeFindings jsonPromptInjection forwarding", () => {
+  beforeEach(() => {
+    generateMock.mockReset();
+    resolveJsonPromptInjectionMock.mockReset();
+  });
+
+  it("forwards jsonPromptInjection=true into structuredOutput when resolver returns true", async () => {
+    resolveJsonPromptInjectionMock.mockReturnValueOnce(true);
+    generateMock.mockResolvedValueOnce({
+      object: { evaluations: [{ index: 0, confidence: 9, reasoning: "ok" }] },
+      usage: { totalTokens: 25 },
+    });
+
+    await judgeFindings([makeFinding()], DIFF, { enabled: true, threshold: 6 });
+
+    const callArgs = generateMock.mock.calls[0][1];
+    expect(callArgs.structuredOutput.jsonPromptInjection).toBe(true);
+  });
+
+  it("forwards jsonPromptInjection=false into structuredOutput when resolver returns false", async () => {
+    resolveJsonPromptInjectionMock.mockReturnValueOnce(false);
+    generateMock.mockResolvedValueOnce({
+      object: { evaluations: [{ index: 0, confidence: 9, reasoning: "ok" }] },
+      usage: { totalTokens: 25 },
+    });
+
+    await judgeFindings([makeFinding()], DIFF, { enabled: true, threshold: 6 });
+
+    const callArgs = generateMock.mock.calls[0][1];
+    expect(callArgs.structuredOutput.jsonPromptInjection).toBe(false);
   });
 });

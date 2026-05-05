@@ -9,6 +9,7 @@ import {
   getModelDisplayName,
   resolveModelSettings,
   resolveDefaultAgentOptions,
+  resolveJsonPromptInjection,
   applyModelConstraints,
 } from "../agent/model.js";
 import { normalizePath } from "../agent/multi-call.js";
@@ -123,8 +124,9 @@ export async function runTriage(
 
   const triageMessage = buildTriageUserMessage(triageablePatches);
   const modelSettings = applyModelConstraints(modelConfig, resolveModelSettings("triage"));
+  const jsonPromptInjection = resolveJsonPromptInjection(modelConfig);
   const response = await agent.generate(triageMessage, {
-    structuredOutput: { schema: TriageOutputSchema },
+    structuredOutput: { schema: TriageOutputSchema, jsonPromptInjection },
     ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
   });
 
