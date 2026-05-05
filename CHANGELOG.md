@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/jegork/rusty-bot/compare/v1.3.0...v1.3.1) (2026-05-03)
+
+
+### Bug Fixes
+
+* **review:** apply per-model temperature constraints across all agent paths ([#131](https://github.com/jegork/rusty-bot/issues/131)) ([d436355](https://github.com/jegork/rusty-bot/commit/d436355c0efe08c18e20fe1466808f2228cc26ae))
+
 ## [1.3.0](https://github.com/jegork/rusty-bot/compare/v1.2.0...v1.3.0) (2026-05-03)
 
 
