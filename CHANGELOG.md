@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://github.com/jegork/rusty-bot/compare/v1.3.1...v1.4.0) (2026-05-05)
+
+
+### Features
+
+* **review:** auto-fallback to prompt-injected JSON for non-json_schema models ([#133](https://github.com/jegork/rusty-bot/issues/133)) ([32b7a36](https://github.com/jegork/rusty-bot/commit/32b7a36e9986ed3aa129dd8d368c542033c18575))
+
+
+### Bug Fixes
+
+* **docker:** include packages/cli/package.json in workspace install ([#134](https://github.com/jegork/rusty-bot/issues/134)) ([a151a5d](https://github.com/jegork/rusty-bot/commit/a151a5df9fcbe5283fa37645f531833d1a2f1794))
+
 ## [1.3.1](https://github.com/jegork/rusty-bot/compare/v1.3.0...v1.3.1) (2026-05-03)
 
 
