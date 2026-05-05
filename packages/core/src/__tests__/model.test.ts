@@ -6,7 +6,9 @@ import {
   resolveReviewPassModelConfigs,
   getModelDisplayName,
   resolveDefaultAgentOptions,
+  resolveJsonPromptInjection,
   supportsAnthropicCacheControl,
+  supportsNativeStructuredOutput,
   applyModelConstraints,
 } from "../agent/model.js";
 
@@ -29,6 +31,8 @@ function clearEnv() {
   delete process.env.RUSTY_LLM_API_KEY;
   delete process.env.REQUESTY_API_KEY;
   delete process.env.RUSTY_PROMPT_CACHE;
+  delete process.env.RUSTY_LLM_JSON_PROMPT_INJECTION;
+  delete process.env.RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT;
 }
 
 describe("resolveModelConfig", () => {
@@ -275,6 +279,203 @@ describe("supportsAnthropicCacheControl", () => {
         baseUrl: "https://example.com/v1",
         model: "anthropic/claude-sonnet-4",
       }),
+    ).toBe(false);
+  });
+});
+
+describe("supportsNativeStructuredOutput", () => {
+  it("returns true for direct openai/anthropic/google/azure-openai router prefixes", () => {
+    expect(supportsNativeStructuredOutput({ type: "router", model: "openai/gpt-5-mini" })).toBe(
+      true,
+    );
+    expect(
+      supportsNativeStructuredOutput({ type: "router", model: "anthropic/claude-sonnet-4-6" }),
+    ).toBe(true);
+    expect(supportsNativeStructuredOutput({ type: "router", model: "google/gemini-3.1-pro" })).toBe(
+      true,
+    );
+    expect(
+      supportsNativeStructuredOutput({ type: "router", model: "azure-openai/my-deployment" }),
+    ).toBe(true);
+  });
+
+  it("returns true for requesty-routed openai/anthropic/google/moonshot", () => {
+    expect(
+      supportsNativeStructuredOutput({ type: "router", model: "requesty/openai/gpt-5-mini" }),
+    ).toBe(true);
+    expect(
+      supportsNativeStructuredOutput({
+        type: "router",
+        model: "requesty/anthropic/claude-sonnet-4-6",
+      }),
+    ).toBe(true);
+    expect(
+      supportsNativeStructuredOutput({ type: "router", model: "requesty/google/gemini-3.1-pro" }),
+    ).toBe(true);
+    expect(
+      supportsNativeStructuredOutput({ type: "router", model: "requesty/moonshot/kimi-k2.6" }),
+    ).toBe(true);
+  });
+
+  it("returns false for requesty-routed providers without verified json_schema support", () => {
+    expect(
+      supportsNativeStructuredOutput({
+        type: "router",
+        model: "requesty/minimaxi/MiniMax-M2.7",
+      }),
+    ).toBe(false);
+    expect(
+      supportsNativeStructuredOutput({
+        type: "router",
+        model: "requesty/deepseek/deepseek-v4-pro",
+      }),
+    ).toBe(false);
+    expect(
+      supportsNativeStructuredOutput({ type: "router", model: "requesty/qwen/qwen3-coder" }),
+    ).toBe(false);
+  });
+
+  it("returns false for non-listed direct router providers", () => {
+    expect(
+      supportsNativeStructuredOutput({ type: "router", model: "deepseek/deepseek-v4-pro" }),
+    ).toBe(false);
+    expect(supportsNativeStructuredOutput({ type: "router", model: "minimaxi/MiniMax-M2.7" })).toBe(
+      false,
+    );
+  });
+
+  it("returns true for azure configs", () => {
+    expect(
+      supportsNativeStructuredOutput({
+        type: "azure-api-key",
+        resourceName: "r",
+        deploymentName: "d",
+        apiKey: "k",
+      }),
+    ).toBe(true);
+    expect(
+      supportsNativeStructuredOutput({
+        type: "azure-managed-identity",
+        resourceName: "r",
+        deploymentName: "d",
+      }),
+    ).toBe(true);
+  });
+
+  it("returns true for openai-compatible configs (assumes proxy translates json_schema)", () => {
+    expect(
+      supportsNativeStructuredOutput({
+        type: "openai-compatible",
+        baseUrl: "https://litellm.example/v1",
+        model: "gpt-4o",
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("resolveJsonPromptInjection", () => {
+  beforeEach(clearEnv);
+
+  it("returns false (use native) for providers in the supported list", () => {
+    expect(
+      resolveJsonPromptInjection({ type: "router", model: "requesty/openai/gpt-5-mini" }),
+    ).toBe(false);
+    expect(
+      resolveJsonPromptInjection({ type: "router", model: "requesty/moonshot/kimi-k2.6" }),
+    ).toBe(false);
+  });
+
+  it("returns true (inject prompt) for providers outside the supported list", () => {
+    expect(
+      resolveJsonPromptInjection({
+        type: "router",
+        model: "requesty/minimaxi/MiniMax-M2.7",
+      }),
+    ).toBe(true);
+    expect(
+      resolveJsonPromptInjection({
+        type: "router",
+        model: "requesty/deepseek/deepseek-v4-pro",
+      }),
+    ).toBe(true);
+  });
+
+  it("force-on env var overrides default for an exact model match", () => {
+    process.env.RUSTY_LLM_JSON_PROMPT_INJECTION = "requesty/openai/gpt-5-mini";
+
+    expect(
+      resolveJsonPromptInjection({ type: "router", model: "requesty/openai/gpt-5-mini" }),
+    ).toBe(true);
+    expect(resolveJsonPromptInjection({ type: "router", model: "requesty/openai/gpt-5-pro" })).toBe(
+      false,
+    );
+  });
+
+  it("force-on env var supports trailing-* prefix wildcards", () => {
+    process.env.RUSTY_LLM_JSON_PROMPT_INJECTION = "requesty/minimaxi/*,requesty/deepseek/*";
+
+    expect(
+      resolveJsonPromptInjection({
+        type: "router",
+        model: "requesty/minimaxi/MiniMax-M2.7",
+      }),
+    ).toBe(true);
+    expect(
+      resolveJsonPromptInjection({
+        type: "router",
+        model: "requesty/deepseek/deepseek-v4-pro",
+      }),
+    ).toBe(true);
+    expect(
+      resolveJsonPromptInjection({ type: "router", model: "requesty/openai/gpt-5-mini" }),
+    ).toBe(false);
+  });
+
+  it("force-off env var overrides the default-injection path", () => {
+    process.env.RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT = "requesty/minimaxi/MiniMax-M2.7";
+
+    expect(
+      resolveJsonPromptInjection({
+        type: "router",
+        model: "requesty/minimaxi/MiniMax-M2.7",
+      }),
+    ).toBe(false);
+  });
+
+  it("force-on takes precedence over force-off for the same model", () => {
+    process.env.RUSTY_LLM_JSON_PROMPT_INJECTION = "requesty/openai/gpt-5-mini";
+    process.env.RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT = "requesty/openai/gpt-5-mini";
+
+    expect(
+      resolveJsonPromptInjection({ type: "router", model: "requesty/openai/gpt-5-mini" }),
+    ).toBe(true);
+  });
+
+  it("matches azure configs against azure-openai/<deployment>", () => {
+    process.env.RUSTY_LLM_JSON_PROMPT_INJECTION = "azure-openai/my-deployment";
+
+    expect(
+      resolveJsonPromptInjection({
+        type: "azure-api-key",
+        resourceName: "r",
+        deploymentName: "my-deployment",
+        apiKey: "k",
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores empty env vars and falls back to default", () => {
+    process.env.RUSTY_LLM_JSON_PROMPT_INJECTION = "";
+    process.env.RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT = "";
+
+    expect(
+      resolveJsonPromptInjection({
+        type: "router",
+        model: "requesty/minimaxi/MiniMax-M2.7",
+      }),
+    ).toBe(true);
+    expect(
+      resolveJsonPromptInjection({ type: "router", model: "requesty/openai/gpt-5-mini" }),
     ).toBe(false);
   });
 });
