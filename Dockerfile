@@ -98,6 +98,9 @@ EOF
 
 RUN chmod +x /app/entrypoint.sh
 
-USER rusty
-
+# Default to root so CI container handlers (GitHub Actions, Azure Pipelines)
+# can run their in-container agent setup (groupadd, sudo provisioning) on
+# `docker exec`. Long-lived webhook deployments should drop privileges by
+# passing `--user rusty` (or `user: rusty` in compose) — the rusty user
+# is already created above with /app chowned to it.
 ENTRYPOINT ["/app/entrypoint.sh"]

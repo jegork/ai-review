@@ -1,6 +1,7 @@
 services:
   rusty-bot:
     build: .
+    user: rusty
     ports:
       - "3000:3000"
     env_file: .env

@@ -48,6 +48,8 @@ cp .env.example .env
 podman compose up --build
 ```
 
+The image defaults to `root` so CI container handlers (GitHub Actions, Azure Pipelines, GitLab CI) can perform their in-container agent setup. The included `compose.yaml` drops privileges via `user: rusty` for the long-running webhook server. If you run the image standalone outside of CI and want non-root, pass `--user rusty` to `docker run` / `podman run`.
+
 ## Project Structure
 
 ```
