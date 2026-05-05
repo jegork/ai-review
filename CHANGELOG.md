@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.0](https://github.com/jegork/rusty-bot/compare/v1.4.0...v1.5.0) (2026-05-05)
+
+
+### Features
+
+* **agents:** forward jsonPromptInjection through judge/triage/description/title ([#139](https://github.com/jegork/rusty-bot/issues/139)) ([86c38da](https://github.com/jegork/rusty-bot/commit/86c38da34b6bd4c2118b1bcf521447f07a5d61bd))
+* **review:** treat requesty/fireworks/* as native json_schema and switch CI to fireworks v4-pro ([#136](https://github.com/jegork/rusty-bot/issues/136)) ([ac0a4a4](https://github.com/jegork/rusty-bot/commit/ac0a4a40289d91c65b75654aa5a10fd42fde5d34))
+
+
+### Bug Fixes
+
+* **docker:** default container to root so CI handlers can provision their agent ([#138](https://github.com/jegork/rusty-bot/issues/138)) ([ddab03d](https://github.com/jegork/rusty-bot/commit/ddab03d47de9e3bbd8b8f5dc634cbc034a12ceb4))
+
 ## [1.4.0](https://github.com/jegork/rusty-bot/compare/v1.3.1...v1.4.0) (2026-05-05)
 
 
