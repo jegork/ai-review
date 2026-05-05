@@ -299,7 +299,7 @@ describe("supportsNativeStructuredOutput", () => {
     ).toBe(true);
   });
 
-  it("returns true for requesty-routed openai/anthropic/google/moonshot", () => {
+  it("returns true for requesty-routed openai/anthropic/google/moonshot/fireworks", () => {
     expect(
       supportsNativeStructuredOutput({ type: "router", model: "requesty/openai/gpt-5-mini" }),
     ).toBe(true);
@@ -314,6 +314,12 @@ describe("supportsNativeStructuredOutput", () => {
     ).toBe(true);
     expect(
       supportsNativeStructuredOutput({ type: "router", model: "requesty/moonshot/kimi-k2.6" }),
+    ).toBe(true);
+    expect(
+      supportsNativeStructuredOutput({
+        type: "router",
+        model: "requesty/fireworks/deepseek-v4-pro",
+      }),
     ).toBe(true);
   });
 
