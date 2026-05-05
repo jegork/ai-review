@@ -6,6 +6,7 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/core/package.json ./packages/core/
+COPY packages/cli/package.json ./packages/cli/
 COPY packages/github/package.json ./packages/github/
 COPY packages/github-action/package.json ./packages/github-action/
 COPY packages/azure-devops/package.json ./packages/azure-devops/
@@ -42,6 +43,7 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/core/package.json ./packages/core/
+COPY packages/cli/package.json ./packages/cli/
 COPY packages/github/package.json ./packages/github/
 COPY packages/github-action/package.json ./packages/github-action/
 COPY packages/azure-devops/package.json ./packages/azure-devops/
