@@ -124,6 +124,67 @@ export function supportsAnthropicCacheControl(config: ModelConfig): boolean {
   return config.model.includes("anthropic/");
 }
 
+const NATIVE_STRUCTURED_OUTPUT_ROUTER_PREFIXES = [
+  "openai/",
+  "anthropic/",
+  "google/",
+  "azure-openai/",
+  "requesty/openai/",
+  "requesty/anthropic/",
+  "requesty/google/",
+  "requesty/moonshot/",
+];
+
+export function supportsNativeStructuredOutput(config: ModelConfig): boolean {
+  switch (config.type) {
+    case "azure-api-key":
+    case "azure-managed-identity":
+      return true;
+    case "openai-compatible":
+      return true;
+    case "router":
+      return NATIVE_STRUCTURED_OUTPUT_ROUTER_PREFIXES.some((prefix) =>
+        config.model.startsWith(prefix),
+      );
+  }
+}
+
+function modelMatchKey(config: ModelConfig): string {
+  switch (config.type) {
+    case "router":
+      return config.model;
+    case "openai-compatible":
+      return config.model;
+    case "azure-api-key":
+    case "azure-managed-identity":
+      return `azure-openai/${config.deploymentName}`;
+  }
+}
+
+function matchesAny(modelKey: string, patterns: string[]): boolean {
+  for (const pattern of patterns) {
+    if (pattern.endsWith("*")) {
+      const prefix = pattern.slice(0, -1);
+      if (modelKey.startsWith(prefix)) return true;
+    } else if (modelKey === pattern) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function resolveJsonPromptInjection(config: ModelConfig): boolean {
+  const key = modelMatchKey(config);
+
+  const forceOn = readCsvEnv("RUSTY_LLM_JSON_PROMPT_INJECTION");
+  if (forceOn.length > 0 && matchesAny(key, forceOn)) return true;
+
+  const forceOff = readCsvEnv("RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT");
+  if (forceOff.length > 0 && matchesAny(key, forceOff)) return false;
+
+  return !supportsNativeStructuredOutput(config);
+}
+
 export interface ModelSettings {
   temperature?: number;
   topP?: number;

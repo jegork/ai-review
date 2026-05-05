@@ -112,6 +112,12 @@ Consensus uses `Promise.allSettled` so a single flaky pass does not fail the who
 - If at least `consensusThreshold` passes succeed, consensus is formed from the surviving passes and `consensusMetadata.failedPasses` records how many threw.
 - If fewer than `consensusThreshold` passes succeed, the review throws an `AggregateError` containing every pass failure.
 
+## Structured output compatibility
+
+Some models in the Balanced and Budget stacks above (notably `requesty/minimaxi/MiniMax-M2.7` and `requesty/deepseek/deepseek-v4-pro`) do not support native `response_format: json_schema` — Requesty's `json_schema` only proxies for OpenAI, Anthropic, Google, and Moonshot. Rusty Bot detects this automatically and falls back to Mastra's `jsonPromptInjection: true` (schema injected into the system prompt; JSON parsed from the text response).
+
+Override the default with `RUSTY_LLM_JSON_PROMPT_INJECTION` (force prompt injection) or `RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT` (force native `json_schema`). Both accept CSV with trailing-`*` prefix wildcards. See the README's _Structured Output Compatibility_ section for details.
+
 ## Cost
 
 With the default 3 passes, LLM cost per review triples. Combine with [cascading review](/guides/cascading-review/) and/or the [judge pass](/guides/judge-pass/) (using a cheaper model) to offset costs.

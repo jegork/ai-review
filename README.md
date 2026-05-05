@@ -293,6 +293,8 @@ The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, th
 | `RUSTY_GENERATE_DESCRIPTION` | generate PR description when empty/placeholder | `false` |
 | `RUSTY_RENAME_TITLE_TO_CONVENTIONAL` | rewrite non-conventional PR titles into Conventional Commits format | `false` |
 | `RUSTY_LLM_MAX_RETRIES` | application-level retries on transient LLM errors (max 2) | `2` |
+| `RUSTY_LLM_JSON_PROMPT_INJECTION` | comma-separated model IDs (or `prefix*` wildcards) to force-on prompt-injected JSON output, overriding the auto-detected default | — |
+| `RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT` | comma-separated model IDs (or `prefix*` wildcards) to force-on native `json_schema` structured output, overriding the auto-detected default | — |
 | `RUSTY_LLM_TEMPERATURE` | global LLM temperature | provider default |
 | `RUSTY_LLM_TOP_P` | global LLM top-p | provider default |
 | `RUSTY_REVIEW_TEMPERATURE` | temperature override for the review agent | `RUSTY_LLM_TEMPERATURE` |
@@ -354,6 +356,27 @@ RUSTY_DESCRIPTION_TEMPERATURE=0.5
 ```
 
 Some models enforce a fixed temperature (e.g. `moonshot/kimi-k2.5` only accepts `temperature=1`). Use the per-agent override when you run different models per agent.
+
+### Structured Output Compatibility
+
+Mastra asks the model to return findings as a typed JSON object via `response_format: json_schema`. Some providers (notably MiniMax M2.x and DeepSeek V4 in thinking mode) do not implement that protocol, and routers like Requesty only proxy `json_schema` for OpenAI / Anthropic / Google / Moonshot today. When the model can't honour the schema, the response comes back empty and the review pass fails with `STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED`.
+
+Rusty Bot detects this automatically and falls back to **prompt-injected JSON** for non-supported model strings (Mastra's `jsonPromptInjection: true`) — the schema is added to the system prompt and Mastra parses the JSON out of the text response. The default rule is:
+
+- Native `json_schema`: any model whose ID starts with `openai/`, `anthropic/`, `google/`, `azure-openai/`, `requesty/openai/`, `requesty/anthropic/`, `requesty/google/`, or `requesty/moonshot/`. Azure (API key or managed identity) and OpenAI-compatible endpoints also default to native.
+- Prompt injection: everything else (e.g. `requesty/minimaxi/...`, `requesty/deepseek/...`, `requesty/qwen/...`).
+
+Override the default per model with two env vars (CSV; trailing-`*` matches a prefix):
+
+```bash
+# force prompt injection (escape hatch when a "supported" model regresses)
+RUSTY_LLM_JSON_PROMPT_INJECTION=requesty/openai/gpt-5-pro,requesty/google/*
+
+# force native json_schema (when a custom proxy translates it correctly)
+RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT=requesty/deepseek/deepseek-v4-pro
+```
+
+Force-on takes precedence over force-off when the same model appears in both lists.
 
 ### Per-Repository Configuration
 

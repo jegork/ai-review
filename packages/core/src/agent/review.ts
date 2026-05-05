@@ -8,6 +8,7 @@ import {
   getModelDisplayName,
   resolveModelSettings,
   resolveDefaultAgentOptions,
+  resolveJsonPromptInjection,
   supportsAnthropicCacheControl,
   applyModelConstraints,
 } from "./model.js";
@@ -164,10 +165,11 @@ export async function runReview(
 
   const rawModelSettings = options?.modelSettings ?? resolveModelSettings("review");
   const modelSettings = applyModelConstraints(modelConfig, rawModelSettings);
+  const jsonPromptInjection = resolveJsonPromptInjection(modelConfig);
   const response = await generateWithTransientRetry(() =>
     generateWithStructuredOutputRetry(() =>
       agent.generate(userMessage, {
-        structuredOutput: { schema },
+        structuredOutput: { schema, jsonPromptInjection },
         ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
       }),
     ),

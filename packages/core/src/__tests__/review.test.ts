@@ -9,12 +9,15 @@ vi.mock("@mastra/core/agent", () => ({
   }),
 }));
 
+const resolveJsonPromptInjectionMock = vi.fn(() => false);
+
 vi.mock("../agent/model.js", () => ({
   resolveModelConfig: vi.fn(() => ({ type: "router", model: "test-model" })),
   resolveModel: vi.fn(() => "test-model"),
   getModelDisplayName: vi.fn(() => "test-model"),
   resolveModelSettings: vi.fn(() => ({})),
   resolveDefaultAgentOptions: vi.fn(() => undefined),
+  resolveJsonPromptInjection: resolveJsonPromptInjectionMock,
   supportsAnthropicCacheControl: vi.fn(() => false),
   applyModelConstraints: vi.fn((_config, settings) => settings),
 }));
@@ -143,6 +146,33 @@ describe("runReview retry on STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED", () => 
 
     await expect(runReview(config, "diff", prMetadata)).rejects.toThrow("provider timeout");
     expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("runReview jsonPromptInjection forwarding", () => {
+  beforeEach(() => {
+    generateMock.mockReset();
+    resolveJsonPromptInjectionMock.mockReset();
+  });
+
+  it("forwards jsonPromptInjection=true into structuredOutput when resolver returns true", async () => {
+    resolveJsonPromptInjectionMock.mockReturnValueOnce(true);
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const callArgs = generateMock.mock.calls[0][1];
+    expect(callArgs.structuredOutput.jsonPromptInjection).toBe(true);
+  });
+
+  it("forwards jsonPromptInjection=false into structuredOutput when resolver returns false", async () => {
+    resolveJsonPromptInjectionMock.mockReturnValueOnce(false);
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const callArgs = generateMock.mock.calls[0][1];
+    expect(callArgs.structuredOutput.jsonPromptInjection).toBe(false);
   });
 });
 
