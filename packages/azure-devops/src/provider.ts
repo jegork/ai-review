@@ -183,7 +183,7 @@ export class AzureDevOpsProvider implements GitProvider {
   ): Promise<z.infer<T>> {
     const response = await this.fetchApi(url, options);
     const json: unknown = await response.json();
-    return schema.parse(json) as z.infer<T>;
+    return schema.parse(json);
   }
 
   async getLatestIterationId(): Promise<string | null> {

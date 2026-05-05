@@ -64,7 +64,7 @@ function runCommand(
       (err, stdout, stderr) => {
         // opengrep exits 1 when findings exist, which is still valid
         if (err && proc.exitCode === null) {
-          reject(err as Error);
+          reject(err instanceof Error ? err : new Error("opengrep exec failed"));
           return;
         }
 

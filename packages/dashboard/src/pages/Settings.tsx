@@ -61,8 +61,7 @@ export function Settings() {
   }, [data]);
 
   const mutation = useMutation({
-    mutationFn: () =>
-      api.updateSettings({ llmModel, jiraToken, linearToken, adoToken } as Settings),
+    mutationFn: () => api.updateSettings({ llmModel, jiraToken, linearToken, adoToken }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
