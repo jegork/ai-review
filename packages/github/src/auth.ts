@@ -8,5 +8,5 @@ export async function createAppOctokit(
 ): Promise<Octokit> {
   const app = new App({ appId, privateKey, Octokit });
   const installationOctokit = await app.getInstallationOctokit(installationId);
-  return installationOctokit as unknown as Octokit;
+  return installationOctokit;
 }

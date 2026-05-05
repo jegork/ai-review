@@ -22,7 +22,7 @@
     "@mastra/hono": "^1.4.13",
     "@octokit/app": "^16.1.2",
     "@rusty-bot/core": "workspace:*",
-    "hono": "^4.12.14",
+    "hono": "^4.12.17",
     "octokit": "^5.0.5"
   }
 }

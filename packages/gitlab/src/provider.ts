@@ -155,7 +155,7 @@ export class GitLabProvider implements GitProvider {
   ): Promise<z.infer<T>> {
     const res = await this.fetchApi(url, options);
     const json: unknown = await res.json();
-    return schema.parse(json) as z.infer<T>;
+    return schema.parse(json);
   }
 
   async getPRMetadata(): Promise<PRMetadata> {

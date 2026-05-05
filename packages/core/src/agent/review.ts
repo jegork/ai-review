@@ -27,7 +27,7 @@ function isStructuredOutputValidationError(err: unknown): boolean {
     typeof err === "object" &&
     err !== null &&
     "id" in err &&
-    (err as { id: unknown }).id === STRUCTURED_OUTPUT_VALIDATION_ERROR_ID
+    err.id === STRUCTURED_OUTPUT_VALIDATION_ERROR_ID
   );
 }
 
@@ -37,10 +37,7 @@ function isStructuredOutputValidationError(err: unknown): boolean {
 // and gives the caller a fresh request budget.
 function isTransientRetryableError(err: unknown): boolean {
   return (
-    typeof err === "object" &&
-    err !== null &&
-    "isRetryable" in err &&
-    (err as { isRetryable: unknown }).isRetryable === true
+    typeof err === "object" && err !== null && "isRetryable" in err && err.isRetryable === true
   );
 }
 

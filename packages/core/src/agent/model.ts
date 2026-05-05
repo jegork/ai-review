@@ -92,10 +92,7 @@ export function resolveModel(
         const token = await credential.getToken(scope);
         const headers = new Headers(init?.headers as ConstructorParameters<typeof Headers>[0]);
         headers.set("Authorization", `Bearer ${token.token}`);
-        return globalThis.fetch(
-          input as Parameters<typeof fetch>[0],
-          { ...init, headers } as RequestInit,
-        );
+        return globalThis.fetch(input as Parameters<typeof fetch>[0], { ...init, headers });
       }) as typeof globalThis.fetch;
 
       const azure = createAzure({

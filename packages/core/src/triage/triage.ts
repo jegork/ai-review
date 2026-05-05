@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import type { FilePatch, TriageResult, TriageFileResult, TriageClassification } from "../types.js";
+import type { FilePatch, TriageResult, TriageFileResult } from "../types.js";
 import type { OpenGrepFinding } from "../opengrep/types.js";
 import { TriageOutputSchema } from "./schema.js";
 import { buildTriageSystemPrompt, buildTriageUserMessage } from "./prompt.js";
@@ -46,7 +46,7 @@ export function promoteOpenGrepFindings(
     if (!flaggedPaths.has(normalizePath(f.path))) return f;
     return {
       ...f,
-      classification: "deep-review" as TriageClassification,
+      classification: "deep-review",
       reason: "opengrep finding",
     };
   });
@@ -67,7 +67,7 @@ function applySafetyNet(files: TriageFileResult[], patches: FilePatch[]): Triage
     forceReview.has(f.path)
       ? {
           ...f,
-          classification: "deep-review" as TriageClassification,
+          classification: "deep-review",
           reason: "safety net: forced review",
         }
       : f,
