@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/jegork/rusty-bot/compare/v1.7.0...v1.8.0) (2026-05-06)
+
+
+### Features
+
+* **core:** include model and token usage in review pass logs ([#149](https://github.com/jegork/rusty-bot/issues/149)) ([f82f719](https://github.com/jegork/rusty-bot/commit/f82f71999e9b8ee78337096578c940817f91f4b0))
+
 ## [1.7.0](https://github.com/jegork/rusty-bot/compare/v1.6.0...v1.7.0) (2026-05-06)
 
 

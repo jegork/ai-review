@@ -303,6 +303,7 @@ The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, th
 | `RUSTY_LLM_MAX_STEPS` | cap on multi-step tool-using trajectories per review pass. The final allowed step is forced to `toolChoice: "none"` so the model has to emit text (and therefore structured output), which avoids tool-happy models — Anthropic in particular — terminating with `finishReason: "tool-calls"` and zero text. Unset = mastra's default (no cap, no forced final step). | — |
 | `RUSTY_LLM_JSON_PROMPT_INJECTION` | comma-separated model IDs (or `prefix*` wildcards) to force-on prompt-injected JSON output, overriding the auto-detected default | — |
 | `RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT` | comma-separated model IDs (or `prefix*` wildcards) to force-on native `json_schema` structured output, overriding the auto-detected default | — |
+| `RUSTY_LLM_DISABLE_THINKING` | comma-separated `azure-foundry/<deployment>` IDs (or `prefix*` wildcards) to send `thinking: { type: "disabled" }` on chat-completions requests. Useful for Moonshot Kimi K2 deployments whose thinking trace eats the output budget and causes JSON truncation. Only takes effect on `azure-foundry/*` configs. | — |
 | `RUSTY_LLM_TEMPERATURE` | global LLM temperature | provider default |
 | `RUSTY_LLM_TOP_P` | global LLM top-p | provider default |
 | `RUSTY_REVIEW_TEMPERATURE` | temperature override for the review agent | `RUSTY_LLM_TEMPERATURE` |
