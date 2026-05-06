@@ -164,12 +164,24 @@ export async function runReview(
   const modelSettings = applyModelConstraints(modelConfig, rawModelSettings);
   const jsonPromptInjection = resolveJsonPromptInjection(modelConfig);
   const response = await generateWithTransientRetry(() =>
-    generateWithStructuredOutputRetry(() =>
-      agent.generate(userMessage, {
+    generateWithStructuredOutputRetry(async () => {
+      const r = await agent.generate(userMessage, {
         structuredOutput: { schema, jsonPromptInjection },
         ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
-      }),
-    ),
+      });
+      // mastra's prompt-injected JSON path can silently return object:undefined
+      // when the model emits unparseable text instead of throwing the schema
+      // validation error. surface it as one so the retry wrapper picks it up.
+      // typed cast because mastra's return type marks .object as always defined.
+      if (!(r as { object?: unknown }).object) {
+        const err = new Error(
+          "structured output parser returned no object (model likely emitted text outside the JSON block or truncated)",
+        );
+        (err as Error & { id?: string }).id = STRUCTURED_OUTPUT_VALIDATION_ERROR_ID;
+        throw err;
+      }
+      return r;
+    }),
   );
 
   const parsed = response.object;

@@ -27,6 +27,10 @@ function clearEnv() {
   delete process.env.AZURE_OPENAI_RESOURCE_NAME;
   delete process.env.RUSTY_AZURE_RESOURCE_NAME;
   delete process.env.RUSTY_AZURE_DEPLOYMENT;
+  delete process.env.RUSTY_AZURE_ANTHROPIC_BASE_URL;
+  delete process.env.RUSTY_AZURE_ANTHROPIC_API_KEY;
+  delete process.env.AZURE_ANTHROPIC_API_KEY;
+  delete process.env.RUSTY_AZURE_ANTHROPIC_DEPLOYMENT;
   delete process.env.RUSTY_LLM_BASE_URL;
   delete process.env.RUSTY_LLM_API_KEY;
   delete process.env.REQUESTY_API_KEY;
@@ -92,6 +96,67 @@ describe("resolveModelConfig", () => {
 
     const config = resolveModelConfig();
     expect(config).toEqual({ type: "router", model: "requesty/anthropic/claude-sonnet-4" });
+  });
+
+  it("builds azure-anthropic-api-key when prefix + base url + api key are present", () => {
+    process.env.RUSTY_LLM_MODEL = "azure-anthropic/claude-sonnet-4-5";
+    process.env.RUSTY_AZURE_ANTHROPIC_BASE_URL =
+      "https://my-foundry.services.ai.azure.com/anthropic/v1";
+    process.env.RUSTY_AZURE_ANTHROPIC_API_KEY = "secret";
+
+    const config = resolveModelConfig();
+    expect(config).toEqual({
+      type: "azure-anthropic-api-key",
+      baseUrl: "https://my-foundry.services.ai.azure.com/anthropic/v1",
+      deploymentName: "claude-sonnet-4-5",
+      apiKey: "secret",
+    });
+  });
+
+  it("accepts AZURE_ANTHROPIC_API_KEY as an alternative to RUSTY_AZURE_ANTHROPIC_API_KEY", () => {
+    process.env.RUSTY_LLM_MODEL = "azure-anthropic/claude-sonnet-4-5";
+    process.env.RUSTY_AZURE_ANTHROPIC_BASE_URL =
+      "https://my-foundry.services.ai.azure.com/anthropic/v1";
+    process.env.AZURE_ANTHROPIC_API_KEY = "alt-secret";
+
+    const config = resolveModelConfig();
+    expect(config.type).toBe("azure-anthropic-api-key");
+    if (config.type === "azure-anthropic-api-key") {
+      expect(config.apiKey).toBe("alt-secret");
+    }
+  });
+
+  it("falls through to router when azure-anthropic prefix is set but base url is missing", () => {
+    process.env.RUSTY_LLM_MODEL = "azure-anthropic/claude-sonnet-4-5";
+    process.env.RUSTY_AZURE_ANTHROPIC_API_KEY = "secret";
+    // no RUSTY_AZURE_ANTHROPIC_BASE_URL
+
+    const config = resolveModelConfig();
+    expect(config.type).toBe("router");
+  });
+
+  it("builds azure-anthropic-managed-identity from base url + deployment env vars", () => {
+    process.env.RUSTY_AZURE_ANTHROPIC_BASE_URL =
+      "https://my-foundry.services.ai.azure.com/anthropic/v1";
+    process.env.RUSTY_AZURE_ANTHROPIC_DEPLOYMENT = "claude-sonnet-4-5";
+
+    const config = resolveModelConfig();
+    expect(config).toEqual({
+      type: "azure-anthropic-managed-identity",
+      baseUrl: "https://my-foundry.services.ai.azure.com/anthropic/v1",
+      deploymentName: "claude-sonnet-4-5",
+    });
+  });
+
+  it("prefers azure-anthropic-api-key over managed-identity when both are configured", () => {
+    process.env.RUSTY_LLM_MODEL = "azure-anthropic/claude-sonnet-4-5";
+    process.env.RUSTY_AZURE_ANTHROPIC_BASE_URL =
+      "https://my-foundry.services.ai.azure.com/anthropic/v1";
+    process.env.RUSTY_AZURE_ANTHROPIC_API_KEY = "secret";
+    process.env.RUSTY_AZURE_ANTHROPIC_DEPLOYMENT = "fallback";
+
+    const config = resolveModelConfig();
+    expect(config.type).toBe("azure-anthropic-api-key");
   });
 });
 
@@ -281,6 +346,24 @@ describe("supportsAnthropicCacheControl", () => {
       }),
     ).toBe(false);
   });
+
+  it("returns true for azure-anthropic configs (api key and managed identity)", () => {
+    expect(
+      supportsAnthropicCacheControl({
+        type: "azure-anthropic-api-key",
+        baseUrl: "https://r.services.ai.azure.com/anthropic/v1",
+        deploymentName: "claude-sonnet-4-5",
+        apiKey: "k",
+      }),
+    ).toBe(true);
+    expect(
+      supportsAnthropicCacheControl({
+        type: "azure-anthropic-managed-identity",
+        baseUrl: "https://r.services.ai.azure.com/anthropic/v1",
+        deploymentName: "claude-sonnet-4-5",
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("supportsNativeStructuredOutput", () => {
@@ -364,6 +447,21 @@ describe("supportsNativeStructuredOutput", () => {
         type: "azure-managed-identity",
         resourceName: "r",
         deploymentName: "d",
+      }),
+    ).toBe(true);
+    expect(
+      supportsNativeStructuredOutput({
+        type: "azure-anthropic-api-key",
+        baseUrl: "https://r.services.ai.azure.com/anthropic/v1",
+        deploymentName: "claude-sonnet-4-5",
+        apiKey: "k",
+      }),
+    ).toBe(true);
+    expect(
+      supportsNativeStructuredOutput({
+        type: "azure-anthropic-managed-identity",
+        baseUrl: "https://r.services.ai.azure.com/anthropic/v1",
+        deploymentName: "claude-sonnet-4-5",
       }),
     ).toBe(true);
   });
@@ -470,6 +568,26 @@ describe("resolveJsonPromptInjection", () => {
     ).toBe(true);
   });
 
+  it("matches azure-anthropic configs against azure-anthropic/<deployment>", () => {
+    process.env.RUSTY_LLM_JSON_PROMPT_INJECTION = "azure-anthropic/claude-sonnet-4-5";
+
+    expect(
+      resolveJsonPromptInjection({
+        type: "azure-anthropic-api-key",
+        baseUrl: "https://r.services.ai.azure.com/anthropic/v1",
+        deploymentName: "claude-sonnet-4-5",
+        apiKey: "k",
+      }),
+    ).toBe(true);
+    expect(
+      resolveJsonPromptInjection({
+        type: "azure-anthropic-managed-identity",
+        baseUrl: "https://r.services.ai.azure.com/anthropic/v1",
+        deploymentName: "claude-sonnet-4-5",
+      }),
+    ).toBe(true);
+  });
+
   it("ignores empty env vars and falls back to default", () => {
     process.env.RUSTY_LLM_JSON_PROMPT_INJECTION = "";
     process.env.RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT = "";
@@ -500,6 +618,24 @@ describe("getModelDisplayName", () => {
   it("returns the raw model string for router configs", () => {
     const name = getModelDisplayName({ type: "router", model: "azure-openai/gpt-5.4-mini" });
     expect(name).toBe("azure-openai/gpt-5.4-mini");
+  });
+
+  it("returns azure-anthropic/<deployment> for both azure-anthropic config types", () => {
+    expect(
+      getModelDisplayName({
+        type: "azure-anthropic-api-key",
+        baseUrl: "https://r.services.ai.azure.com/anthropic/v1",
+        deploymentName: "claude-sonnet-4-5",
+        apiKey: "k",
+      }),
+    ).toBe("azure-anthropic/claude-sonnet-4-5");
+    expect(
+      getModelDisplayName({
+        type: "azure-anthropic-managed-identity",
+        baseUrl: "https://r.services.ai.azure.com/anthropic/v1",
+        deploymentName: "claude-sonnet-4-5",
+      }),
+    ).toBe("azure-anthropic/claude-sonnet-4-5");
   });
 });
 

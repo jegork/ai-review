@@ -53,6 +53,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@ai-sdk/anthropic':
+        specifier: ^3.0.75
+        version: 3.0.75(zod@4.4.3)
       '@ai-sdk/azure':
         specifier: ^3.0.61
         version: 3.0.61(zod@4.4.3)
@@ -213,6 +216,12 @@ packages:
         optional: true
       express:
         optional: true
+
+  '@ai-sdk/anthropic@3.0.75':
+    resolution: {integrity: sha512-5AV3CKwaOJFdGXhihVgvRLNrjwRn2Xmy71YygT8DYOA+5zTx93Seg2QSIS8b3tJxzZ7X4H84pEtrE8VZKBCZGA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   '@ai-sdk/azure@3.0.61':
     resolution: {integrity: sha512-SJPgUuJYP1iU6BvE87wMUVaolJk0u69Z2lCslFuFXSSJJ9EF6HNrEk+NLtZzCFG5Cic46dhn3zC0EHICRXntoA==}
@@ -2851,6 +2860,12 @@ snapshots:
       uuid: 11.1.1
     optionalDependencies:
       express: 5.2.1
+
+  '@ai-sdk/anthropic@3.0.75(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 3.0.10
+      '@ai-sdk/provider-utils': 4.0.26(zod@4.4.3)
+      zod: 4.4.3
 
   '@ai-sdk/azure@3.0.61(zod@4.4.3)':
     dependencies:
