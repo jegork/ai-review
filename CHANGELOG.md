@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/jegork/rusty-bot/compare/v1.5.1...v1.6.0) (2026-05-06)
+
+
+### Features
+
+* **core:** support Anthropic models on Azure AI Foundry (API key + Entra ID) ([#145](https://github.com/jegork/rusty-bot/issues/145)) ([286324a](https://github.com/jegork/rusty-bot/commit/286324a1792eb9a7584b8305b81812e29af722cf))
+
 ## [1.5.1](https://github.com/jegork/rusty-bot/compare/v1.5.0...v1.5.1) (2026-05-06)
 
 
