@@ -11,6 +11,8 @@ vi.mock("@mastra/core/agent", () => ({
 
 const resolveJsonPromptInjectionMock = vi.fn(() => false);
 
+const supportsAnthropicCacheControlMock = vi.fn(() => false);
+
 vi.mock("../agent/model.js", () => ({
   resolveModelConfig: vi.fn(() => ({ type: "router", model: "test-model" })),
   resolveModelConfigWithOverride: vi.fn((model: string) => ({ type: "router", model })),
@@ -23,10 +25,12 @@ vi.mock("../agent/model.js", () => ({
   resolveModelSettings: vi.fn(() => ({})),
   resolveDefaultAgentOptions: vi.fn(() => undefined),
   resolveJsonPromptInjection: resolveJsonPromptInjectionMock,
+  supportsAnthropicCacheControl: supportsAnthropicCacheControlMock,
   applyModelConstraints: vi.fn((_config, settings) => settings),
 }));
 
-const { judgeFindings, judgeReviewResult, resolveJudgeConfig } = await import("../agent/judge.js");
+const { judgeFindings, judgeReviewResult, resolveJudgeConfig, buildJudgeUserMessage } =
+  await import("../agent/judge.js");
 
 const DIFF = `--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1,3 +1,5 @@\n+import { z } from "zod";\n const app = express();\n+app.get("/health", (req, res) => res.json({ ok: true }));\n`;
 
@@ -143,8 +147,11 @@ describe("judgeFindings", () => {
     await judgeFindings(findings, DIFF, enabledConfig);
 
     const agentConfig = vi.mocked(Agent).mock.calls.at(-1)?.[0];
-    const instructions = agentConfig?.instructions as (() => string) | undefined;
-    const prompt = instructions?.();
+    const instructions = agentConfig?.instructions as
+      | (() => string | { role: "system"; content: string }[])
+      | undefined;
+    const result = instructions?.();
+    const prompt = typeof result === "string" ? result : (result?.[0]?.content ?? "");
     expect(prompt).toContain("Default to rejection");
     expect(prompt).toContain("missing-test complaints");
     expect(prompt).toContain("severity-inflated findings");
@@ -531,5 +538,131 @@ describe("judgeFindings jsonPromptInjection forwarding", () => {
 
     const callArgs = generateMock.mock.calls[0][1];
     expect(callArgs.structuredOutput.jsonPromptInjection).toBe(false);
+  });
+});
+
+describe("buildJudgeUserMessage", () => {
+  it("returns a plain string when anthropicCacheControl is false", () => {
+    const result = buildJudgeUserMessage([makeFinding()], DIFF, { anthropicCacheControl: false });
+    expect(typeof result).toBe("string");
+    expect(result).toContain("## Diff under review");
+    expect(result).toContain("## Findings to evaluate");
+    expect(result).toContain(DIFF);
+  });
+
+  it("returns a multi-part user message when anthropicCacheControl is true", () => {
+    const result = buildJudgeUserMessage([makeFinding()], DIFF, { anthropicCacheControl: true });
+    expect(typeof result).toBe("object");
+    if (typeof result === "string") return;
+    expect(result.role).toBe("user");
+    expect(result.content).toHaveLength(2);
+  });
+
+  it("places cacheControl on the diff block, not the findings block", () => {
+    const result = buildJudgeUserMessage([makeFinding()], DIFF, { anthropicCacheControl: true });
+    if (typeof result === "string") throw new Error("expected multi-part");
+    const [diffPart, findingsPart] = result.content;
+    expect(diffPart.text).toContain("## Diff under review");
+    expect(diffPart.text).toContain(DIFF);
+    expect(diffPart.providerOptions).toEqual({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
+    expect(findingsPart.text).toContain("## Findings to evaluate");
+    expect(findingsPart.providerOptions).toBeUndefined();
+  });
+
+  it("includes the same finding metadata in both modes (cached and non-cached)", () => {
+    const finding = makeFinding({ message: "specific issue text", line: 42 });
+    const stringForm = buildJudgeUserMessage([finding], DIFF, { anthropicCacheControl: false });
+    const partsForm = buildJudgeUserMessage([finding], DIFF, { anthropicCacheControl: true });
+    if (typeof partsForm === "string") throw new Error("expected multi-part");
+
+    const partsCombined = partsForm.content.map((p) => p.text).join("\n");
+    expect(stringForm).toContain("specific issue text");
+    expect(partsCombined).toContain("specific issue text");
+    expect(stringForm).toContain("**Line:** 42");
+    expect(partsCombined).toContain("**Line:** 42");
+  });
+});
+
+describe("judgeFindings cache wiring", () => {
+  beforeEach(() => {
+    generateMock.mockReset();
+    supportsAnthropicCacheControlMock.mockReset();
+  });
+
+  it("passes a multi-part user message to agent.generate when supportsAnthropicCacheControl is true", async () => {
+    supportsAnthropicCacheControlMock.mockReturnValue(true);
+    generateMock.mockResolvedValueOnce({
+      object: { evaluations: [{ index: 0, confidence: 9, reasoning: "ok" }] },
+      usage: { totalTokens: 25 },
+    });
+
+    await judgeFindings([makeFinding()], DIFF, { enabled: true, threshold: 6 });
+
+    const messages = generateMock.mock.calls[0][0] as {
+      role: string;
+      content: { providerOptions?: unknown }[];
+    }[];
+    expect(Array.isArray(messages)).toBe(true);
+    expect(messages[0].role).toBe("user");
+    expect(messages[0].content[0].providerOptions).toEqual({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
+  });
+
+  it("passes a plain string user message when supportsAnthropicCacheControl is false", async () => {
+    supportsAnthropicCacheControlMock.mockReturnValue(false);
+    generateMock.mockResolvedValueOnce({
+      object: { evaluations: [{ index: 0, confidence: 9, reasoning: "ok" }] },
+      usage: { totalTokens: 25 },
+    });
+
+    await judgeFindings([makeFinding()], DIFF, { enabled: true, threshold: 6 });
+
+    const userMessage = generateMock.mock.calls[0][0];
+    expect(typeof userMessage).toBe("string");
+  });
+
+  it("wraps system prompt with anthropic cacheControl when supported", async () => {
+    supportsAnthropicCacheControlMock.mockReturnValue(true);
+    generateMock.mockResolvedValueOnce({
+      object: { evaluations: [{ index: 0, confidence: 9, reasoning: "ok" }] },
+      usage: { totalTokens: 25 },
+    });
+
+    await judgeFindings([makeFinding()], DIFF, { enabled: true, threshold: 6 });
+
+    const { Agent } = await import("@mastra/core/agent");
+    const agentConfig = vi.mocked(Agent).mock.calls.at(-1)?.[0];
+    const instructions = agentConfig?.instructions as
+      | (() => string | { role: "system"; content: string; providerOptions?: unknown }[])
+      | undefined;
+    const result = instructions?.();
+    expect(Array.isArray(result)).toBe(true);
+    if (!Array.isArray(result)) return;
+    expect(result[0].providerOptions).toEqual({
+      anthropic: { cacheControl: { type: "ephemeral" } },
+    });
+  });
+
+  it("returns a plain system prompt when anthropic cacheControl is not supported", async () => {
+    supportsAnthropicCacheControlMock.mockReturnValue(false);
+    generateMock.mockResolvedValueOnce({
+      object: { evaluations: [{ index: 0, confidence: 9, reasoning: "ok" }] },
+      usage: { totalTokens: 25 },
+    });
+
+    await judgeFindings([makeFinding()], DIFF, { enabled: true, threshold: 6 });
+
+    const { Agent } = await import("@mastra/core/agent");
+    const agentConfig = vi.mocked(Agent).mock.calls.at(-1)?.[0];
+    const instructions = agentConfig?.instructions as
+      | (() => string | { role: "system"; content: string; providerOptions?: unknown }[])
+      | undefined;
+    const result = instructions?.();
+    if (Array.isArray(result)) {
+      expect(result[0].providerOptions).toBeUndefined();
+    }
   });
 });
