@@ -51,6 +51,19 @@ function readMaxTransientRetries(): number {
   return Math.min(Math.floor(n), TRANSIENT_RETRY_BACKOFF_MS.length);
 }
 
+// caps how many tool-use rounds an agent can run before mastra forces it to
+// produce a final answer. unset = mastra's default. matters most for Anthropic
+// models, which can otherwise fan out parallel tool calls indefinitely and
+// terminate with finishReason="tool-calls" and zero text — defeating the
+// structured-output contract.
+function readLlmMaxSteps(): number | undefined {
+  const raw = process.env.RUSTY_LLM_MAX_STEPS;
+  if (raw === undefined || raw === "") return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return undefined;
+  return Math.floor(n);
+}
+
 async function generateWithStructuredOutputRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -163,11 +176,13 @@ export async function runReview(
   const rawModelSettings = options?.modelSettings ?? resolveModelSettings("review");
   const modelSettings = applyModelConstraints(modelConfig, rawModelSettings);
   const jsonPromptInjection = resolveJsonPromptInjection(modelConfig);
+  const maxSteps = readLlmMaxSteps();
   const response = await generateWithTransientRetry(() =>
     generateWithStructuredOutputRetry(async () => {
       const r = await agent.generate(userMessage, {
         structuredOutput: { schema, jsonPromptInjection },
         ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
+        ...(maxSteps !== undefined && { maxSteps }),
       });
       // mastra's prompt-injected JSON path can silently return object:undefined
       // when the model emits unparseable text instead of throwing the schema

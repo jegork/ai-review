@@ -337,3 +337,72 @@ describe("runReview retry on transient LLM errors", () => {
     expect(generateMock).toHaveBeenCalledTimes(3);
   });
 });
+
+describe("RUSTY_LLM_MAX_STEPS", () => {
+  beforeEach(() => {
+    generateMock.mockReset();
+    delete process.env.RUSTY_LLM_MAX_STEPS;
+  });
+
+  it("does not pass maxSteps to agent.generate when env is unset", async () => {
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(opts.maxSteps).toBeUndefined();
+  });
+
+  it("passes the configured maxSteps to agent.generate", async () => {
+    process.env.RUSTY_LLM_MAX_STEPS = "5";
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(opts.maxSteps).toBe(5);
+  });
+
+  it("floors fractional values", async () => {
+    process.env.RUSTY_LLM_MAX_STEPS = "3.7";
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(opts.maxSteps).toBe(3);
+  });
+
+  it("ignores non-numeric values and falls back to mastra default", async () => {
+    process.env.RUSTY_LLM_MAX_STEPS = "abc";
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(opts.maxSteps).toBeUndefined();
+  });
+
+  it("ignores zero and negative values (caps below 1 are nonsensical)", async () => {
+    for (const raw of ["0", "-1", "-100"]) {
+      process.env.RUSTY_LLM_MAX_STEPS = raw;
+      generateMock.mockReset();
+      generateMock.mockResolvedValueOnce(makeValidResponse());
+
+      await runReview(config, "diff", prMetadata);
+
+      const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+      expect(opts.maxSteps, `for raw="${raw}"`).toBeUndefined();
+    }
+  });
+
+  it("ignores empty string", async () => {
+    process.env.RUSTY_LLM_MAX_STEPS = "";
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(opts.maxSteps).toBeUndefined();
+  });
+});
