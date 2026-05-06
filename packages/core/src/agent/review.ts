@@ -51,6 +51,19 @@ function readMaxTransientRetries(): number {
   return Math.min(Math.floor(n), TRANSIENT_RETRY_BACKOFF_MS.length);
 }
 
+// caps how many tool-use rounds an agent can run before mastra forces it to
+// produce a final answer. unset = mastra's default. matters most for Anthropic
+// models, which can otherwise fan out parallel tool calls indefinitely and
+// terminate with finishReason="tool-calls" and zero text — defeating the
+// structured-output contract.
+function readLlmMaxSteps(): number | undefined {
+  const raw = process.env.RUSTY_LLM_MAX_STEPS;
+  if (raw === undefined || raw === "") return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 1) return undefined;
+  return Math.floor(n);
+}
+
 // captures the fields most useful for diagnosing why r.object came back
 // undefined: did the model truncate (finishReason: "length"), did it emit
 // text wrapped in code fences, or did it pick a tool-call path the parser
@@ -202,6 +215,20 @@ export async function runReview(
   const rawModelSettings = options?.modelSettings ?? resolveModelSettings("review");
   const modelSettings = applyModelConstraints(modelConfig, rawModelSettings);
   const jsonPromptInjection = resolveJsonPromptInjection(modelConfig);
+  const maxSteps = readLlmMaxSteps();
+  // when capping steps we ALSO have to force the final step to be tool-free,
+  // otherwise tool-happy models (Anthropic in particular) burn the whole budget
+  // on tool calls and end with finishReason="tool-calls" and no text — which
+  // produces no structured output and the pass fails. stripping tools on the
+  // last allowed step guarantees the model emits a final answer.
+  const prepareStep =
+    maxSteps !== undefined
+      ? ({ stepNumber }: { stepNumber: number }) => {
+          if (stepNumber >= maxSteps - 1) {
+            return { toolChoice: "none" as const, activeTools: [] };
+          }
+        }
+      : undefined;
   const logBindings = { model: modelName, tier };
   const response = await generateWithTransientRetry(
     () =>
@@ -209,6 +236,8 @@ export async function runReview(
         const r = await agent.generate(userMessage, {
           structuredOutput: { schema, jsonPromptInjection },
           ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
+          ...(maxSteps !== undefined && { maxSteps }),
+          ...(prepareStep && { prepareStep }),
         });
         // mastra's prompt-injected JSON path can silently return object:undefined
         // when the model emits unparseable text instead of throwing the schema
