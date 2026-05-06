@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/jegork/rusty-bot/compare/v1.6.0...v1.7.0) (2026-05-06)
+
+
+### Features
+
+* **core:** route non-OpenAI Azure AI Foundry models via chat completions ([#147](https://github.com/jegork/rusty-bot/issues/147)) ([f56d258](https://github.com/jegork/rusty-bot/commit/f56d258f95ceeb5051cd07216db6609cb27a7df9))
+
 ## [1.6.0](https://github.com/jegork/rusty-bot/compare/v1.5.1...v1.6.0) (2026-05-06)
 
 
