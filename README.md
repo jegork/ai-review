@@ -284,6 +284,8 @@ The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, th
 | `AZURE_OPENAI_RESOURCE_NAME` | Azure OpenAI resource name | — |
 | `RUSTY_AZURE_RESOURCE_NAME` | Azure OpenAI resource (managed identity mode) | — |
 | `RUSTY_AZURE_DEPLOYMENT` | Azure OpenAI deployment (managed identity mode) | — |
+| `RUSTY_AZURE_FOUNDRY_RESOURCE_NAME` | Azure AI Foundry resource for non-OpenAI models (managed identity mode) | — |
+| `RUSTY_AZURE_FOUNDRY_DEPLOYMENT` | Azure AI Foundry deployment for non-OpenAI models (managed identity mode) | — |
 | `RUSTY_AZURE_ANTHROPIC_BASE_URL` | Azure AI Foundry Anthropic endpoint (e.g. `https://<resource>.services.ai.azure.com/anthropic/v1`) | — |
 | `RUSTY_AZURE_ANTHROPIC_API_KEY` | Foundry API key for the Anthropic deployment (or `AZURE_ANTHROPIC_API_KEY`) | — |
 | `RUSTY_AZURE_ANTHROPIC_DEPLOYMENT` | Foundry deployment name (managed identity / Entra ID mode) | — |
@@ -310,7 +312,7 @@ The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, th
 
 ### LLM Provider Configuration
 
-Rusty Bot supports six ways to connect to an LLM, resolved in this order:
+Rusty Bot supports eight ways to connect to an LLM, resolved in this order:
 
 **1. Azure OpenAI with API key** — for Azure AI Foundry GPT deployments:
 ```bash
@@ -319,7 +321,7 @@ AZURE_OPENAI_API_KEY=your-key
 AZURE_OPENAI_RESOURCE_NAME=ai-code-review-foundry
 ```
 
-The resource name is the subdomain from your endpoint URL (e.g. `https://ai-code-review-foundry.cognitiveservices.azure.com` → `ai-code-review-foundry`). Uses `@ai-sdk/azure` directly.
+The resource name is the subdomain from your endpoint URL (e.g. `https://ai-code-review-foundry.cognitiveservices.azure.com` → `ai-code-review-foundry`). Uses `@ai-sdk/azure` directly with the Responses API (`/v1/responses`).
 
 **2. Azure OpenAI with Managed Identity** — no API keys needed when running on Azure:
 ```bash
@@ -329,7 +331,24 @@ RUSTY_AZURE_DEPLOYMENT=gpt-4o
 
 Uses `DefaultAzureCredential` from `@azure/identity`, which automatically picks up managed identity in Azure VMs, AKS, App Service, Azure Functions, and Azure Pipelines. Also works with `az login` locally.
 
-**3. Anthropic on Azure AI Foundry with API key** — for Claude deployments served from Foundry's Models-as-a-Service:
+**3. Non-OpenAI models on Azure AI Foundry with API key** — Kimi, Llama, Mistral, etc. served from the Foundry endpoint but only reachable via Chat Completions:
+```bash
+RUSTY_LLM_MODEL=azure-foundry/Kimi-K2.6
+AZURE_OPENAI_API_KEY=your-key
+AZURE_OPENAI_RESOURCE_NAME=ai-code-review-foundry
+```
+
+Identical config to `azure-openai/`, but routes through `/v1/chat/completions` instead of `/v1/responses` because non-OpenAI Foundry models don't support the Responses API. Use this prefix whenever the deployment isn't a first-party OpenAI model.
+
+**4. Non-OpenAI models on Azure AI Foundry with Managed Identity**:
+```bash
+RUSTY_AZURE_FOUNDRY_RESOURCE_NAME=ai-code-review-foundry
+RUSTY_AZURE_FOUNDRY_DEPLOYMENT=Kimi-K2.6
+```
+
+Same `DefaultAzureCredential` path as the OpenAI MI mode, but kept on separate env vars so the two can coexist on the same machine.
+
+**5. Anthropic on Azure AI Foundry with API key** — for Claude deployments served from Foundry's Models-as-a-Service:
 ```bash
 RUSTY_LLM_MODEL=azure-anthropic/claude-sonnet-4-5
 RUSTY_AZURE_ANTHROPIC_BASE_URL=https://my-foundry.services.ai.azure.com/anthropic/v1
@@ -338,7 +357,7 @@ RUSTY_AZURE_ANTHROPIC_API_KEY=your-foundry-key
 
 The deployment after `azure-anthropic/` must match the deployment name in Foundry. The base URL is the resource's Anthropic endpoint up to and including `/v1` — `@ai-sdk/anthropic` appends `/messages` itself. Uses `@ai-sdk/anthropic` with a custom `baseURL`, so Anthropic features like prompt caching and tool use work unchanged.
 
-**4. Anthropic on Azure AI Foundry with Entra ID** — managed identity / `az login`, no API key:
+**6. Anthropic on Azure AI Foundry with Entra ID** — managed identity / `az login`, no API key:
 ```bash
 RUSTY_AZURE_ANTHROPIC_BASE_URL=https://my-foundry.services.ai.azure.com/anthropic/v1
 RUSTY_AZURE_ANTHROPIC_DEPLOYMENT=claude-sonnet-4-5
@@ -346,14 +365,14 @@ RUSTY_AZURE_ANTHROPIC_DEPLOYMENT=claude-sonnet-4-5
 
 Uses `DefaultAzureCredential` to fetch a fresh token (scope `https://cognitiveservices.azure.com/.default`) for every request, just like the Azure OpenAI managed identity path.
 
-**5. OpenAI-compatible endpoint** — for LiteLLM, vLLM, Ollama, or any proxy:
+**7. OpenAI-compatible endpoint** — for LiteLLM, vLLM, Ollama, or any proxy:
 ```bash
 RUSTY_LLM_BASE_URL=http://localhost:4000/v1
 RUSTY_LLM_MODEL=gpt-4o
 RUSTY_LLM_API_KEY=optional-key
 ```
 
-**6. Mastra model router (default)** — direct provider API keys:
+**8. Mastra model router (default)** — direct provider API keys:
 ```bash
 RUSTY_LLM_MODEL=anthropic/claude-sonnet-4-20250514
 ANTHROPIC_API_KEY=sk-ant-...

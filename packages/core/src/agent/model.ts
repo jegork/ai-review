@@ -6,6 +6,8 @@ export type ModelConfig =
   | { type: "router"; model: string }
   | { type: "azure-api-key"; resourceName: string; deploymentName: string; apiKey: string }
   | { type: "azure-managed-identity"; resourceName: string; deploymentName: string }
+  | { type: "azure-foundry-api-key"; resourceName: string; deploymentName: string; apiKey: string }
+  | { type: "azure-foundry-managed-identity"; resourceName: string; deploymentName: string }
   | { type: "azure-anthropic-api-key"; baseUrl: string; deploymentName: string; apiKey: string }
   | { type: "azure-anthropic-managed-identity"; baseUrl: string; deploymentName: string }
   | { type: "openai-compatible"; baseUrl: string; model: string; apiKey?: string };
@@ -31,6 +33,26 @@ export function resolveModelConfig(): ModelConfig {
       type: "azure-managed-identity",
       resourceName: process.env.RUSTY_AZURE_RESOURCE_NAME,
       deploymentName: process.env.RUSTY_AZURE_DEPLOYMENT,
+    };
+  }
+
+  // non-OpenAI models on Azure AI Foundry (Kimi, Llama, Mistral, etc.) — they
+  // share the AOAI endpoint shape but only support /chat/completions, not the
+  // newer /responses API that azure(deployment) defaults to.
+  if (model.startsWith("azure-foundry/") && azureApiKey && process.env.AZURE_OPENAI_RESOURCE_NAME) {
+    return {
+      type: "azure-foundry-api-key",
+      resourceName: process.env.AZURE_OPENAI_RESOURCE_NAME,
+      deploymentName: model.replace("azure-foundry/", ""),
+      apiKey: azureApiKey,
+    };
+  }
+
+  if (process.env.RUSTY_AZURE_FOUNDRY_RESOURCE_NAME && process.env.RUSTY_AZURE_FOUNDRY_DEPLOYMENT) {
+    return {
+      type: "azure-foundry-managed-identity",
+      resourceName: process.env.RUSTY_AZURE_FOUNDRY_RESOURCE_NAME,
+      deploymentName: process.env.RUSTY_AZURE_FOUNDRY_DEPLOYMENT,
     };
   }
 
@@ -128,6 +150,34 @@ export function resolveModel(
       return azure(config.deploymentName);
     }
 
+    case "azure-foundry-api-key": {
+      const azure = createAzure({
+        resourceName: config.resourceName,
+        apiKey: config.apiKey,
+      });
+      // .chat() routes to /v1/chat/completions; the default azure() picks
+      // /v1/responses, which non-OpenAI Foundry models reject
+      return azure.chat(config.deploymentName);
+    }
+
+    case "azure-foundry-managed-identity": {
+      const credential = new DefaultAzureCredential();
+      const scope = "https://cognitiveservices.azure.com/.default";
+
+      const azureFetch = (async (input: unknown, init?: Record<string, unknown>) => {
+        const token = await credential.getToken(scope);
+        const headers = new Headers(init?.headers as ConstructorParameters<typeof Headers>[0]);
+        headers.set("Authorization", `Bearer ${token.token}`);
+        return globalThis.fetch(input as Parameters<typeof fetch>[0], { ...init, headers });
+      }) as typeof globalThis.fetch;
+
+      const azure = createAzure({
+        resourceName: config.resourceName,
+        fetch: azureFetch,
+      });
+      return azure.chat(config.deploymentName);
+    }
+
     case "azure-anthropic-api-key": {
       const anthropic = createAnthropic({
         baseURL: config.baseUrl,
@@ -202,6 +252,11 @@ export function supportsNativeStructuredOutput(config: ModelConfig): boolean {
     case "azure-anthropic-api-key":
     case "azure-anthropic-managed-identity":
       return true;
+    case "azure-foundry-api-key":
+    case "azure-foundry-managed-identity":
+      // Foundry chat completions for non-OpenAI models (Kimi, Llama, etc.)
+      // varies by deployment; default to prompt-injected JSON to be safe
+      return false;
     case "openai-compatible":
       return true;
     case "router":
@@ -220,6 +275,9 @@ function modelMatchKey(config: ModelConfig): string {
     case "azure-api-key":
     case "azure-managed-identity":
       return `azure-openai/${config.deploymentName}`;
+    case "azure-foundry-api-key":
+    case "azure-foundry-managed-identity":
+      return `azure-foundry/${config.deploymentName}`;
     case "azure-anthropic-api-key":
     case "azure-anthropic-managed-identity":
       return `azure-anthropic/${config.deploymentName}`;
@@ -364,6 +422,10 @@ export function getModelDisplayName(config: ModelConfig): string {
       return `azure/${config.deploymentName}`;
     case "azure-managed-identity":
       return `azure/${config.deploymentName}`;
+    case "azure-foundry-api-key":
+      return `azure-foundry/${config.deploymentName}`;
+    case "azure-foundry-managed-identity":
+      return `azure-foundry/${config.deploymentName}`;
     case "azure-anthropic-api-key":
       return `azure-anthropic/${config.deploymentName}`;
     case "azure-anthropic-managed-identity":

@@ -31,6 +31,8 @@ function clearEnv() {
   delete process.env.RUSTY_AZURE_ANTHROPIC_API_KEY;
   delete process.env.AZURE_ANTHROPIC_API_KEY;
   delete process.env.RUSTY_AZURE_ANTHROPIC_DEPLOYMENT;
+  delete process.env.RUSTY_AZURE_FOUNDRY_RESOURCE_NAME;
+  delete process.env.RUSTY_AZURE_FOUNDRY_DEPLOYMENT;
   delete process.env.RUSTY_LLM_BASE_URL;
   delete process.env.RUSTY_LLM_API_KEY;
   delete process.env.REQUESTY_API_KEY;
@@ -157,6 +159,62 @@ describe("resolveModelConfig", () => {
 
     const config = resolveModelConfig();
     expect(config.type).toBe("azure-anthropic-api-key");
+  });
+
+  it("builds azure-foundry-api-key when prefix + api key + resource name are present", () => {
+    process.env.RUSTY_LLM_MODEL = "azure-foundry/Kimi-K2.6";
+    process.env.AZURE_API_KEY = "secret";
+    process.env.AZURE_OPENAI_RESOURCE_NAME = "ai-code-review-foundry";
+
+    const config = resolveModelConfig();
+    expect(config).toEqual({
+      type: "azure-foundry-api-key",
+      resourceName: "ai-code-review-foundry",
+      deploymentName: "Kimi-K2.6",
+      apiKey: "secret",
+    });
+  });
+
+  it("falls through to router when azure-foundry prefix is set but resource name is missing", () => {
+    process.env.RUSTY_LLM_MODEL = "azure-foundry/Kimi-K2.6";
+    process.env.AZURE_API_KEY = "secret";
+
+    const config = resolveModelConfig();
+    expect(config.type).toBe("router");
+  });
+
+  it("builds azure-foundry-managed-identity from foundry-specific resource + deployment env vars", () => {
+    process.env.RUSTY_AZURE_FOUNDRY_RESOURCE_NAME = "ai-code-review-foundry";
+    process.env.RUSTY_AZURE_FOUNDRY_DEPLOYMENT = "Kimi-K2.6";
+
+    const config = resolveModelConfig();
+    expect(config).toEqual({
+      type: "azure-foundry-managed-identity",
+      resourceName: "ai-code-review-foundry",
+      deploymentName: "Kimi-K2.6",
+    });
+  });
+
+  it("does not collide with azure-managed-identity when only OpenAI MI vars are set", () => {
+    process.env.RUSTY_AZURE_RESOURCE_NAME = "openai-resource";
+    process.env.RUSTY_AZURE_DEPLOYMENT = "gpt-5.4";
+
+    const config = resolveModelConfig();
+    expect(config.type).toBe("azure-managed-identity");
+  });
+
+  it("prefers azure-foundry-api-key over foundry MI when both are configured with the prefix", () => {
+    process.env.RUSTY_LLM_MODEL = "azure-foundry/Kimi-K2.6";
+    process.env.AZURE_API_KEY = "secret";
+    process.env.AZURE_OPENAI_RESOURCE_NAME = "ai-code-review-foundry";
+    process.env.RUSTY_AZURE_FOUNDRY_RESOURCE_NAME = "fallback-resource";
+    process.env.RUSTY_AZURE_FOUNDRY_DEPLOYMENT = "fallback-deployment";
+
+    const config = resolveModelConfig();
+    expect(config.type).toBe("azure-foundry-api-key");
+    if (config.type === "azure-foundry-api-key") {
+      expect(config.deploymentName).toBe("Kimi-K2.6");
+    }
   });
 });
 
@@ -475,6 +533,24 @@ describe("supportsNativeStructuredOutput", () => {
       }),
     ).toBe(true);
   });
+
+  it("returns false for azure-foundry configs (deployments vary; default to prompt-injected JSON)", () => {
+    expect(
+      supportsNativeStructuredOutput({
+        type: "azure-foundry-api-key",
+        resourceName: "ai-code-review-foundry",
+        deploymentName: "Kimi-K2.6",
+        apiKey: "k",
+      }),
+    ).toBe(false);
+    expect(
+      supportsNativeStructuredOutput({
+        type: "azure-foundry-managed-identity",
+        resourceName: "ai-code-review-foundry",
+        deploymentName: "Kimi-K2.6",
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("resolveJsonPromptInjection", () => {
@@ -636,6 +712,24 @@ describe("getModelDisplayName", () => {
         deploymentName: "claude-sonnet-4-5",
       }),
     ).toBe("azure-anthropic/claude-sonnet-4-5");
+  });
+
+  it("returns azure-foundry/<deployment> for both azure-foundry config types", () => {
+    expect(
+      getModelDisplayName({
+        type: "azure-foundry-api-key",
+        resourceName: "ai-code-review-foundry",
+        deploymentName: "Kimi-K2.6",
+        apiKey: "k",
+      }),
+    ).toBe("azure-foundry/Kimi-K2.6");
+    expect(
+      getModelDisplayName({
+        type: "azure-foundry-managed-identity",
+        resourceName: "ai-code-review-foundry",
+        deploymentName: "Kimi-K2.6",
+      }),
+    ).toBe("azure-foundry/Kimi-K2.6");
   });
 });
 
