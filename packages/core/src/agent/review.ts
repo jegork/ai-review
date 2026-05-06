@@ -4,6 +4,7 @@ import { ReviewOutputSchema, SkimReviewOutputSchema } from "./schema.js";
 import { buildSystemPrompt, buildUserMessage, buildCachedSystemMessages } from "./prompts.js";
 import {
   resolveModelConfig,
+  resolveModelConfigWithOverride,
   resolveModel,
   getModelDisplayName,
   resolveModelSettings,
@@ -62,6 +63,18 @@ function readLlmMaxSteps(): number | undefined {
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 1) return undefined;
   return Math.floor(n);
+}
+
+// when set, mastra runs a separate structuring agent on top of the main
+// review agent's output: the main agent produces freeform prose (with tools
+// available, no schema pressure) and a cheap structuring model translates
+// that prose into the schema-conformant JSON. eliminates the entire class of
+// `finishReason: "tool-calls"` failures because the main agent isn't on the
+// schema-output path at all. the structuring model handles the JSON.
+function readLlmStructuringModel(): string | undefined {
+  const raw = process.env.RUSTY_LLM_STRUCTURING_MODEL;
+  if (raw === undefined || raw === "") return undefined;
+  return raw;
 }
 
 // captures the fields most useful for diagnosing why r.object came back
@@ -214,7 +227,16 @@ export async function runReview(
 
   const rawModelSettings = options?.modelSettings ?? resolveModelSettings("review");
   const modelSettings = applyModelConstraints(modelConfig, rawModelSettings);
-  const jsonPromptInjection = resolveJsonPromptInjection(modelConfig);
+  // when the structuring model is set, it owns the JSON output, so we evaluate
+  // jsonPromptInjection against ITS capabilities rather than the main model's.
+  // the main model just writes prose; whether to use native json_schema vs
+  // prompt-injected JSON is the structurer's problem.
+  const structuringModelOverride = readLlmStructuringModel();
+  const structuringConfig = structuringModelOverride
+    ? resolveModelConfigWithOverride(structuringModelOverride)
+    : undefined;
+  const jsonPromptInjection = resolveJsonPromptInjection(structuringConfig ?? modelConfig);
+  const structuringModel = structuringConfig ? resolveModel(structuringConfig) : undefined;
   const maxSteps = readLlmMaxSteps();
   // when capping steps we ALSO have to force the final step to be tool-free,
   // otherwise tool-happy models (Anthropic in particular) burn the whole budget
@@ -229,12 +251,20 @@ export async function runReview(
           }
         }
       : undefined;
-  const logBindings = { model: modelName, tier };
+  const logBindings = {
+    model: modelName,
+    tier,
+    ...(structuringConfig && { structuringModel: getModelDisplayName(structuringConfig) }),
+  };
   const response = await generateWithTransientRetry(
     () =>
       generateWithStructuredOutputRetry(async () => {
         const r = await agent.generate(userMessage, {
-          structuredOutput: { schema, jsonPromptInjection },
+          structuredOutput: {
+            schema,
+            jsonPromptInjection,
+            ...(structuringModel && { model: structuringModel }),
+          },
           ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
           ...(maxSteps !== undefined && { maxSteps }),
           ...(prepareStep && { prepareStep }),

@@ -13,8 +13,13 @@ const resolveJsonPromptInjectionMock = vi.fn(() => false);
 
 vi.mock("../agent/model.js", () => ({
   resolveModelConfig: vi.fn(() => ({ type: "router", model: "test-model" })),
-  resolveModel: vi.fn(() => "test-model"),
-  getModelDisplayName: vi.fn(() => "test-model"),
+  resolveModelConfigWithOverride: vi.fn((model: string) => ({ type: "router", model })),
+  resolveModel: vi.fn((config: { type: string; model?: string }) =>
+    config.type === "router" ? (config.model ?? "test-model") : "test-model",
+  ),
+  getModelDisplayName: vi.fn((config: { type: string; model?: string }) =>
+    config.type === "router" ? (config.model ?? "test-model") : "test-model",
+  ),
   resolveModelSettings: vi.fn(() => ({})),
   resolveDefaultAgentOptions: vi.fn(() => undefined),
   resolveJsonPromptInjection: resolveJsonPromptInjectionMock,
@@ -445,5 +450,71 @@ describe("RUSTY_LLM_MAX_STEPS", () => {
     const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(opts.maxSteps).toBeUndefined();
     expect(opts.prepareStep).toBeUndefined();
+  });
+});
+
+describe("RUSTY_LLM_STRUCTURING_MODEL", () => {
+  beforeEach(() => {
+    generateMock.mockReset();
+    resolveJsonPromptInjectionMock.mockReset();
+    resolveJsonPromptInjectionMock.mockImplementation(() => false);
+    delete process.env.RUSTY_LLM_STRUCTURING_MODEL;
+  });
+
+  it("does not pass structuredOutput.model when env is unset", async () => {
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    const structured = opts.structuredOutput as Record<string, unknown>;
+    expect(structured.model).toBeUndefined();
+  });
+
+  it("passes structuring model into structuredOutput.model when env is set", async () => {
+    process.env.RUSTY_LLM_STRUCTURING_MODEL = "azure-openai/gpt-5.4-mini";
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    const structured = opts.structuredOutput as Record<string, unknown>;
+    expect(structured.model).toBe("azure-openai/gpt-5.4-mini");
+  });
+
+  it("evaluates jsonPromptInjection against the structuring model when set", async () => {
+    process.env.RUSTY_LLM_STRUCTURING_MODEL = "azure-openai/gpt-5.4-mini";
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    expect(resolveJsonPromptInjectionMock).toHaveBeenCalledTimes(1);
+    expect(resolveJsonPromptInjectionMock).toHaveBeenLastCalledWith({
+      type: "router",
+      model: "azure-openai/gpt-5.4-mini",
+    });
+  });
+
+  it("falls back to evaluating jsonPromptInjection against the main model when env is unset", async () => {
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    expect(resolveJsonPromptInjectionMock).toHaveBeenCalledTimes(1);
+    expect(resolveJsonPromptInjectionMock).toHaveBeenLastCalledWith({
+      type: "router",
+      model: "test-model",
+    });
+  });
+
+  it("ignores empty string", async () => {
+    process.env.RUSTY_LLM_STRUCTURING_MODEL = "";
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    const structured = opts.structuredOutput as Record<string, unknown>;
+    expect(structured.model).toBeUndefined();
   });
 });
