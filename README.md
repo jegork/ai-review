@@ -284,6 +284,9 @@ The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, th
 | `AZURE_OPENAI_RESOURCE_NAME` | Azure OpenAI resource name | — |
 | `RUSTY_AZURE_RESOURCE_NAME` | Azure OpenAI resource (managed identity mode) | — |
 | `RUSTY_AZURE_DEPLOYMENT` | Azure OpenAI deployment (managed identity mode) | — |
+| `RUSTY_AZURE_ANTHROPIC_BASE_URL` | Azure AI Foundry Anthropic endpoint (e.g. `https://<resource>.services.ai.azure.com/anthropic/v1`) | — |
+| `RUSTY_AZURE_ANTHROPIC_API_KEY` | Foundry API key for the Anthropic deployment (or `AZURE_ANTHROPIC_API_KEY`) | — |
+| `RUSTY_AZURE_ANTHROPIC_DEPLOYMENT` | Foundry deployment name (managed identity / Entra ID mode) | — |
 | `RUSTY_LLM_BASE_URL` | OpenAI-compatible endpoint URL (e.g. LiteLLM) | — |
 | `RUSTY_LLM_API_KEY` | API key for custom endpoint | — |
 | `RUSTY_JUDGE_ENABLED` | enable post-generation judge/filter pass | `false` |
@@ -307,9 +310,9 @@ The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, th
 
 ### LLM Provider Configuration
 
-Rusty Bot supports four ways to connect to an LLM, resolved in this order:
+Rusty Bot supports six ways to connect to an LLM, resolved in this order:
 
-**1. Azure OpenAI with API key** — for Azure AI Foundry deployments:
+**1. Azure OpenAI with API key** — for Azure AI Foundry GPT deployments:
 ```bash
 RUSTY_LLM_MODEL=azure-openai/gpt-5.3-codex
 AZURE_OPENAI_API_KEY=your-key
@@ -326,14 +329,31 @@ RUSTY_AZURE_DEPLOYMENT=gpt-4o
 
 Uses `DefaultAzureCredential` from `@azure/identity`, which automatically picks up managed identity in Azure VMs, AKS, App Service, Azure Functions, and Azure Pipelines. Also works with `az login` locally.
 
-**3. OpenAI-compatible endpoint** — for LiteLLM, vLLM, Ollama, or any proxy:
+**3. Anthropic on Azure AI Foundry with API key** — for Claude deployments served from Foundry's Models-as-a-Service:
+```bash
+RUSTY_LLM_MODEL=azure-anthropic/claude-sonnet-4-5
+RUSTY_AZURE_ANTHROPIC_BASE_URL=https://my-foundry.services.ai.azure.com/anthropic/v1
+RUSTY_AZURE_ANTHROPIC_API_KEY=your-foundry-key
+```
+
+The deployment after `azure-anthropic/` must match the deployment name in Foundry. The base URL is the resource's Anthropic endpoint up to and including `/v1` — `@ai-sdk/anthropic` appends `/messages` itself. Uses `@ai-sdk/anthropic` with a custom `baseURL`, so Anthropic features like prompt caching and tool use work unchanged.
+
+**4. Anthropic on Azure AI Foundry with Entra ID** — managed identity / `az login`, no API key:
+```bash
+RUSTY_AZURE_ANTHROPIC_BASE_URL=https://my-foundry.services.ai.azure.com/anthropic/v1
+RUSTY_AZURE_ANTHROPIC_DEPLOYMENT=claude-sonnet-4-5
+```
+
+Uses `DefaultAzureCredential` to fetch a fresh token (scope `https://cognitiveservices.azure.com/.default`) for every request, just like the Azure OpenAI managed identity path.
+
+**5. OpenAI-compatible endpoint** — for LiteLLM, vLLM, Ollama, or any proxy:
 ```bash
 RUSTY_LLM_BASE_URL=http://localhost:4000/v1
 RUSTY_LLM_MODEL=gpt-4o
 RUSTY_LLM_API_KEY=optional-key
 ```
 
-**4. Mastra model router (default)** — direct provider API keys:
+**6. Mastra model router (default)** — direct provider API keys:
 ```bash
 RUSTY_LLM_MODEL=anthropic/claude-sonnet-4-20250514
 ANTHROPIC_API_KEY=sk-ant-...
@@ -365,7 +385,7 @@ Mastra asks the model to return findings as a typed JSON object via `response_fo
 
 Rusty Bot detects this automatically and falls back to **prompt-injected JSON** for non-supported model strings (Mastra's `jsonPromptInjection: true`) — the schema is added to the system prompt and Mastra parses the JSON out of the text response. The default rule is:
 
-- Native `json_schema`: any model whose ID starts with `openai/`, `anthropic/`, `google/`, `azure-openai/`, `requesty/openai/`, `requesty/anthropic/`, `requesty/google/`, `requesty/moonshot/`, or `requesty/fireworks/`. Azure (API key or managed identity) and OpenAI-compatible endpoints also default to native.
+- Native `json_schema`: any model whose ID starts with `openai/`, `anthropic/`, `google/`, `azure-openai/`, `requesty/openai/`, `requesty/anthropic/`, `requesty/google/`, `requesty/moonshot/`, or `requesty/fireworks/`. Azure OpenAI, Azure-hosted Anthropic (both API key and Entra ID), and OpenAI-compatible endpoints also default to native.
 - Prompt injection: everything else (e.g. `requesty/minimaxi/...`, `requesty/deepseek/...`, `requesty/qwen/...`).
 
 Override the default per model with two env vars (CSV; trailing-`*` matches a prefix):

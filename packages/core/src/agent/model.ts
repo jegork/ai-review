@@ -1,3 +1,4 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { createAzure } from "@ai-sdk/azure";
 import { DefaultAzureCredential } from "@azure/identity";
 
@@ -5,6 +6,8 @@ export type ModelConfig =
   | { type: "router"; model: string }
   | { type: "azure-api-key"; resourceName: string; deploymentName: string; apiKey: string }
   | { type: "azure-managed-identity"; resourceName: string; deploymentName: string }
+  | { type: "azure-anthropic-api-key"; baseUrl: string; deploymentName: string; apiKey: string }
+  | { type: "azure-anthropic-managed-identity"; baseUrl: string; deploymentName: string }
   | { type: "openai-compatible"; baseUrl: string; model: string; apiKey?: string };
 
 export function resolveModelConfig(): ModelConfig {
@@ -28,6 +31,29 @@ export function resolveModelConfig(): ModelConfig {
       type: "azure-managed-identity",
       resourceName: process.env.RUSTY_AZURE_RESOURCE_NAME,
       deploymentName: process.env.RUSTY_AZURE_DEPLOYMENT,
+    };
+  }
+
+  // anthropic on azure ai foundry (api key mode)
+  // accepts both AZURE_ANTHROPIC_API_KEY and RUSTY_AZURE_ANTHROPIC_API_KEY
+  const azureAnthropicBaseUrl = process.env.RUSTY_AZURE_ANTHROPIC_BASE_URL;
+  const azureAnthropicApiKey =
+    process.env.RUSTY_AZURE_ANTHROPIC_API_KEY ?? process.env.AZURE_ANTHROPIC_API_KEY;
+  if (model.startsWith("azure-anthropic/") && azureAnthropicBaseUrl && azureAnthropicApiKey) {
+    return {
+      type: "azure-anthropic-api-key",
+      baseUrl: azureAnthropicBaseUrl,
+      deploymentName: model.replace("azure-anthropic/", ""),
+      apiKey: azureAnthropicApiKey,
+    };
+  }
+
+  // anthropic on azure ai foundry (managed identity / entra id mode)
+  if (azureAnthropicBaseUrl && process.env.RUSTY_AZURE_ANTHROPIC_DEPLOYMENT) {
+    return {
+      type: "azure-anthropic-managed-identity",
+      baseUrl: azureAnthropicBaseUrl,
+      deploymentName: process.env.RUSTY_AZURE_ANTHROPIC_DEPLOYMENT,
     };
   }
 
@@ -71,7 +97,10 @@ export function resolveTriageModelConfig(): ModelConfig | null {
 
 export function resolveModel(
   config: ModelConfig,
-): string | ReturnType<ReturnType<typeof createAzure>> {
+):
+  | string
+  | ReturnType<ReturnType<typeof createAzure>>
+    {
   switch (config.type) {
     case "router":
       return config.model;
@@ -102,6 +131,36 @@ export function resolveModel(
       return azure(config.deploymentName);
     }
 
+    case "azure-anthropic-api-key": {
+      const anthropic = createAnthropic({
+        baseURL: config.baseUrl,
+        apiKey: config.apiKey,
+      });
+      return anthropic(config.deploymentName);
+    }
+
+    case "azure-anthropic-managed-identity": {
+      const credential = new DefaultAzureCredential();
+      const scope = "https://cognitiveservices.azure.com/.default";
+
+      const anthropicFetch = (async (input: unknown, init?: Record<string, unknown>) => {
+        const token = await credential.getToken(scope);
+        const headers = new Headers(init?.headers as ConstructorParameters<typeof Headers>[0]);
+        headers.delete("x-api-key");
+        headers.set("Authorization", `Bearer ${token.token}`);
+        return globalThis.fetch(input as Parameters<typeof fetch>[0], { ...init, headers });
+      }) as typeof globalThis.fetch;
+
+      const anthropic = createAnthropic({
+        baseURL: config.baseUrl,
+        // createAnthropic requires apiKey or authToken; the fetch wrapper
+        // overrides Authorization with a fresh entra token per request.
+        authToken: "managed-identity",
+        fetch: anthropicFetch,
+      });
+      return anthropic(config.deploymentName);
+    }
+
     case "openai-compatible":
       return config.model;
   }
@@ -117,6 +176,12 @@ export function resolveDefaultAgentOptions(
 }
 
 export function supportsAnthropicCacheControl(config: ModelConfig): boolean {
+  if (
+    config.type === "azure-anthropic-api-key" ||
+    config.type === "azure-anthropic-managed-identity"
+  ) {
+    return true;
+  }
   if (config.type !== "router") return false;
   return config.model.includes("anthropic/");
 }
@@ -137,6 +202,8 @@ export function supportsNativeStructuredOutput(config: ModelConfig): boolean {
   switch (config.type) {
     case "azure-api-key":
     case "azure-managed-identity":
+    case "azure-anthropic-api-key":
+    case "azure-anthropic-managed-identity":
       return true;
     case "openai-compatible":
       return true;
@@ -156,6 +223,9 @@ function modelMatchKey(config: ModelConfig): string {
     case "azure-api-key":
     case "azure-managed-identity":
       return `azure-openai/${config.deploymentName}`;
+    case "azure-anthropic-api-key":
+    case "azure-anthropic-managed-identity":
+      return `azure-anthropic/${config.deploymentName}`;
   }
 }
 
@@ -297,6 +367,10 @@ export function getModelDisplayName(config: ModelConfig): string {
       return `azure/${config.deploymentName}`;
     case "azure-managed-identity":
       return `azure/${config.deploymentName}`;
+    case "azure-anthropic-api-key":
+      return `azure-anthropic/${config.deploymentName}`;
+    case "azure-anthropic-managed-identity":
+      return `azure-anthropic/${config.deploymentName}`;
     case "openai-compatible":
       return `${config.baseUrl}/${config.model}`;
   }
