@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/jegork/rusty-bot/compare/v1.9.0...v1.10.0) (2026-05-06)
+
+
+### Features
+
+* **core:** add RUSTY_LLM_STRUCTURING_MODEL for two-pass review ([#157](https://github.com/jegork/rusty-bot/issues/157)) ([d24cf58](https://github.com/jegork/rusty-bot/commit/d24cf588eca9d933a4c1c0cf8b87bf0ab0466edd))
+
 ## [1.9.0](https://github.com/jegork/rusty-bot/compare/v1.8.0...v1.9.0) (2026-05-06)
 
 
