@@ -422,6 +422,20 @@ RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT=requesty/deepseek/deepseek-v4-pro
 
 Force-on takes precedence over force-off when the same model appears in both lists.
 
+#### Two-pass structured output (alternative to forcing one schema mode)
+
+Some models — Kimi K2.x with thinking enabled, Anthropic models with tools — sometimes terminate with `finishReason: "tool-calls"` and zero text instead of emitting JSON, regardless of which schema mode is in use. The single-model path can't recover from that: there's no text for either the native parser or the prompt-injection parser to work with.
+
+`RUSTY_LLM_STRUCTURING_MODEL` opts into Mastra's two-agent flow:
+
+```bash
+RUSTY_LLM_STRUCTURING_MODEL=azure-openai/gpt-5.4-mini
+```
+
+When set, the review model runs with tools and writes freeform prose (no schema pressure), then a cheap structuring model translates the prose into the schema-conformant JSON. Tool-loop failures evaporate because the review model is no longer on the schema-output path. `RUSTY_LLM_JSON_PROMPT_INJECTION` / `RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT` are evaluated against the *structuring* model's capabilities when this is set.
+
+Costs: one extra LLM call per review pass (small on a cheap model) and ~3–8s of extra latency. Trade-off: small risk of information loss in the prose-to-JSON translation if the structuring model misses a field.
+
 ### Per-Repository Configuration
 
 Configure via the web dashboard at `http://localhost:3000` or the API:
