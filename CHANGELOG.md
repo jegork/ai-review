@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/jegork/rusty-bot/compare/v1.5.0...v1.5.1) (2026-05-06)
+
+
+### Bug Fixes
+
+* **docker:** create /home/rusty so ADO container handler can chdir there ([#143](https://github.com/jegork/rusty-bot/issues/143)) ([b7109a9](https://github.com/jegork/rusty-bot/commit/b7109a9387a841bbc62c9c72fd874f85a99d1a74))
+
 ## [1.5.0](https://github.com/jegork/rusty-bot/compare/v1.4.0...v1.5.0) (2026-05-05)
 
 
