@@ -37,6 +37,11 @@ jobs:
           RUSTY_LLM_JSON_PROMPT_INJECTION: requesty/fireworks/kimi-k2.6
           RUSTY_REVIEW_TEMPERATURES: "1,0.2,0.3"
           RUSTY_REVIEW_ADAPTIVE_PASSES: "true"
+          # cap tool-using trajectories so tool-happy models (Kimi/Anthropic)
+          # can't terminate with finishReason="tool-calls" and zero text. the
+          # final allowed step gets toolChoice="none" so the model has to emit
+          # the structured-output JSON. see #152.
+          RUSTY_LLM_MAX_STEPS: "8"
           RUSTY_JUDGE_ENABLED: "true"
           RUSTY_JUDGE_MODEL: requesty/anthropic/claude-sonnet-4-6
           RUSTY_JUDGE_TEMPERATURE: "0"
