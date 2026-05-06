@@ -147,6 +147,29 @@ describe("runReview retry on STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED", () => 
     await expect(runReview(config, "diff", prMetadata)).rejects.toThrow("provider timeout");
     expect(generateMock).toHaveBeenCalledTimes(2);
   });
+
+  it("retries when mastra silently returns response.object=undefined", async () => {
+    // mastra's prompt-injected JSON path can return object:undefined when the
+    // model emits text outside the JSON block instead of throwing. we should
+    // synthesize a validation error so the retry wrapper picks it up.
+    generateMock
+      .mockResolvedValueOnce({ object: undefined, usage: { totalTokens: 50 } })
+      .mockResolvedValueOnce(makeValidResponse());
+
+    const result = await runReview(config, "diff", prMetadata);
+
+    expect(generateMock).toHaveBeenCalledTimes(2);
+    expect(result.recommendation).toBe("looks_good");
+  });
+
+  it("throws a clear error when both attempts return response.object=undefined", async () => {
+    generateMock.mockResolvedValue({ object: undefined, usage: { totalTokens: 50 } });
+
+    await expect(runReview(config, "diff", prMetadata)).rejects.toThrow(
+      /structured output parser returned no object/,
+    );
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("runReview jsonPromptInjection forwarding", () => {
