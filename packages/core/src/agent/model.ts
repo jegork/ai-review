@@ -97,10 +97,7 @@ export function resolveTriageModelConfig(): ModelConfig | null {
 
 export function resolveModel(
   config: ModelConfig,
-):
-  | string
-  | ReturnType<ReturnType<typeof createAzure>>
-    {
+): string | ReturnType<ReturnType<typeof createAzure>> {
   switch (config.type) {
     case "router":
       return config.model;
