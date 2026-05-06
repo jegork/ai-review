@@ -6,10 +6,12 @@ import {
   resolveReviewPassModelConfigs,
   getModelDisplayName,
   resolveDefaultAgentOptions,
+  resolveDisableThinking,
   resolveJsonPromptInjection,
   supportsAnthropicCacheControl,
   supportsNativeStructuredOutput,
   applyModelConstraints,
+  mutateBodyForFoundry,
 } from "../agent/model.js";
 
 function clearEnv() {
@@ -39,6 +41,7 @@ function clearEnv() {
   delete process.env.RUSTY_PROMPT_CACHE;
   delete process.env.RUSTY_LLM_JSON_PROMPT_INJECTION;
   delete process.env.RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT;
+  delete process.env.RUSTY_LLM_DISABLE_THINKING;
 }
 
 describe("resolveModelConfig", () => {
@@ -677,6 +680,161 @@ describe("resolveJsonPromptInjection", () => {
     expect(
       resolveJsonPromptInjection({ type: "router", model: "requesty/openai/gpt-5-mini" }),
     ).toBe(false);
+  });
+});
+
+describe("resolveDisableThinking", () => {
+  beforeEach(clearEnv);
+
+  it("returns false when env var is unset", () => {
+    expect(
+      resolveDisableThinking({
+        type: "azure-foundry-api-key",
+        resourceName: "r",
+        deploymentName: "Kimi-K2.6",
+        apiKey: "k",
+      }),
+    ).toBe(false);
+  });
+
+  it("returns true for an azure-foundry config that matches the env list", () => {
+    process.env.RUSTY_LLM_DISABLE_THINKING = "azure-foundry/Kimi-K2.6";
+    expect(
+      resolveDisableThinking({
+        type: "azure-foundry-api-key",
+        resourceName: "r",
+        deploymentName: "Kimi-K2.6",
+        apiKey: "k",
+      }),
+    ).toBe(true);
+    expect(
+      resolveDisableThinking({
+        type: "azure-foundry-managed-identity",
+        resourceName: "r",
+        deploymentName: "Kimi-K2.6",
+      }),
+    ).toBe(true);
+  });
+
+  it("supports trailing-* wildcard for foundry deployments", () => {
+    process.env.RUSTY_LLM_DISABLE_THINKING = "azure-foundry/Kimi-*";
+    expect(
+      resolveDisableThinking({
+        type: "azure-foundry-api-key",
+        resourceName: "r",
+        deploymentName: "Kimi-K2.6",
+        apiKey: "k",
+      }),
+    ).toBe(true);
+    expect(
+      resolveDisableThinking({
+        type: "azure-foundry-api-key",
+        resourceName: "r",
+        deploymentName: "Llama-3.3",
+        apiKey: "k",
+      }),
+    ).toBe(false);
+  });
+
+  it("only takes effect on azure-foundry configs (other types ignored even if matched)", () => {
+    process.env.RUSTY_LLM_DISABLE_THINKING =
+      "azure-openai/gpt-5.4-mini,anthropic/claude-sonnet-4-6";
+    expect(
+      resolveDisableThinking({
+        type: "azure-api-key",
+        resourceName: "r",
+        deploymentName: "gpt-5.4-mini",
+        apiKey: "k",
+      }),
+    ).toBe(false);
+    expect(resolveDisableThinking({ type: "router", model: "anthropic/claude-sonnet-4-6" })).toBe(
+      false,
+    );
+  });
+
+  it("matches one foundry deployment without affecting another", () => {
+    process.env.RUSTY_LLM_DISABLE_THINKING = "azure-foundry/Kimi-K2.6";
+    expect(
+      resolveDisableThinking({
+        type: "azure-foundry-api-key",
+        resourceName: "r",
+        deploymentName: "Kimi-K2.6",
+        apiKey: "k",
+      }),
+    ).toBe(true);
+    expect(
+      resolveDisableThinking({
+        type: "azure-foundry-api-key",
+        resourceName: "r",
+        deploymentName: "Llama-3.3",
+        apiKey: "k",
+      }),
+    ).toBe(false);
+  });
+
+  it("ignores empty env var", () => {
+    process.env.RUSTY_LLM_DISABLE_THINKING = "";
+    expect(
+      resolveDisableThinking({
+        type: "azure-foundry-api-key",
+        resourceName: "r",
+        deploymentName: "Kimi-K2.6",
+        apiKey: "k",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("mutateBodyForFoundry", () => {
+  it("injects thinking:{type:disabled} into a JSON body when disableThinking is set", () => {
+    const init: Record<string, unknown> = {
+      body: JSON.stringify({ model: "Kimi-K2.6", messages: [{ role: "user", content: "hi" }] }),
+    };
+    mutateBodyForFoundry(init, { disableThinking: true });
+    expect(JSON.parse(init.body as string)).toEqual({
+      model: "Kimi-K2.6",
+      messages: [{ role: "user", content: "hi" }],
+      thinking: { type: "disabled" },
+    });
+  });
+
+  it("overrides any caller-provided thinking field", () => {
+    const init: Record<string, unknown> = {
+      body: JSON.stringify({ model: "x", thinking: { type: "enabled" } }),
+    };
+    mutateBodyForFoundry(init, { disableThinking: true });
+    expect((JSON.parse(init.body as string) as Record<string, unknown>).thinking).toEqual({
+      type: "disabled",
+    });
+  });
+
+  it("is a no-op when no flags are set", () => {
+    const init: Record<string, unknown> = { body: JSON.stringify({ model: "x" }) };
+    mutateBodyForFoundry(init, {});
+    expect(init.body).toBe(JSON.stringify({ model: "x" }));
+  });
+
+  it("silently leaves non-JSON bodies alone", () => {
+    const formData = "form-data-not-json";
+    const init: Record<string, unknown> = { body: formData };
+    mutateBodyForFoundry(init, { disableThinking: true });
+    expect(init.body).toBe(formData);
+  });
+
+  it("silently leaves missing body alone", () => {
+    const init: Record<string, unknown> = {};
+    mutateBodyForFoundry(init, { disableThinking: true });
+    expect(init.body).toBeUndefined();
+  });
+
+  it("silently leaves a JSON body that parses to an array alone", () => {
+    const init: Record<string, unknown> = { body: JSON.stringify([1, 2, 3]) };
+    mutateBodyForFoundry(init, { disableThinking: true });
+    expect(init.body).toBe(JSON.stringify([1, 2, 3]));
+  });
+
+  it("ignores undefined init", () => {
+    expect(() => mutateBodyForFoundry(undefined, { disableThinking: true })).not.toThrow();
   });
 });
 

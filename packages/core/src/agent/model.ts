@@ -117,6 +117,42 @@ export function resolveTriageModelConfig(): ModelConfig | null {
   return resolveModelConfigWithOverride(triageModel);
 }
 
+interface FoundryBodyOptions {
+  disableThinking?: boolean;
+}
+
+// foundry chat completions accepts vendor-specific body fields like
+// `thinking: { type: "disabled" }` (Moonshot/Kimi) that have no equivalent
+// passthrough in @ai-sdk/openai's typed options. mutate the JSON body in-place
+// before it goes on the wire. silently no-ops on non-JSON bodies (streaming
+// uploads, FormData, etc.) — those don't apply to chat completions today.
+export function mutateBodyForFoundry(
+  init: Record<string, unknown> | undefined,
+  opts: FoundryBodyOptions,
+): void {
+  if (!init || typeof init.body !== "string") return;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(init.body);
+  } catch {
+    return;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return;
+  const body = parsed as Record<string, unknown>;
+  if (opts.disableThinking) {
+    body.thinking = { type: "disabled" };
+  }
+  init.body = JSON.stringify(body);
+}
+
+function makeFoundryFetch(opts: FoundryBodyOptions): typeof globalThis.fetch {
+  return (async (input: unknown, init?: Record<string, unknown>) => {
+    const next = { ...init };
+    mutateBodyForFoundry(next, opts);
+    return globalThis.fetch(input as Parameters<typeof fetch>[0], next);
+  }) as typeof globalThis.fetch;
+}
+
 export function resolveModel(
   config: ModelConfig,
 ): string | ReturnType<ReturnType<typeof createAzure>> {
@@ -151,9 +187,11 @@ export function resolveModel(
     }
 
     case "azure-foundry-api-key": {
+      const disableThinking = resolveDisableThinking(config);
       const azure = createAzure({
         resourceName: config.resourceName,
         apiKey: config.apiKey,
+        ...(disableThinking && { fetch: makeFoundryFetch({ disableThinking: true }) }),
       });
       // .chat() routes to /v1/chat/completions; the default azure() picks
       // /v1/responses, which non-OpenAI Foundry models reject
@@ -163,12 +201,15 @@ export function resolveModel(
     case "azure-foundry-managed-identity": {
       const credential = new DefaultAzureCredential();
       const scope = "https://cognitiveservices.azure.com/.default";
+      const disableThinking = resolveDisableThinking(config);
 
       const azureFetch = (async (input: unknown, init?: Record<string, unknown>) => {
         const token = await credential.getToken(scope);
         const headers = new Headers(init?.headers as ConstructorParameters<typeof Headers>[0]);
         headers.set("Authorization", `Bearer ${token.token}`);
-        return globalThis.fetch(input as Parameters<typeof fetch>[0], { ...init, headers });
+        const next = { ...init, headers };
+        if (disableThinking) mutateBodyForFoundry(next, { disableThinking: true });
+        return globalThis.fetch(input as Parameters<typeof fetch>[0], next);
       }) as typeof globalThis.fetch;
 
       const azure = createAzure({
@@ -306,6 +347,22 @@ export function resolveJsonPromptInjection(config: ModelConfig): boolean {
   if (forceOff.length > 0 && matchesAny(key, forceOff)) return false;
 
   return !supportsNativeStructuredOutput(config);
+}
+
+/**
+ * Whether the deployment should have its thinking/reasoning trace disabled at
+ * request time. Currently only takes effect on azure-foundry/* deployments —
+ * other paths have no Foundry-style `thinking` knob to flip. Matches the
+ * model display name against `RUSTY_LLM_DISABLE_THINKING` (CSV with trailing-*
+ * wildcards), same pattern as `RUSTY_LLM_JSON_PROMPT_INJECTION`.
+ */
+export function resolveDisableThinking(config: ModelConfig): boolean {
+  if (config.type !== "azure-foundry-api-key" && config.type !== "azure-foundry-managed-identity") {
+    return false;
+  }
+  const patterns = readCsvEnv("RUSTY_LLM_DISABLE_THINKING");
+  if (patterns.length === 0) return false;
+  return matchesAny(modelMatchKey(config), patterns);
 }
 
 export interface ModelSettings {
