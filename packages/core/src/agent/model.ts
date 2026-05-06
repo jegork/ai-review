@@ -121,11 +121,14 @@ interface FoundryBodyOptions {
   disableThinking?: boolean;
 }
 
-// foundry chat completions accepts vendor-specific body fields like
-// `thinking: { type: "disabled" }` (Moonshot/Kimi) that have no equivalent
-// passthrough in @ai-sdk/openai's typed options. mutate the JSON body in-place
-// before it goes on the wire. silently no-ops on non-JSON bodies (streaming
-// uploads, FormData, etc.) — those don't apply to chat completions today.
+// Moonshot/Kimi expose two ways to disable the reasoning trace:
+//   1. Their direct API takes a top-level `thinking: { type: "disabled" }`
+//   2. vLLM- and SGLang-based deployments (which is what Azure Foundry's MaaS
+//      runs for Kimi K2.x) take `chat_template_kwargs: { thinking: false }`
+// Foundry's strict OpenAI-compatible allowlist rejects unknown top-level
+// fields with `unrecognized_request_argument`, so we have to use the
+// chat_template_kwargs form. We merge into any caller-provided value so we
+// don't clobber other template kwargs the user might set later.
 export function mutateBodyForFoundry(
   init: Record<string, unknown> | undefined,
   opts: FoundryBodyOptions,
@@ -140,7 +143,13 @@ export function mutateBodyForFoundry(
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return;
   const body = parsed as Record<string, unknown>;
   if (opts.disableThinking) {
-    body.thinking = { type: "disabled" };
+    const existing =
+      typeof body.chat_template_kwargs === "object" &&
+      body.chat_template_kwargs !== null &&
+      !Array.isArray(body.chat_template_kwargs)
+        ? (body.chat_template_kwargs as Record<string, unknown>)
+        : {};
+    body.chat_template_kwargs = { ...existing, thinking: false };
   }
   init.body = JSON.stringify(body);
 }

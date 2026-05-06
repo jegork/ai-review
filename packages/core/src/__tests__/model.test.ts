@@ -786,7 +786,7 @@ describe("resolveDisableThinking", () => {
 });
 
 describe("mutateBodyForFoundry", () => {
-  it("injects thinking:{type:disabled} into a JSON body when disableThinking is set", () => {
+  it("sets chat_template_kwargs.thinking=false when disableThinking is set", () => {
     const init: Record<string, unknown> = {
       body: JSON.stringify({ model: "Kimi-K2.6", messages: [{ role: "user", content: "hi" }] }),
     };
@@ -794,18 +794,39 @@ describe("mutateBodyForFoundry", () => {
     expect(JSON.parse(init.body as string)).toEqual({
       model: "Kimi-K2.6",
       messages: [{ role: "user", content: "hi" }],
-      thinking: { type: "disabled" },
+      chat_template_kwargs: { thinking: false },
     });
   });
 
-  it("overrides any caller-provided thinking field", () => {
+  it("does not inject the deprecated top-level `thinking` field (Foundry rejects it)", () => {
     const init: Record<string, unknown> = {
-      body: JSON.stringify({ model: "x", thinking: { type: "enabled" } }),
+      body: JSON.stringify({ model: "Kimi-K2.6", messages: [] }),
     };
     mutateBodyForFoundry(init, { disableThinking: true });
-    expect((JSON.parse(init.body as string) as Record<string, unknown>).thinking).toEqual({
-      type: "disabled",
-    });
+    expect((JSON.parse(init.body as string) as Record<string, unknown>).thinking).toBeUndefined();
+  });
+
+  it("merges with caller-provided chat_template_kwargs instead of clobbering", () => {
+    const init: Record<string, unknown> = {
+      body: JSON.stringify({
+        model: "Kimi-K2.6",
+        chat_template_kwargs: { foo: "bar", thinking: true },
+      }),
+    };
+    mutateBodyForFoundry(init, { disableThinking: true });
+    expect(
+      (JSON.parse(init.body as string) as Record<string, unknown>).chat_template_kwargs,
+    ).toEqual({ foo: "bar", thinking: false });
+  });
+
+  it("ignores a non-object chat_template_kwargs from the caller and replaces it", () => {
+    const init: Record<string, unknown> = {
+      body: JSON.stringify({ model: "x", chat_template_kwargs: "not-an-object" }),
+    };
+    mutateBodyForFoundry(init, { disableThinking: true });
+    expect(
+      (JSON.parse(init.body as string) as Record<string, unknown>).chat_template_kwargs,
+    ).toEqual({ thinking: false });
   });
 
   it("is a no-op when no flags are set", () => {
