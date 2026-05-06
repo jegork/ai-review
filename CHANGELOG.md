@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.0](https://github.com/jegork/rusty-bot/compare/v1.8.0...v1.9.0) (2026-05-06)
+
+
+### Features
+
+* **core:** add RUSTY_LLM_DISABLE_THINKING per-deployment knob for Foundry ([#151](https://github.com/jegork/rusty-bot/issues/151)) ([57396e9](https://github.com/jegork/rusty-bot/commit/57396e9ca0b8d3c36e53cfc428800968ae6c1e5a))
+* **core:** add RUSTY_LLM_MAX_STEPS cap on tool-use trajectories ([#152](https://github.com/jegork/rusty-bot/issues/152)) ([6371d93](https://github.com/jegork/rusty-bot/commit/6371d93c7945b8febfe2ed2abe08f3568bd10db5))
+
 ## [1.8.0](https://github.com/jegork/rusty-bot/compare/v1.7.0...v1.8.0) (2026-05-06)
 
 
