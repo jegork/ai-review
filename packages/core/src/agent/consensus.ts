@@ -156,7 +156,12 @@ export async function runConsensusReview(
     } else {
       failures.push(outcome.reason);
       logger.warn(
-        { err: outcome.reason, passIndex: i, prId: prMetadata.id },
+        {
+          err: outcome.reason,
+          passIndex: i,
+          model: passModelConfigs[i].displayName,
+          prId: prMetadata.id,
+        },
         "consensus pass failed",
       );
     }
@@ -220,6 +225,11 @@ export async function runConsensusReview(
       droppedObservations: totalRawObservations - survivingObservations.length,
       agreementRate,
       passRecommendations,
+      passModels: passModelConfigs.map((m) => m.displayName),
+      passTokens: settled.map((outcome) =>
+        outcome.status === "fulfilled" ? outcome.value.tokenCount : 0,
+      ),
+      totalTokens,
     },
     "consensus voting complete",
   );

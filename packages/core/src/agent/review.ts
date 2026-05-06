@@ -51,20 +51,26 @@ function readMaxTransientRetries(): number {
   return Math.min(Math.floor(n), TRANSIENT_RETRY_BACKOFF_MS.length);
 }
 
-async function generateWithStructuredOutputRetry<T>(fn: () => Promise<T>): Promise<T> {
+async function generateWithStructuredOutputRetry<T>(
+  fn: () => Promise<T>,
+  bindings: Record<string, unknown> = {},
+): Promise<T> {
   try {
     return await fn();
   } catch (err) {
     if (!isStructuredOutputValidationError(err)) throw err;
     log.warn(
-      { err },
+      { ...bindings, err },
       "structured output validation failed, retrying once before giving up on this pass",
     );
     return await fn();
   }
 }
 
-async function generateWithTransientRetry<T>(fn: () => Promise<T>): Promise<T> {
+async function generateWithTransientRetry<T>(
+  fn: () => Promise<T>,
+  bindings: Record<string, unknown> = {},
+): Promise<T> {
   const maxRetries = readMaxTransientRetries();
   let lastErr: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -75,7 +81,7 @@ async function generateWithTransientRetry<T>(fn: () => Promise<T>): Promise<T> {
       if (!isTransientRetryableError(err) || attempt === maxRetries) throw err;
       const backoffMs = TRANSIENT_RETRY_BACKOFF_MS[attempt];
       log.warn(
-        { err, attempt: attempt + 1, maxRetries, backoffMs },
+        { ...bindings, err, attempt: attempt + 1, maxRetries, backoffMs },
         "transient LLM error, retrying after backoff",
       );
       await new Promise((resolve) => setTimeout(resolve, backoffMs));
@@ -163,28 +169,52 @@ export async function runReview(
   const rawModelSettings = options?.modelSettings ?? resolveModelSettings("review");
   const modelSettings = applyModelConstraints(modelConfig, rawModelSettings);
   const jsonPromptInjection = resolveJsonPromptInjection(modelConfig);
-  const response = await generateWithTransientRetry(() =>
-    generateWithStructuredOutputRetry(async () => {
-      const r = await agent.generate(userMessage, {
-        structuredOutput: { schema, jsonPromptInjection },
-        ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
-      });
-      // mastra's prompt-injected JSON path can silently return object:undefined
-      // when the model emits unparseable text instead of throwing the schema
-      // validation error. surface it as one so the retry wrapper picks it up.
-      // typed cast because mastra's return type marks .object as always defined.
-      if (!(r as { object?: unknown }).object) {
-        const err = new Error(
-          "structured output parser returned no object (model likely emitted text outside the JSON block or truncated)",
-        );
-        (err as Error & { id?: string }).id = STRUCTURED_OUTPUT_VALIDATION_ERROR_ID;
-        throw err;
-      }
-      return r;
-    }),
+  const logBindings = { model: modelName, tier };
+  const response = await generateWithTransientRetry(
+    () =>
+      generateWithStructuredOutputRetry(async () => {
+        const r = await agent.generate(userMessage, {
+          structuredOutput: { schema, jsonPromptInjection },
+          ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
+        });
+        // mastra's prompt-injected JSON path can silently return object:undefined
+        // when the model emits unparseable text instead of throwing the schema
+        // validation error. surface it as one so the retry wrapper picks it up.
+        // typed cast because mastra's return type marks .object as always defined.
+        if (!(r as { object?: unknown }).object) {
+          const err = new Error(
+            "structured output parser returned no object (model likely emitted text outside the JSON block or truncated)",
+          );
+          (err as Error & { id?: string }).id = STRUCTURED_OUTPUT_VALIDATION_ERROR_ID;
+          throw err;
+        }
+        return r;
+      }, logBindings),
+    logBindings,
   );
 
   const parsed = response.object;
+  const usage = response.usage as {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    cachedInputTokens?: number;
+    reasoningTokens?: number;
+  };
+  const totalTokens = usage.totalTokens ?? 0;
+
+  log.info(
+    {
+      model: modelName,
+      tier,
+      tokens: totalTokens,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cachedInputTokens: usage.cachedInputTokens,
+      reasoningTokens: usage.reasoningTokens,
+    },
+    "review pass complete",
+  );
 
   return {
     summary: parsed.summary,
@@ -204,6 +234,6 @@ export async function runReview(
         : [],
     filesReviewed: parsed.filesReviewed,
     modelUsed: modelName,
-    tokenCount: response.usage.totalTokens ?? 0,
+    tokenCount: totalTokens,
   };
 }
