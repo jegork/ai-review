@@ -177,12 +177,26 @@ export async function runReview(
   const modelSettings = applyModelConstraints(modelConfig, rawModelSettings);
   const jsonPromptInjection = resolveJsonPromptInjection(modelConfig);
   const maxSteps = readLlmMaxSteps();
+  // when capping steps we ALSO have to force the final step to be tool-free,
+  // otherwise tool-happy models (Anthropic in particular) burn the whole budget
+  // on tool calls and end with finishReason="tool-calls" and no text — which
+  // produces no structured output and the pass fails. stripping tools on the
+  // last allowed step guarantees the model emits a final answer.
+  const prepareStep =
+    maxSteps !== undefined
+      ? ({ stepNumber }: { stepNumber: number }) => {
+          if (stepNumber >= maxSteps - 1) {
+            return { toolChoice: "none" as const, activeTools: [] };
+          }
+        }
+      : undefined;
   const response = await generateWithTransientRetry(() =>
     generateWithStructuredOutputRetry(async () => {
       const r = await agent.generate(userMessage, {
         structuredOutput: { schema, jsonPromptInjection },
         ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
         ...(maxSteps !== undefined && { maxSteps }),
+        ...(prepareStep && { prepareStep }),
       });
       // mastra's prompt-injected JSON path can silently return object:undefined
       // when the model emits unparseable text instead of throwing the schema
