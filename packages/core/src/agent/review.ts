@@ -51,6 +51,39 @@ function readMaxTransientRetries(): number {
   return Math.min(Math.floor(n), TRANSIENT_RETRY_BACKOFF_MS.length);
 }
 
+// captures the fields most useful for diagnosing why r.object came back
+// undefined: did the model truncate (finishReason: "length"), did it emit
+// text wrapped in code fences, or did it pick a tool-call path the parser
+// didn't expect? we cap text snippets so a multi-megabyte response can't
+// blow up the log line.
+const FAILED_RESPONSE_TEXT_PREVIEW_CHARS = 400;
+
+function summarizeFailedResponse(r: unknown): Record<string, unknown> {
+  const resp = r as {
+    finishReason?: unknown;
+    text?: unknown;
+    reasoning?: unknown;
+    warnings?: unknown;
+    toolCalls?: unknown;
+    usage?: { totalTokens?: unknown; outputTokens?: unknown };
+  };
+  const text = typeof resp.text === "string" ? resp.text : undefined;
+  const reasoning = typeof resp.reasoning === "string" ? resp.reasoning : undefined;
+  const toolCallCount = Array.isArray(resp.toolCalls) ? resp.toolCalls.length : undefined;
+  const warningCount = Array.isArray(resp.warnings) ? resp.warnings.length : undefined;
+  return {
+    finishReason: resp.finishReason,
+    textLength: text?.length ?? 0,
+    textPreview: text?.slice(0, FAILED_RESPONSE_TEXT_PREVIEW_CHARS),
+    reasoningLength: reasoning?.length,
+    toolCallCount,
+    warningCount,
+    warnings: warningCount && warningCount > 0 ? resp.warnings : undefined,
+    outputTokens: resp.usage?.outputTokens,
+    totalTokens: resp.usage?.totalTokens,
+  };
+}
+
 async function generateWithStructuredOutputRetry<T>(
   fn: () => Promise<T>,
   bindings: Record<string, unknown> = {},
@@ -182,6 +215,10 @@ export async function runReview(
         // validation error. surface it as one so the retry wrapper picks it up.
         // typed cast because mastra's return type marks .object as always defined.
         if (!(r as { object?: unknown }).object) {
+          log.warn(
+            { ...logBindings, ...summarizeFailedResponse(r) },
+            "structured output produced no object — captured diagnostic snapshot",
+          );
           const err = new Error(
             "structured output parser returned no object (model likely emitted text outside the JSON block or truncated)",
           );
