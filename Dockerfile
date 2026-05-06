@@ -62,10 +62,10 @@ COPY --from=build /app/packages/dashboard/dist ./packages/dashboard/dist
 # copy prompt files that are bundled alongside dist
 COPY --from=build /app/packages/core/src/prompts ./packages/core/dist/prompts
 
-RUN mkdir -p /app/data \
+RUN mkdir -p /app/data /home/rusty \
     && groupadd --system --gid 1001 rusty \
-    && useradd --system --uid 1001 --gid rusty --home-dir /app --shell /usr/sbin/nologin rusty \
-    && chown -R rusty:rusty /app
+    && useradd --system --uid 1001 --gid rusty --home-dir /home/rusty --shell /usr/sbin/nologin rusty \
+    && chown -R rusty:rusty /app /home/rusty
 
 VOLUME /app/data
 
