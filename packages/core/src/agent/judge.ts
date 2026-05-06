@@ -8,8 +8,10 @@ import {
   resolveModelSettings,
   resolveDefaultAgentOptions,
   resolveJsonPromptInjection,
+  supportsAnthropicCacheControl,
   applyModelConstraints,
 } from "./model.js";
+import { buildCachedSystemMessages } from "./prompts.js";
 import type { Finding, ReviewResult } from "../types.js";
 import { logger } from "../logger.js";
 
@@ -73,13 +75,12 @@ Reject or heavily penalize findings that are:
 
 You MUST return exactly one evaluation per finding, in the same order they were provided.`;
 
-function formatFindingsForJudge(findings: readonly Finding[], diff: string): string {
-  const parts: string[] = [];
+function buildDiffBlock(diff: string): string {
+  return `## Diff under review\n\n${diff}\n`;
+}
 
-  parts.push("## Diff under review\n");
-  parts.push(diff);
-  parts.push("\n## Findings to evaluate\n");
-
+function buildFindingsBlock(findings: readonly Finding[]): string {
+  const parts: string[] = ["## Findings to evaluate\n"];
   for (let i = 0; i < findings.length; i++) {
     const f = findings[i];
     const lineRange = f.endLine ? `${f.line}-${f.endLine}` : `${f.line}`;
@@ -94,8 +95,57 @@ function formatFindingsForJudge(findings: readonly Finding[], diff: string): str
     }
     parts.push("");
   }
-
   return parts.join("\n");
+}
+
+interface CacheableTextPart {
+  type: "text";
+  text: string;
+  providerOptions?: { anthropic: { cacheControl: { type: "ephemeral" } } };
+}
+
+interface CacheableUserMessage {
+  role: "user";
+  content: CacheableTextPart[];
+}
+
+/**
+ * Build the user message for the judge. When the underlying provider supports
+ * Anthropic-style ephemeral cache markers, the diff (the bulk of the input) is
+ * placed in its own text block with cacheControl set so it can be reused
+ * across calls. The findings list comes after the cache breakpoint so it
+ * doesn't invalidate the cached prefix.
+ *
+ * Real cache hits require the cached prefix (system + earlier blocks + this
+ * block) to be byte-identical, AND the prefix to clear Anthropic's 1024-token
+ * floor for ephemeral cache. So this only earns its keep when the same diff
+ * is judged again within ~5 minutes — typically a manual re-run of the same
+ * PR. For non-Anthropic providers we fall back to a plain string and let
+ * Azure OpenAI's automatic prefix caching do its thing server-side.
+ */
+export function buildJudgeUserMessage(
+  findings: readonly Finding[],
+  diff: string,
+  options: { anthropicCacheControl: boolean },
+): string | CacheableUserMessage {
+  const diffBlock = buildDiffBlock(diff);
+  const findingsBlock = buildFindingsBlock(findings);
+
+  if (!options.anthropicCacheControl) {
+    return `${diffBlock}\n${findingsBlock}`;
+  }
+
+  return {
+    role: "user",
+    content: [
+      {
+        type: "text",
+        text: diffBlock,
+        providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+      },
+      { type: "text", text: findingsBlock },
+    ],
+  };
 }
 
 function resolveJudgeModel(judgeModelOverride?: string) {
@@ -148,25 +198,29 @@ export async function judgeFindings(
   );
 
   const defaultOptions = resolveDefaultAgentOptions(modelConfig);
+  const anthropicCacheControl = supportsAnthropicCacheControl(modelConfig);
   const agent = new Agent({
     id: "review-judge",
     name: "Rusty Bot Judge",
-    instructions: () => JUDGE_SYSTEM_PROMPT,
+    instructions: () => buildCachedSystemMessages(JUDGE_SYSTEM_PROMPT, { anthropicCacheControl }),
     model: () => resolveModel(modelConfig),
     ...(defaultOptions && { defaultOptions }),
   });
 
-  const userMessage = formatFindingsForJudge(findings, diff);
+  const userMessage = buildJudgeUserMessage(findings, diff, { anthropicCacheControl });
 
   let evaluations: JudgeEvaluation[];
   let tokenCount = 0;
   try {
     const modelSettings = applyModelConstraints(modelConfig, resolveModelSettings("judge"));
     const jsonPromptInjection = resolveJsonPromptInjection(modelConfig);
-    const response = await agent.generate(userMessage, {
-      structuredOutput: { schema: JudgeOutputSchema, jsonPromptInjection },
-      ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
-    });
+    const response = await agent.generate(
+      typeof userMessage === "string" ? userMessage : [userMessage],
+      {
+        structuredOutput: { schema: JudgeOutputSchema, jsonPromptInjection },
+        ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
+      },
+    );
     evaluations = response.object.evaluations;
     tokenCount = response.usage.totalTokens ?? 0;
   } catch (err) {
