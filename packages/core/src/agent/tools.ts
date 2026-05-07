@@ -2,13 +2,32 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import type { ToolCache } from "./tool-cache.js";
 
+export const MAX_SEARCH_RESULTS = 5;
+export const MAX_SEARCH_FRAGMENT_CHARS = 300;
+
+export function capSearchResults(input: {
+  results: { file: string; line: number; content: string }[];
+  count: number;
+}) {
+  const results = input.results.slice(0, MAX_SEARCH_RESULTS).map((r) => ({
+    ...r,
+    content:
+      r.content.length > MAX_SEARCH_FRAGMENT_CHARS
+        ? r.content.slice(0, MAX_SEARCH_FRAGMENT_CHARS) + "…"
+        : r.content,
+  }));
+  return { results, totalMatches: input.count, shown: results.length };
+}
+
 export function createSearchCodeTool(cache: ToolCache) {
   return createTool({
     id: "search-code",
     description:
       "Search the codebase for references to a symbol, function name, import, or string. " +
       "Use this to verify whether removed or renamed exports are still used elsewhere " +
-      "before reporting them as issues. Returns matching files and snippets.",
+      `before reporting them as issues. Returns up to ${MAX_SEARCH_RESULTS} matches with ` +
+      `snippets truncated to ${MAX_SEARCH_FRAGMENT_CHARS} characters; if totalMatches ` +
+      "exceeds shown, narrow the query to see more.",
     inputSchema: z.object({
       query: z.string().describe("symbol name, function name, or search term to find usages of"),
     }),
@@ -20,9 +39,10 @@ export function createSearchCodeTool(cache: ToolCache) {
           content: z.string(),
         }),
       ),
-      count: z.number(),
+      totalMatches: z.number(),
+      shown: z.number(),
     }),
-    execute: async ({ query }) => cache.searchCode(query),
+    execute: async ({ query }) => capSearchResults(await cache.searchCode(query)),
   });
 }
 
