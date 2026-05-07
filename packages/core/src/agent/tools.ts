@@ -1,8 +1,8 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import type { GitProvider } from "../types.js";
+import type { ToolCache } from "./tool-cache.js";
 
-export function createSearchCodeTool(provider: GitProvider) {
+export function createSearchCodeTool(cache: ToolCache) {
   return createTool({
     id: "search-code",
     description:
@@ -22,14 +22,11 @@ export function createSearchCodeTool(provider: GitProvider) {
       ),
       count: z.number(),
     }),
-    execute: async ({ query }) => {
-      const results = await provider.searchCode(query);
-      return { results, count: results.length };
-    },
+    execute: async ({ query }) => cache.searchCode(query),
   });
 }
 
-export function createGetFileContextTool(provider: GitProvider, ref: string) {
+export function createGetFileContextTool(cache: ToolCache) {
   return createTool({
     id: "get-file-context",
     description:
@@ -42,9 +39,6 @@ export function createGetFileContextTool(provider: GitProvider, ref: string) {
     outputSchema: z.object({
       content: z.string().nullable(),
     }),
-    execute: async ({ path }) => {
-      const content = await provider.getFileContent(path, ref);
-      return { content };
-    },
+    execute: async ({ path }) => cache.getFileContent(path),
   });
 }

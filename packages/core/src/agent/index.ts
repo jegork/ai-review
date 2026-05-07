@@ -33,6 +33,7 @@ export {
 } from "./model.js";
 export type { ModelConfig } from "./model.js";
 export { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
+export { ToolCache } from "./tool-cache.js";
 export { clusterFindings, clusterObservations } from "./cluster.js";
 export type { FindingCluster, ObservationCluster } from "./cluster.js";
 export { judgeFindings, judgeReviewResult, resolveJudgeConfig } from "./judge.js";
