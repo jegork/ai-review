@@ -301,10 +301,31 @@ export async function runReview(
   };
   const totalTokens = usage.totalTokens ?? 0;
 
+  if (totalTokens === 0) {
+    // some upstream providers (notably non-OpenAI Azure Foundry deployments)
+    // return chat-completions responses without a populated usage block, so the
+    // ai-sdk parser collapses every token field to undefined. dump the raw shape
+    // once per occurrence so we can tell missing usage apart from a zero-cost
+    // cache hit and adapt the parser if the field is just nested somewhere else.
+    const diag = response as {
+      usage?: unknown;
+      warnings?: unknown;
+      providerMetadata?: unknown;
+    };
+    log.warn(
+      {
+        ...logBindings,
+        rawUsage: diag.usage,
+        warnings: diag.warnings,
+        providerMetadata: diag.providerMetadata,
+      },
+      "review pass returned zero total tokens — capturing diagnostic snapshot",
+    );
+  }
+
   log.info(
     {
-      model: modelName,
-      tier,
+      ...logBindings,
       tokens: totalTokens,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
