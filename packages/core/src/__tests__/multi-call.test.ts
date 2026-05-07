@@ -343,7 +343,7 @@ describe("runMultiCallReview", () => {
 
   it("routes through consensus when consensusPasses > 1", async () => {
     const consensusConfig: ReviewConfig = { ...config, consensusPasses: 3 };
-    const patches = [makePatch("small.ts", 10)];
+    const patches = [makePatch("src/auth/handler.ts", 10)];
     const result = await runMultiCallReview(patches, consensusConfig, prMetadata);
     expect(result.consensusMetadata).toMatchObject({ passes: 3, threshold: 2 });
     expect(result.findings.length).toBeGreaterThanOrEqual(1);

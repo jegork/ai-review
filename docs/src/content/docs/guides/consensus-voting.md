@@ -31,7 +31,6 @@ RUSTY_REVIEW_MODELS=requesty/anthropic/claude-sonnet-4-6,requesty/openai/gpt-5-m
 RUSTY_REVIEW_TEMPERATURES=0.2,0.2,0.3
 RUSTY_JUDGE_MODEL=requesty/anthropic/claude-sonnet-4-6
 RUSTY_JUDGE_TEMPERATURE=0
-RUSTY_REVIEW_ADAPTIVE_PASSES=true
 ```
 
 Treat model IDs as provider-specific configuration. If your router uses different current aliases, keep the same role split: cheap structured model for triage, diverse review models for consensus, and a well-calibrated model for the judge.
@@ -50,7 +49,6 @@ RUSTY_REVIEW_MODELS=requesty/anthropic/claude-sonnet-4-6,requesty/openai/gpt-5-m
 RUSTY_REVIEW_TEMPERATURES=0.2,0.2,0.3
 RUSTY_JUDGE_MODEL=requesty/anthropic/claude-sonnet-4-6
 RUSTY_JUDGE_TEMPERATURE=0
-RUSTY_REVIEW_ADAPTIVE_PASSES=true
 ```
 
 ### ⚖️ Balanced — open-weight reviews + proprietary judge (~$0.10–$0.50/PR) **recommended**
@@ -63,7 +61,6 @@ RUSTY_REVIEW_MODELS=requesty/fireworks/deepseek-v4-pro,requesty/moonshot/kimi-k2
 RUSTY_REVIEW_TEMPERATURES=0.2,1,0.3
 RUSTY_JUDGE_MODEL=requesty/anthropic/claude-sonnet-4-6
 RUSTY_JUDGE_TEMPERATURE=0
-RUSTY_REVIEW_ADAPTIVE_PASSES=true
 ```
 
 > Use the `requesty/fireworks/` route for DeepSeek V4 Pro. Fireworks proxies `json_schema` natively and exposes the model's reasoning in a separate `reasoning_content` field, so structured output stays intact while thinking still happens. The direct `requesty/deepseek/` route currently corrupts JSON when thinking mode is on ([vllm-project/vllm#41132](https://github.com/vllm-project/vllm/issues/41132)).
@@ -78,7 +75,6 @@ RUSTY_REVIEW_MODELS=requesty/fireworks/deepseek-v4-pro,requesty/moonshot/kimi-k2
 RUSTY_REVIEW_TEMPERATURES=0.2,1,0.3
 RUSTY_JUDGE_MODEL=requesty/fireworks/deepseek-v4-pro
 RUSTY_JUDGE_TEMPERATURE=0
-RUSTY_REVIEW_ADAPTIVE_PASSES=true
 ```
 
 ### Picking a judge
@@ -90,13 +86,13 @@ The judge is the single highest-ROI pass — it runs once per PR over surviving 
 - **`deepseek/deepseek-v4-pro`** — best open-weight option for judge. Cheaper than Sonnet but slightly more permissive.
 - **Avoid for judge**: Gemini Pro (scores inflate ~1pt — too agreeable), reasoning models like o3/o4-mini (overthink, hallucinate severity), Opus 4.7 (overkill — reserve for architecture review).
 
-Adaptive pass planning is opt-in:
+Adaptive pass planning is on by default. Ordinary deep-review chunks use 2 passes, while large or security-sensitive chunks keep up to 3 passes. Explicit `consensusPasses` still caps the maximum number of passes.
+
+To force every chunk through the full pass count:
 
 ```bash
-RUSTY_REVIEW_ADAPTIVE_PASSES=true
+RUSTY_REVIEW_ADAPTIVE_PASSES=false
 ```
-
-With adaptive planning enabled, ordinary deep-review chunks use 2 passes, while large or security-sensitive chunks keep up to 3 passes. Explicit `consensusPasses` still caps the maximum number of passes.
 
 ## How it works
 
