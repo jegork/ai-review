@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { capSearchResults, MAX_SEARCH_RESULTS, MAX_SEARCH_FRAGMENT_CHARS } from "../agent/tools.js";
+import {
+  capSearchResults,
+  capFileContent,
+  MAX_SEARCH_RESULTS,
+  MAX_SEARCH_FRAGMENT_CHARS,
+  MAX_FILE_CONTEXT_CHARS,
+} from "../agent/tools.js";
 
 function makeResult(file: string, content: string) {
   return { file, line: 1, content };
@@ -72,5 +78,53 @@ describe("capSearchResults", () => {
     expect(out.results[0].file).toBe("src/a.ts");
     expect(out.results[0].line).toBe(42);
     expect(out.results[0].content.length).toBe(MAX_SEARCH_FRAGMENT_CHARS + 1);
+  });
+});
+
+describe("capFileContent", () => {
+  it("returns null content untouched and reports zero totalChars", () => {
+    const out = capFileContent({ content: null });
+
+    expect(out.content).toBeNull();
+    expect(out.truncated).toBe(false);
+    expect(out.totalChars).toBe(0);
+  });
+
+  it("passes through content shorter than the cap unchanged", () => {
+    const content = "small file body";
+    const out = capFileContent({ content });
+
+    expect(out.content).toBe(content);
+    expect(out.truncated).toBe(false);
+    expect(out.totalChars).toBe(content.length);
+  });
+
+  it("treats content at exactly the cap as not truncated", () => {
+    const content = "x".repeat(MAX_FILE_CONTEXT_CHARS);
+    const out = capFileContent({ content });
+
+    expect(out.content).toBe(content);
+    expect(out.truncated).toBe(false);
+    expect(out.totalChars).toBe(MAX_FILE_CONTEXT_CHARS);
+  });
+
+  it("truncates content larger than the cap and appends a remaining-char hint", () => {
+    const remaining = 500;
+    const content = "y".repeat(MAX_FILE_CONTEXT_CHARS + remaining);
+    const out = capFileContent({ content });
+
+    expect(out.truncated).toBe(true);
+    expect(out.totalChars).toBe(MAX_FILE_CONTEXT_CHARS + remaining);
+    expect(out.content).not.toBeNull();
+    expect(out.content!.startsWith("y".repeat(MAX_FILE_CONTEXT_CHARS))).toBe(true);
+    expect(out.content!.endsWith(`[file truncated, ${remaining} more characters]`)).toBe(true);
+  });
+
+  it("reports the original totalChars even when content is truncated", () => {
+    const total = MAX_FILE_CONTEXT_CHARS * 5;
+    const out = capFileContent({ content: "z".repeat(total) });
+
+    expect(out.totalChars).toBe(total);
+    expect(out.truncated).toBe(true);
   });
 });
