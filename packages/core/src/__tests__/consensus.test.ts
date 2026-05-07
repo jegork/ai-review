@@ -84,6 +84,7 @@ describe("runConsensusReview", () => {
     delete process.env.RUSTY_REVIEW_TEMPERATURES;
     delete process.env.RUSTY_REVIEW_TOP_PS;
     delete process.env.RUSTY_REVIEW_ADAPTIVE_PASSES;
+    process.env.RUSTY_REVIEW_ADAPTIVE_PASSES = "false";
     delete process.env.RUSTY_LLM_MODEL;
     vi.clearAllMocks();
   });
@@ -154,11 +155,23 @@ describe("runConsensusReview", () => {
     expect(result.tokenCount).toBe(300);
   });
 
-  it("defaults to 3 passes when consensusPasses not set", async () => {
+  it("defaults to 3 passes when adaptive pass planning is disabled", async () => {
+    process.env.RUSTY_REVIEW_ADAPTIVE_PASSES = "false";
+
     const result = await runConsensusReview([], config, prMetadata, "diff content");
     const { runReview } = await import("../agent/review.js");
     expect(runReview).toHaveBeenCalledTimes(3);
     expect(result.consensusMetadata?.passes).toBe(3);
+  });
+
+  it("defaults to 2 passes with small patches when adaptive is on (default)", async () => {
+    delete process.env.RUSTY_REVIEW_ADAPTIVE_PASSES;
+
+    const result = await runConsensusReview([], config, prMetadata, "diff content");
+    const { runReview } = await import("../agent/review.js");
+    expect(runReview).toHaveBeenCalledTimes(2);
+    expect(result.consensusMetadata?.passes).toBe(2);
+    expect(result.consensusMetadata?.passPlanReason).toBe("ordinary deep-review chunk");
   });
 
   it("passes per-pass model configs and settings to each review pass", async () => {
@@ -183,8 +196,8 @@ describe("runConsensusReview", () => {
     ]);
   });
 
-  it("reduces ordinary deep-review chunks to two passes when adaptive pass planning is enabled", async () => {
-    process.env.RUSTY_REVIEW_ADAPTIVE_PASSES = "true";
+  it("reduces ordinary deep-review chunks to two passes by default (adaptive pass planning)", async () => {
+    delete process.env.RUSTY_REVIEW_ADAPTIVE_PASSES;
 
     const patches = [
       {
@@ -212,7 +225,7 @@ describe("runConsensusReview", () => {
   });
 
   it("keeps three adaptive passes for security-sensitive chunks", async () => {
-    process.env.RUSTY_REVIEW_ADAPTIVE_PASSES = "true";
+    delete process.env.RUSTY_REVIEW_ADAPTIVE_PASSES;
 
     const patches = [
       {
@@ -351,6 +364,7 @@ describe("runConsensusReview failure tolerance", () => {
   beforeEach(() => {
     callCount = 0;
     mockBehavior = "default";
+    process.env.RUSTY_REVIEW_ADAPTIVE_PASSES = "false";
     vi.clearAllMocks();
   });
 

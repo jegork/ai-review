@@ -61,7 +61,7 @@ The managed identity vars (`RUSTY_AZURE_*`) take priority over the API-key vars 
 | `RUSTY_REVIEW_MODELS` | `RUSTY_LLM_MODEL` | Comma-separated per-pass review models for consensus, e.g. `anthropic/claude-sonnet,openai/gpt-5-mini` |
 | `RUSTY_REVIEW_TEMPERATURES` | `RUSTY_REVIEW_TEMPERATURE` | Comma-separated per-pass review temperatures |
 | `RUSTY_REVIEW_TOP_PS` | `RUSTY_REVIEW_TOP_P` | Comma-separated per-pass review top-p values |
-| `RUSTY_REVIEW_ADAPTIVE_PASSES` | `false` | When `true`, ordinary deep-review chunks use fewer consensus passes while large or security-sensitive chunks keep up to 3 |
+| `RUSTY_REVIEW_ADAPTIVE_PASSES` | `true` | Ordinary deep-review chunks use fewer consensus passes (2) while large or security-sensitive chunks keep up to 3. Set to `false` to force every chunk through the full pass count. |
 | `RUSTY_TRIAGE_TEMPERATURE` | `RUSTY_LLM_TEMPERATURE` | Temperature override for the triage agent |
 | `RUSTY_JUDGE_TEMPERATURE` | `RUSTY_LLM_TEMPERATURE` | Temperature override for the judge agent |
 | `RUSTY_DESCRIPTION_TEMPERATURE` | `RUSTY_LLM_TEMPERATURE` | Temperature override for the description agent |

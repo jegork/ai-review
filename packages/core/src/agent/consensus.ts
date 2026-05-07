@@ -61,6 +61,7 @@ function deriveRecommendation(
 
 function isAdaptivePassPlanningEnabled(): boolean {
   const raw = process.env.RUSTY_REVIEW_ADAPTIVE_PASSES;
+  if (raw === undefined || raw === "") return true;
   return raw === "true" || raw === "1";
 }
 
