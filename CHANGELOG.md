@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.1](https://github.com/jegork/rusty-bot/compare/v1.11.0...v1.11.1) (2026-05-07)
+
+
+### Performance
+
+* **core:** cap get-file-context content at 12k chars with truncation hint ([#164](https://github.com/jegork/rusty-bot/issues/164)) ([115de35](https://github.com/jegork/rusty-bot/commit/115de359166d38208436ab5ae3deabf49496de96))
+
 ## [1.11.0](https://github.com/jegork/rusty-bot/compare/v1.10.0...v1.11.0) (2026-05-07)
 
 
