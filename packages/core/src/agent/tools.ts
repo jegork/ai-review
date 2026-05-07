@@ -46,19 +46,42 @@ export function createSearchCodeTool(cache: ToolCache) {
   });
 }
 
+export const MAX_FILE_CONTEXT_CHARS = 12_000;
+
+export function capFileContent(input: { content: string | null }) {
+  if (input.content === null) {
+    return { content: null, truncated: false, totalChars: 0 };
+  }
+  const totalChars = input.content.length;
+  if (totalChars <= MAX_FILE_CONTEXT_CHARS) {
+    return { content: input.content, truncated: false, totalChars };
+  }
+  const remaining = totalChars - MAX_FILE_CONTEXT_CHARS;
+  return {
+    content:
+      input.content.slice(0, MAX_FILE_CONTEXT_CHARS) +
+      `\n... [file truncated, ${remaining} more characters]`,
+    truncated: true,
+    totalChars,
+  };
+}
+
 export function createGetFileContextTool(cache: ToolCache) {
   return createTool({
     id: "get-file-context",
     description:
-      "Fetch the full content of a file from the repository. " +
-      "Use this when you need to see more context around a change " +
-      "than what the diff provides.",
+      "Fetch the content of a file from the repository. " +
+      "Use this when you need to see more context around a change than what the diff " +
+      `provides. Returns up to ${MAX_FILE_CONTEXT_CHARS} characters; if truncated is ` +
+      "true, narrow your investigation to a more specific path or accept the partial view.",
     inputSchema: z.object({
       path: z.string().describe("file path relative to repo root"),
     }),
     outputSchema: z.object({
       content: z.string().nullable(),
+      truncated: z.boolean(),
+      totalChars: z.number(),
     }),
-    execute: async ({ path }) => cache.getFileContent(path),
+    execute: async ({ path }) => capFileContent(await cache.getFileContent(path)),
   });
 }
