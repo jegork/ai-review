@@ -17,6 +17,7 @@ import type { ModelConfig, ModelSettings } from "./model.js";
 import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
 import type { OpenGrepFinding } from "../opengrep/types.js";
 import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
+import { ToolCache } from "./tool-cache.js";
 import { logger } from "../logger.js";
 
 const log = logger.child({ module: "review" });
@@ -176,9 +177,10 @@ function buildTools(options?: RunReviewOptions): ToolsInput {
 
   const tools: ToolsInput = {};
   if (options?.provider) {
-    tools.searchCode = createSearchCodeTool(options.provider);
+    const cache = new ToolCache(options.provider, options.sourceRef ?? "HEAD");
+    tools.searchCode = createSearchCodeTool(cache);
     if (options.sourceRef) {
-      tools.getFileContext = createGetFileContextTool(options.provider, options.sourceRef);
+      tools.getFileContext = createGetFileContextTool(cache);
     }
   }
   return tools;
