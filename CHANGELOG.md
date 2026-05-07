@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.11.0](https://github.com/jegork/rusty-bot/compare/v1.10.0...v1.11.0) (2026-05-07)
+
+
+### Features
+
+* **core:** enable adaptive pass planning by default ([#160](https://github.com/jegork/rusty-bot/issues/160)) ([92e71a7](https://github.com/jegork/rusty-bot/commit/92e71a7058706ea0e68ed544111196cfe70b4608))
+* **core:** surface structuring model and zero-token responses in review logs ([#162](https://github.com/jegork/rusty-bot/issues/162)) ([ae9ce42](https://github.com/jegork/rusty-bot/commit/ae9ce4275b13763bae588a24548d88b511bb7ffd))
+
+
+### Performance
+
+* **core:** cache tool calls within a review pass ([#159](https://github.com/jegork/rusty-bot/issues/159)) ([36a4eef](https://github.com/jegork/rusty-bot/commit/36a4eefd2f27f244d8f7c283816989878c016a3b))
+* **core:** cap search-code tool results to 5 hits with 300-char fragments ([#163](https://github.com/jegork/rusty-bot/issues/163)) ([1268deb](https://github.com/jegork/rusty-bot/commit/1268deb97e22b6d7ab4c17b812bdc1a15d0a0567))
+
 ## [1.10.0](https://github.com/jegork/rusty-bot/compare/v1.9.0...v1.10.0) (2026-05-06)
 
 
