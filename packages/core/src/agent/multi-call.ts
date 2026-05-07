@@ -494,9 +494,7 @@ export async function runMultiCallReview(
     }
 
     const judgeConfig = resolveJudgeConfig();
-    const judgeDiff =
-      skippedFiles.length === 0 ? compressed : compressDiff(patches, Infinity).compressed;
-    return await judgeReviewResult(result, judgeDiff, judgeConfig);
+    return await judgeReviewResult(result, patches, judgeConfig);
   } finally {
     if (mcpDisconnect) {
       try {
@@ -598,9 +596,8 @@ export async function runCascadeReview(
     const merged = mergeResults(allResults, allResults[0]?.modelUsed ?? "unknown");
 
     const allPatches = [...skimPatches, ...deepPatches];
-    const judgeDiff = compressDiff(allPatches, Infinity).compressed;
     const judgeConfig = resolveJudgeConfig();
-    return await judgeReviewResult(merged, judgeDiff, judgeConfig);
+    return await judgeReviewResult(merged, allPatches, judgeConfig);
   } finally {
     if (mcpDisconnect) {
       try {
