@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Finding, ReviewResult } from "../types.js";
+import type { FilePatch, Finding, ReviewResult } from "../types.js";
 
 const generateMock = vi.fn();
 
@@ -26,9 +26,32 @@ vi.mock("../agent/model.js", () => ({
   applyModelConstraints: vi.fn((_config, settings) => settings),
 }));
 
-const { judgeFindings, judgeReviewResult, resolveJudgeConfig } = await import("../agent/judge.js");
+const { judgeFindings, judgeReviewResult, resolveJudgeConfig, buildFindingExcerpt } =
+  await import("../agent/judge.js");
 
-const DIFF = `--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1,3 +1,5 @@\n+import { z } from "zod";\n const app = express();\n+app.get("/health", (req, res) => res.json({ ok: true }));\n`;
+const PATCHES: FilePatch[] = [
+  {
+    path: "src/app.ts",
+    hunks: [
+      {
+        oldStart: 1,
+        oldLines: 3,
+        newStart: 1,
+        newLines: 5,
+        content: [
+          '+import { z } from "zod";',
+          " const app = express();",
+          '+app.get("/health", (req, res) => res.json({ ok: true }));',
+          " const port = 3000;",
+          " app.listen(port);",
+        ].join("\n"),
+      },
+    ],
+    additions: 2,
+    deletions: 0,
+    isBinary: false,
+  },
+];
 
 function makeFinding(overrides: Partial<Finding> = {}): Finding {
   return {
@@ -112,7 +135,7 @@ describe("judgeFindings", () => {
 
   it("passes through all findings when judge is disabled", async () => {
     const findings = [makeFinding(), makeFinding({ line: 2 })];
-    const result = await judgeFindings(findings, DIFF, disabledConfig);
+    const result = await judgeFindings(findings, PATCHES, disabledConfig);
 
     expect(result.accepted).toHaveLength(2);
     expect(result.rejected).toHaveLength(0);
@@ -122,7 +145,7 @@ describe("judgeFindings", () => {
   });
 
   it("passes through all findings when list is empty", async () => {
-    const result = await judgeFindings([], DIFF, enabledConfig);
+    const result = await judgeFindings([], PATCHES, enabledConfig);
 
     expect(result.accepted).toHaveLength(0);
     expect(result.rejected).toHaveLength(0);
@@ -140,7 +163,7 @@ describe("judgeFindings", () => {
       usage: { totalTokens: 200 },
     });
 
-    await judgeFindings(findings, DIFF, enabledConfig);
+    await judgeFindings(findings, PATCHES, enabledConfig);
 
     const agentConfig = vi.mocked(Agent).mock.calls.at(-1)?.[0];
     const instructions = agentConfig?.instructions as (() => string) | undefined;
@@ -169,7 +192,7 @@ describe("judgeFindings", () => {
       usage: { totalTokens: 350 },
     });
 
-    const result = await judgeFindings(findings, DIFF, enabledConfig);
+    const result = await judgeFindings(findings, PATCHES, enabledConfig);
 
     expect(result.accepted).toHaveLength(2);
     expect(result.accepted[0].message).toBe("real bug");
@@ -189,7 +212,7 @@ describe("judgeFindings", () => {
       usage: { totalTokens: 200 },
     });
 
-    const result = await judgeFindings(findings, DIFF, enabledConfig);
+    const result = await judgeFindings(findings, PATCHES, enabledConfig);
     expect(result.accepted).toHaveLength(1);
     expect(result.rejected).toHaveLength(0);
   });
@@ -204,7 +227,7 @@ describe("judgeFindings", () => {
       usage: { totalTokens: 200 },
     });
 
-    const result = await judgeFindings(findings, DIFF, enabledConfig);
+    const result = await judgeFindings(findings, PATCHES, enabledConfig);
     expect(result.accepted).toHaveLength(0);
     expect(result.rejected).toHaveLength(1);
   });
@@ -222,7 +245,7 @@ describe("judgeFindings", () => {
       usage: { totalTokens: 250 },
     });
 
-    const result = await judgeFindings(findings, DIFF, enabledConfig);
+    const result = await judgeFindings(findings, PATCHES, enabledConfig);
     expect(result.accepted).toHaveLength(0);
     expect(result.rejected).toHaveLength(2);
   });
@@ -244,7 +267,7 @@ describe("judgeFindings", () => {
       usage: { totalTokens: 150 },
     });
 
-    const result = await judgeFindings(findings, DIFF, enabledConfig);
+    const result = await judgeFindings(findings, PATCHES, enabledConfig);
     // first finding passes, remaining two have no evaluation → kept (safe default)
     expect(result.accepted).toHaveLength(3);
     expect(result.rejected).toHaveLength(0);
@@ -255,7 +278,7 @@ describe("judgeFindings", () => {
 
     generateMock.mockRejectedValueOnce(new Error("API rate limit"));
 
-    const result = await judgeFindings(findings, DIFF, enabledConfig);
+    const result = await judgeFindings(findings, PATCHES, enabledConfig);
     expect(result.accepted).toHaveLength(1);
     expect(result.rejected).toHaveLength(0);
     expect(result.evaluations).toHaveLength(0);
@@ -273,7 +296,7 @@ describe("judgeFindings", () => {
     });
 
     const strictConfig = { enabled: true, threshold: 8 };
-    const result = await judgeFindings(findings, DIFF, strictConfig);
+    const result = await judgeFindings(findings, PATCHES, strictConfig);
     expect(result.accepted).toHaveLength(0);
     expect(result.rejected).toHaveLength(1);
   });
@@ -289,7 +312,7 @@ describe("judgeFindings", () => {
       usage: { totalTokens: 200 },
     });
 
-    await judgeFindings(findings, DIFF, {
+    await judgeFindings(findings, PATCHES, {
       enabled: true,
       threshold: 6,
       model: "anthropic/claude-haiku",
@@ -315,7 +338,7 @@ describe("judgeFindings", () => {
       usage: { totalTokens: 200 },
     });
 
-    await judgeFindings(findings, DIFF, {
+    await judgeFindings(findings, PATCHES, {
       enabled: true,
       threshold: 6,
       model: "azure-openai/gpt-5.4-mini",
@@ -335,7 +358,7 @@ describe("judgeReviewResult", () => {
 
   it("passes through unchanged when judge is disabled", async () => {
     const review = makeReviewResult([makeFinding()]);
-    const result = await judgeReviewResult(review, DIFF, { enabled: false, threshold: 6 });
+    const result = await judgeReviewResult(review, PATCHES, { enabled: false, threshold: 6 });
 
     expect(result.findings).toHaveLength(1);
     expect(result.filteredCount).toBeUndefined();
@@ -359,7 +382,7 @@ describe("judgeReviewResult", () => {
       usage: { totalTokens: 300 },
     });
 
-    const result = await judgeReviewResult(review, DIFF, { enabled: true, threshold: 6 });
+    const result = await judgeReviewResult(review, PATCHES, { enabled: true, threshold: 6 });
     expect(result.findings).toHaveLength(1);
     expect(result.filteredCount).toBe(1);
     expect(result.judgeTokenCount).toBe(300);
@@ -375,7 +398,7 @@ describe("judgeReviewResult", () => {
       usage: { totalTokens: 200 },
     });
 
-    const result = await judgeReviewResult(review, DIFF, { enabled: true, threshold: 6 });
+    const result = await judgeReviewResult(review, PATCHES, { enabled: true, threshold: 6 });
     expect(result.findings).toHaveLength(0);
     expect(result.recommendation).toBe("looks_good");
   });
@@ -397,7 +420,7 @@ describe("judgeReviewResult", () => {
       usage: { totalTokens: 280 },
     });
 
-    const result = await judgeReviewResult(review, DIFF, { enabled: true, threshold: 6 });
+    const result = await judgeReviewResult(review, PATCHES, { enabled: true, threshold: 6 });
     expect(result.recommendation).toBe("address_before_merge");
     expect(result.filteredCount).toBe(1);
   });
@@ -420,7 +443,7 @@ describe("judgeReviewResult", () => {
       },
     };
 
-    const result = await judgeReviewResult(review, DIFF, { enabled: true, threshold: 6 });
+    const result = await judgeReviewResult(review, PATCHES, { enabled: true, threshold: 6 });
     expect(result.findings).toHaveLength(0);
     expect(result.recommendation).toBe("address_before_merge");
   });
@@ -450,7 +473,7 @@ describe("judgeReviewResult", () => {
       usage: { totalTokens: 200 },
     });
 
-    const result = await judgeReviewResult(review, DIFF, { enabled: true, threshold: 6 });
+    const result = await judgeReviewResult(review, PATCHES, { enabled: true, threshold: 6 });
     expect(result.findings).toHaveLength(0);
     expect(result.recommendation).toBe("looks_good");
   });
@@ -473,7 +496,7 @@ describe("judgeReviewResult", () => {
       usage: { totalTokens: 200 },
     });
 
-    const result = await judgeReviewResult(review, DIFF, { enabled: true, threshold: 6 });
+    const result = await judgeReviewResult(review, PATCHES, { enabled: true, threshold: 6 });
     expect(result.observations).toHaveLength(1);
     expect(result.filesReviewed).toEqual(["src/app.ts", "src/b.ts"]);
     expect(result.modelUsed).toBe("claude-sonnet");
@@ -496,7 +519,7 @@ describe("judgeReviewResult", () => {
       usage: { totalTokens: 50 },
     });
 
-    const result = await judgeReviewResult(review, DIFF, { enabled: true, threshold: 6 });
+    const result = await judgeReviewResult(review, PATCHES, { enabled: true, threshold: 6 });
     expect(result.droppedFindings).toEqual(review.droppedFindings);
   });
 });
@@ -514,7 +537,7 @@ describe("judgeFindings jsonPromptInjection forwarding", () => {
       usage: { totalTokens: 25 },
     });
 
-    await judgeFindings([makeFinding()], DIFF, { enabled: true, threshold: 6 });
+    await judgeFindings([makeFinding()], PATCHES, { enabled: true, threshold: 6 });
 
     const callArgs = generateMock.mock.calls[0][1];
     expect(callArgs.structuredOutput.jsonPromptInjection).toBe(true);
@@ -527,9 +550,118 @@ describe("judgeFindings jsonPromptInjection forwarding", () => {
       usage: { totalTokens: 25 },
     });
 
-    await judgeFindings([makeFinding()], DIFF, { enabled: true, threshold: 6 });
+    await judgeFindings([makeFinding()], PATCHES, { enabled: true, threshold: 6 });
 
     const callArgs = generateMock.mock.calls[0][1];
     expect(callArgs.structuredOutput.jsonPromptInjection).toBe(false);
+  });
+});
+
+describe("buildFindingExcerpt", () => {
+  const TWO_HUNK_PATCH: FilePatch = {
+    path: "src/multi.ts",
+    hunks: [
+      {
+        oldStart: 10,
+        oldLines: 3,
+        newStart: 10,
+        newLines: 3,
+        content: ["+near top change", " context line", " more context"].join("\n"),
+      },
+      {
+        oldStart: 50,
+        oldLines: 4,
+        newStart: 52,
+        newLines: 5,
+        content: [" before", "-removed mid", "+replacement", "+inserted", " after"].join("\n"),
+      },
+    ],
+    additions: 3,
+    deletions: 1,
+    isBinary: false,
+  };
+
+  it("emits the file header plus the hunk that contains the finding line", () => {
+    const finding = makeFinding({ file: "src/app.ts", line: 1 });
+    const excerpt = buildFindingExcerpt(PATCHES, finding);
+
+    expect(excerpt.startsWith("## src/app.ts")).toBe(true);
+    expect(excerpt).toContain("__new hunk__");
+    expect(excerpt).toContain('1 +import { z } from "zod";');
+  });
+
+  it("returns the not-found sentinel when the file isn't in the patches", () => {
+    const finding = makeFinding({ file: "src/missing.ts", line: 1 });
+    const excerpt = buildFindingExcerpt(PATCHES, finding);
+
+    expect(excerpt).toContain("[no matching hunk");
+    expect(excerpt).not.toContain("## src/");
+  });
+
+  it("returns the not-found sentinel when the line is outside every hunk", () => {
+    const finding = makeFinding({ file: "src/app.ts", line: 999 });
+    const excerpt = buildFindingExcerpt(PATCHES, finding);
+
+    expect(excerpt).toContain("[no matching hunk");
+  });
+
+  it("picks the second hunk when the finding lands inside it", () => {
+    const finding = makeFinding({ file: "src/multi.ts", line: 53 });
+    const excerpt = buildFindingExcerpt([TWO_HUNK_PATCH], finding);
+
+    expect(excerpt).toContain("## src/multi.ts");
+    expect(excerpt).toContain("53 +replacement");
+    expect(excerpt).not.toContain("near top change");
+  });
+
+  it("includes both hunks when the finding range spans them", () => {
+    const finding = makeFinding({ file: "src/multi.ts", line: 11, endLine: 53 });
+    const excerpt = buildFindingExcerpt([TWO_HUNK_PATCH], finding);
+
+    expect(excerpt).toContain("near top change");
+    expect(excerpt).toContain("53 +replacement");
+  });
+
+  it("renders both old and new hunks for diffs with removals", () => {
+    const finding = makeFinding({ file: "src/multi.ts", line: 53 });
+    const excerpt = buildFindingExcerpt([TWO_HUNK_PATCH], finding);
+
+    expect(excerpt).toContain("__old hunk__");
+    expect(excerpt).toContain("__new hunk__");
+    expect(excerpt).toContain("-removed mid");
+  });
+});
+
+describe("judge formatter", () => {
+  it("inlines a per-finding excerpt and does not dump the full repo diff", async () => {
+    generateMock.mockReset();
+    generateMock.mockResolvedValueOnce({
+      object: { evaluations: [{ index: 0, confidence: 9, reasoning: "ok" }] },
+      usage: { totalTokens: 30 },
+    });
+
+    const finding = makeFinding({ file: "src/app.ts", line: 1 });
+    await judgeFindings([finding], PATCHES, { enabled: true, threshold: 6 });
+
+    const userMessage = generateMock.mock.calls[0][0] as string;
+    expect(userMessage).toContain("## Findings to evaluate");
+    expect(userMessage).toContain("### Finding 0");
+    expect(userMessage).toContain("- **Diff context:**");
+    expect(userMessage).toContain("## src/app.ts");
+    expect(userMessage).not.toContain("## Diff under review");
+  });
+
+  it("uses the not-found sentinel for findings whose file isn't in the patches", async () => {
+    generateMock.mockReset();
+    generateMock.mockResolvedValueOnce({
+      object: { evaluations: [{ index: 0, confidence: 4, reasoning: "no evidence" }] },
+      usage: { totalTokens: 30 },
+    });
+
+    const finding = makeFinding({ file: "ghost.ts", line: 12 });
+    await judgeFindings([finding], PATCHES, { enabled: true, threshold: 6 });
+
+    const userMessage = generateMock.mock.calls[0][0] as string;
+    expect(userMessage).toContain("[no matching hunk");
   });
 });

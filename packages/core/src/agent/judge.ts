@@ -10,8 +10,67 @@ import {
   resolveJsonPromptInjection,
   applyModelConstraints,
 } from "./model.js";
-import type { Finding, ReviewResult } from "../types.js";
+import type { FilePatch, Finding, Hunk, ReviewResult } from "../types.js";
 import { logger } from "../logger.js";
+
+const EXCERPT_NO_HUNK =
+  "[no matching hunk for this finding — line is outside the diff or the file isn't in the PR]";
+
+function findOverlappingHunks(hunks: Hunk[], line: number, endLine: number): Hunk[] {
+  return hunks.filter((h) => {
+    const hStart = h.newStart;
+    const hEnd = h.newStart + h.newLines - 1;
+    return hStart <= endLine && hEnd >= line;
+  });
+}
+
+function formatHunkExcerpt(hunk: Hunk): string[] {
+  const lines = hunk.content.split("\n");
+  const oldLines: string[] = [];
+  const newLines: string[] = [];
+  let oldLine = hunk.oldStart;
+  let newLine = hunk.newStart;
+  for (const line of lines) {
+    if (line.startsWith("-")) {
+      oldLines.push(`${oldLine} ${line}`);
+      oldLine++;
+    } else if (line.startsWith("+")) {
+      newLines.push(`${newLine} ${line}`);
+      newLine++;
+    } else if (line.startsWith("\\")) {
+      continue;
+    } else if (line.startsWith("~")) {
+      oldLines.push(line);
+      newLines.push(line);
+    } else {
+      oldLines.push(`${oldLine} ${line}`);
+      newLines.push(`${newLine} ${line}`);
+      oldLine++;
+      newLine++;
+    }
+  }
+  const parts: string[] = [];
+  if (oldLines.length > 0) {
+    parts.push("__old hunk__");
+    parts.push(...oldLines);
+  }
+  if (newLines.length > 0) {
+    parts.push("__new hunk__");
+    parts.push(...newLines);
+  }
+  return parts;
+}
+
+export function buildFindingExcerpt(patches: readonly FilePatch[], finding: Finding): string {
+  const patch = patches.find((p) => p.path === finding.file);
+  if (!patch) return EXCERPT_NO_HUNK;
+  const endLine = finding.endLine ?? finding.line;
+  const hunks = findOverlappingHunks(patch.hunks, finding.line, endLine);
+  if (hunks.length === 0) return EXCERPT_NO_HUNK;
+  const parts: string[] = [`## ${patch.path}`];
+  for (const h of hunks) parts.push(...formatHunkExcerpt(h));
+  return parts.join("\n");
+}
 
 const log = logger.child({ module: "judge" });
 
@@ -73,12 +132,11 @@ Reject or heavily penalize findings that are:
 
 You MUST return exactly one evaluation per finding, in the same order they were provided.`;
 
-function formatFindingsForJudge(findings: readonly Finding[], diff: string): string {
-  const parts: string[] = [];
-
-  parts.push("## Diff under review\n");
-  parts.push(diff);
-  parts.push("\n## Findings to evaluate\n");
+function formatFindingsForJudge(
+  findings: readonly Finding[],
+  patches: readonly FilePatch[],
+): string {
+  const parts: string[] = ["## Findings to evaluate\n"];
 
   for (let i = 0; i < findings.length; i++) {
     const f = findings[i];
@@ -92,6 +150,7 @@ function formatFindingsForJudge(findings: readonly Finding[], diff: string): str
     if (f.suggestedFix) {
       parts.push(`- **Suggested fix:**\n\`\`\`\n${f.suggestedFix}\n\`\`\``);
     }
+    parts.push(`- **Diff context:**\n\`\`\`\n${buildFindingExcerpt(patches, f)}\n\`\`\``);
     parts.push("");
   }
 
@@ -133,7 +192,7 @@ export interface JudgeResult {
 
 export async function judgeFindings(
   findings: readonly Finding[],
-  diff: string,
+  patches: readonly FilePatch[],
   config: JudgeConfig,
 ): Promise<JudgeResult> {
   if (!config.enabled || findings.length === 0) {
@@ -156,7 +215,7 @@ export async function judgeFindings(
     ...(defaultOptions && { defaultOptions }),
   });
 
-  const userMessage = formatFindingsForJudge(findings, diff);
+  const userMessage = formatFindingsForJudge(findings, patches);
 
   let evaluations: JudgeEvaluation[];
   let tokenCount = 0;
@@ -221,14 +280,14 @@ export async function judgeFindings(
 
 export async function judgeReviewResult(
   result: ReviewResult,
-  diff: string,
+  patches: readonly FilePatch[],
   config: JudgeConfig,
 ): Promise<ReviewResult> {
   if (!config.enabled) {
     return result;
   }
 
-  const { accepted, rejected, tokenCount } = await judgeFindings(result.findings, diff, config);
+  const { accepted, rejected, tokenCount } = await judgeFindings(result.findings, patches, config);
 
   // when consensus elevated the recommendation based on pass votes (not findings),
   // and there are no findings for the judge to evaluate, preserve it
