@@ -1,7 +1,14 @@
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ReviewConfig, PRMetadata, TicketInfo, FocusArea, ReviewStyle } from "../types.js";
+import type {
+  ReviewConfig,
+  PRMetadata,
+  TicketInfo,
+  FocusArea,
+  ReviewStyle,
+  PriorReviewContext,
+} from "../types.js";
 import type { OpenGrepFinding } from "../opengrep/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -100,6 +107,7 @@ export function buildUserMessage(
   openGrepFindings?: OpenGrepFinding[],
   chunkFiles?: string[],
   rankedContext?: string,
+  priorContext?: PriorReviewContext,
 ): string {
   const parts: string[] = [];
 
@@ -175,8 +183,39 @@ export function buildUserMessage(
     parts.push(rankedContext);
   }
 
+  if (priorContext) {
+    parts.push("");
+    parts.push(buildPriorContextSection(priorContext));
+  }
+
   parts.push("\n## Diff\n");
   parts.push(diff);
 
+  return parts.join("\n");
+}
+
+function buildPriorContextSection(ctx: PriorReviewContext): string {
+  const parts: string[] = [];
+  parts.push("## Prior review context");
+  parts.push(
+    "This PR was reviewed previously; the **Diff** section below contains only the changes pushed since that review. " +
+      "Use the prior summary as established context for the rest of the PR — your published `summary` " +
+      "must describe the WHOLE PR, not just the new diff.",
+  );
+
+  parts.push("\n**Previously published summary:**");
+  parts.push(ctx.summary.trim());
+
+  parts.push(`\n**Previous recommendation:** ${ctx.recommendation}`);
+
+  if (ctx.findings.length > 0) {
+    parts.push(
+      "\n**Issues already surfaced** (do NOT re-raise unless this commit changes the underlying code; " +
+        "if a new commit fixes one of these, mention it in your summary):",
+    );
+    for (const f of ctx.findings) {
+      parts.push(`- \`${f.file}\`:${f.line} (${f.severity}) — ${f.message}`);
+    }
+  }
   return parts.join("\n");
 }

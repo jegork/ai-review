@@ -5,8 +5,13 @@ import type {
   Finding,
   CodeSearchResult,
   PostSummaryCommentOptions,
+  PriorReviewContext,
 } from "@rusty-bot/core";
-import { formatInlineComment } from "@rusty-bot/core";
+import {
+  encodePriorReviewContext,
+  extractPriorReviewContext,
+  formatInlineComment,
+} from "@rusty-bot/core";
 import { structuredPatch } from "diff";
 import type { StructuredPatchHunk } from "diff";
 import type { z } from "zod";
@@ -212,6 +217,25 @@ export class AzureDevOpsProvider implements GitProvider {
       for (const comment of thread.comments) {
         const match = comment.content ? LAST_ITERATION_MARKER_RE.exec(comment.content) : null;
         if (match) return match[1];
+      }
+    }
+    return null;
+  }
+
+  async getPriorReviewContext(): Promise<PriorReviewContext | null> {
+    const threads = await this.request(
+      `${this.baseUrl}/pullRequests/${this.pullRequestId}/threads?${API_VERSION}`,
+      AdoThreadsSchema,
+    );
+
+    for (let i = threads.value.length - 1; i >= 0; i--) {
+      const thread = threads.value[i];
+      const hasBotComment = thread.comments.some((c) => c.content?.includes(BOT_MARKER));
+      if (!hasBotComment) continue;
+      for (const comment of thread.comments) {
+        if (!comment.content) continue;
+        const ctx = extractPriorReviewContext(comment.content);
+        if (ctx) return ctx;
       }
     }
     return null;
@@ -441,6 +465,9 @@ export class AzureDevOpsProvider implements GitProvider {
     }
     if (options?.lastReviewedIteration) {
       headerLines.push(buildLastIterationMarker(options.lastReviewedIteration));
+    }
+    if (options?.priorContext) {
+      headerLines.push(encodePriorReviewContext(options.priorContext));
     }
     const header = headerLines.join("\n");
     await this.fetchApi(

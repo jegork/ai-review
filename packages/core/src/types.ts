@@ -114,6 +114,27 @@ export interface PostSummaryCommentOptions {
   lastReviewedSha?: string;
   /** ADO equivalent of lastReviewedSha — iteration id of the just-completed review */
   lastReviewedIteration?: string;
+  /** when set, providers embed an encoded marker the next incremental run can read back as PR-wide context */
+  priorContext?: PriorReviewContext;
+}
+
+export interface PriorReviewContextFinding {
+  file: string;
+  line: number;
+  severity: Severity;
+  message: string;
+}
+
+/**
+ * carry-forward state from a previous review pass. on incremental re-review the next
+ * pass only sees the diff since the last review, so we hand it the prior summary +
+ * already-surfaced findings so it can keep PR-wide situational awareness without
+ * re-reading the full PR diff.
+ */
+export interface PriorReviewContext {
+  summary: string;
+  recommendation: Recommendation;
+  findings: PriorReviewContextFinding[];
 }
 
 export interface Hunk {
@@ -184,6 +205,8 @@ export interface GitProvider {
   getLastReviewedSha?(): Promise<string | null>;
   /** fetch only the diff between an earlier sha and the current head; null if unreachable */
   getDiffSinceSha?(sinceSha: string, headSha: string): Promise<FilePatch[] | null>;
+  /** read PR-wide context (summary + findings) embedded in a previously-posted summary comment, if any */
+  getPriorReviewContext?(): Promise<PriorReviewContext | null>;
 }
 
 export interface TicketProvider {

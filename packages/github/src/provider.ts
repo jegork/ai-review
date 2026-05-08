@@ -7,8 +7,14 @@ import type {
   Hunk,
   CodeSearchResult,
   PostSummaryCommentOptions,
+  PriorReviewContext,
 } from "@rusty-bot/core";
-import { formatInlineComment, logger } from "@rusty-bot/core";
+import {
+  encodePriorReviewContext,
+  extractPriorReviewContext,
+  formatInlineComment,
+  logger,
+} from "@rusty-bot/core";
 
 const BOT_MARKER = "<!-- rusty-bot-review -->";
 const LAST_SHA_MARKER_RE = /<!--\s*rusty-bot:last-sha:([0-9a-f]{40})\s*-->/i;
@@ -178,6 +184,26 @@ export class GitHubProvider implements GitProvider {
     return null;
   }
 
+  async getPriorReviewContext(): Promise<PriorReviewContext | null> {
+    const { data: comments } = await this.octokit.request(
+      "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+      {
+        owner: this.owner,
+        repo: this.repo,
+        issue_number: this.pullNumber,
+      },
+    );
+
+    // walk newest-first; only return the most recent prior context
+    for (let i = comments.length - 1; i >= 0; i--) {
+      const body = comments[i].body;
+      if (!body?.includes(BOT_MARKER)) continue;
+      const ctx = extractPriorReviewContext(body);
+      if (ctx) return ctx;
+    }
+    return null;
+  }
+
   async getPRMetadata(): Promise<PRMetadata> {
     const { data } = await this.octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
       owner: this.owner,
@@ -232,14 +258,18 @@ export class GitHubProvider implements GitProvider {
   }
 
   async postSummaryComment(markdown: string, options?: PostSummaryCommentOptions): Promise<void> {
-    const header = options?.lastReviewedSha
-      ? `${BOT_MARKER}\n${buildLastShaMarker(options.lastReviewedSha)}`
-      : BOT_MARKER;
+    const headerParts: string[] = [BOT_MARKER];
+    if (options?.lastReviewedSha) {
+      headerParts.push(buildLastShaMarker(options.lastReviewedSha));
+    }
+    if (options?.priorContext) {
+      headerParts.push(encodePriorReviewContext(options.priorContext));
+    }
     await this.octokit.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
       owner: this.owner,
       repo: this.repo,
       issue_number: this.pullNumber,
-      body: `${header}\n${markdown}`,
+      body: `${headerParts.join("\n")}\n${markdown}`,
     });
   }
 
