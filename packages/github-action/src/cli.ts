@@ -37,6 +37,7 @@ import {
   parseDiff,
   filterAnchorableFindings,
   buildPriorContextFromReview,
+  configureGlobalHttp,
 } from "@rusty-bot/core";
 import { GitHubProvider, createOctokitIssueFetcher } from "@rusty-bot/github";
 import {
@@ -498,6 +499,8 @@ export async function runAction(config: ActionConfig): Promise<number> {
 }
 
 async function main(): Promise<number> {
+  configureGlobalHttp();
+
   const eventPath = process.env.GITHUB_EVENT_PATH;
   if (!eventPath) {
     throw new Error("GITHUB_EVENT_PATH is not set — this CLI must run inside a GitHub Action");

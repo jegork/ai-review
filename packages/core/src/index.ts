@@ -35,6 +35,7 @@ export type {
 
 export { getMastra, getStorage } from "./mastra.js";
 export { logger, flushLogger } from "./logger.js";
+export { configureGlobalHttp } from "./http-config.js";
 export * from "./formatter/index.js";
 export * from "./tickets/index.js";
 export * from "./diff/index.js";
