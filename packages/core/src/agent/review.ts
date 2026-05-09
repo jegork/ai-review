@@ -44,10 +44,35 @@ function isStructuredOutputValidationError(err: unknown): boolean {
 // with isRetryable=true. Mastra's internal pRetry handles per-request retries; this
 // catches the case where its retries exhausted within a single tight timeout window
 // and gives the caller a fresh request budget.
+/** retryable HTTP statuses for upstream LLM calls — 408 (timeout), 425 (early
+ * data), 429 (rate limit), and the 5xx server-side band. matches the ai-sdk's
+ * APICallError convention so other providers downstream of mastra get the
+ * same treatment. */
+function isRetryableStatus(status: unknown): boolean {
+  if (typeof status !== "number") return false;
+  if (status === 408 || status === 425 || status === 429) return true;
+  return status >= 500 && status < 600;
+}
+
+/** ai-sdk-ollama's OllamaError doesn't set ai-sdk's `isRetryable` marker, so
+ * an upstream 503 from Ollama Cloud (e.g. "Server overloaded") falls through
+ * pRetry's filter today. duck-type the error and look for ollama-js's
+ * `status_code` (snake_case) on either the error itself or its `cause`. */
+function isOllamaRetryableError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const e = err as { name?: unknown; status_code?: unknown; cause?: unknown };
+  if (e.name !== "OllamaError" && e.name !== "ResponseError") return false;
+  if (isRetryableStatus(e.status_code)) return true;
+  const cause = e.cause as { status_code?: unknown } | undefined;
+  return isRetryableStatus(cause?.status_code);
+}
+
 function isTransientRetryableError(err: unknown): boolean {
-  return (
-    typeof err === "object" && err !== null && "isRetryable" in err && err.isRetryable === true
-  );
+  if (typeof err !== "object" || err === null) return false;
+  if ("isRetryable" in err && (err as { isRetryable?: unknown }).isRetryable === true) {
+    return true;
+  }
+  return isOllamaRetryableError(err);
 }
 
 const TRANSIENT_RETRY_BACKOFF_MS = [500, 2_000];
