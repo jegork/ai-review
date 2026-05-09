@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/jegork/rusty-bot/compare/v1.12.1...v1.13.0) (2026-05-09)
+
+
+### Features
+
+* native Ollama (local + Ollama Cloud) provider, mixable in consensus ([#172](https://github.com/jegork/rusty-bot/issues/172)) ([427a058](https://github.com/jegork/rusty-bot/commit/427a058c7cea8a1fdd47fd1770a805405d0422c0))
+
 ## [1.12.1](https://github.com/jegork/rusty-bot/compare/v1.12.0...v1.12.1) (2026-05-09)
 
 
