@@ -271,6 +271,8 @@ The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, th
 | `RUSTY_FAIL_ON_CRITICAL` | exit 1 on critical findings (pipeline/action mode) | `true` |
 | `RUSTY_REVIEW_DRAFTS` | review draft PRs in GitHub Action mode | `false` |
 | `RUSTY_INCREMENTAL_REVIEW` | review only the diff since the last reviewed commit (GitHub, GitLab) or PR iteration (Azure DevOps); previous summary + findings are carried forward as context | `true` |
+| `RUSTY_LLM_HEADERS_TIMEOUT_MS` | undici headers timeout for outbound `fetch` (LLM router + provider APIs) — raised above the 300s default to accommodate slow upstream models on large prompts | `600000` |
+| `RUSTY_LLM_BODY_TIMEOUT_MS` | undici body timeout for outbound `fetch`; resets per chunk so generations longer than this still complete as long as chunks keep arriving | `600000` |
 | `RUSTY_JIRA_BASE_URL` | Jira instance URL | — |
 | `RUSTY_JIRA_EMAIL` | Jira auth email | — |
 | `RUSTY_JIRA_API_TOKEN` | Jira API token | — |
@@ -534,6 +536,19 @@ When a PR gets new commits after a previous review, the bot only fetches the dif
 - Carry-forward state is provider-side: it survives bot-comment cleanup because the markers are read **before** old comments are deleted on each run.
 - If a force-push or rebase makes the prior SHA unreachable, the bot transparently falls back to a full review — there is no fragile state.
 - Disable with `RUSTY_INCREMENTAL_REVIEW=false`; the bot then re-reviews the full PR every time and posts no carry-forward markers.
+
+### LLM Request Timeouts
+
+Node's underlying HTTP client (undici) defaults to a **300-second headers timeout**. On large PRs reviewed with slower upstream routes — particularly Requesty proxying to Fireworks/Kimi or other long-tail providers — the response headers may not arrive within that window even though the model is making forward progress. The default would surface as a `HeadersTimeoutError` (`UND_ERR_HEADERS_TIMEOUT`) on the affected pass.
+
+Each CLI entry point calls `configureGlobalHttp()` at startup, which installs an undici dispatcher with a longer headers + body timeout. Defaults:
+
+- `RUSTY_LLM_HEADERS_TIMEOUT_MS=600000` (10 min)
+- `RUSTY_LLM_BODY_TIMEOUT_MS=600000` (resets per response chunk)
+
+These apply to **all** outbound `fetch` calls (LLM routes + GitHub/GitLab/ADO APIs). Raising the timeout never harms a fast request — it only delays the failure mode for slow ones.
+
+If you keep seeing headers-timeout failures on a specific consensus pass, bump `RUSTY_LLM_HEADERS_TIMEOUT_MS` to `900000` or `1200000`. If the failure persists past 15 minutes, the upstream model is genuinely stuck (not slow) — the right fix is to drop that model from `RUSTY_REVIEW_MODELS` rather than extend the timeout further.
 
 ### OpenGrep Pre-scan
 

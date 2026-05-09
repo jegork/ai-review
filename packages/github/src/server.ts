@@ -5,7 +5,7 @@ import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile, stat } from "node:fs/promises";
 import type { FocusArea } from "@rusty-bot/core";
-import { ReviewStyleSchema, logger } from "@rusty-bot/core";
+import { ReviewStyleSchema, configureGlobalHttp, logger } from "@rusty-bot/core";
 import { validateWebhookSignature, parseWebhookEvent } from "./webhook.js";
 import { createAppOctokit } from "./auth.js";
 import { orchestrateReview } from "./orchestrator.js";
@@ -218,6 +218,7 @@ if (dashboardEnabled) {
 }
 
 if (process.env.NODE_ENV !== "test") {
+  configureGlobalHttp();
   const port = Number(process.env.PORT ?? 3000);
   serve({ fetch: app.fetch, port });
   log.info({ port }, "server listening");

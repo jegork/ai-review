@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {
+  configureGlobalHttp,
   expandContext,
   fetchConventionFile,
   filterAnchorableFindings,
@@ -169,6 +170,8 @@ export async function run(args: CliArgs): Promise<number> {
 }
 
 async function main(): Promise<number> {
+  configureGlobalHttp();
+
   let args: CliArgs;
   try {
     args = parseArgs(process.argv.slice(2), process.env);

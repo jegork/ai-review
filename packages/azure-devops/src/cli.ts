@@ -32,6 +32,7 @@ import {
   isConventionalTitle,
   filterAnchorableFindings,
   buildPriorContextFromReview,
+  configureGlobalHttp,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
@@ -94,6 +95,8 @@ export function parseConfig(): {
 }
 
 async function main(): Promise<void> {
+  configureGlobalHttp();
+
   const { provider, config, failOnCritical, incrementalReview, env } = parseConfig();
 
   const metadata = await provider.getPRMetadata();

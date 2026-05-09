@@ -35,6 +35,7 @@ import {
   isConventionalTitle,
   filterAnchorableFindings,
   buildPriorContextFromReview,
+  configureGlobalHttp,
 } from "@rusty-bot/core";
 import { GitLabProvider } from "./provider.js";
 
@@ -499,6 +500,8 @@ export async function runReview(config: GitLabCliConfig): Promise<number> {
 }
 
 async function main(): Promise<number> {
+  configureGlobalHttp();
+
   // GitLab CI runs this CLI on every pipeline; only proceed when triggered by an MR event.
   const eventType = process.env.CI_PIPELINE_SOURCE;
   if (eventType && eventType !== "merge_request_event" && !process.env.CI_MERGE_REQUEST_IID) {
