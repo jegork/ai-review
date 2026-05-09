@@ -40,12 +40,13 @@ jobs:
 
           RUSTY_LLM_MODEL: requesty/google/gemini-3.1-flash-lite-preview
           RUSTY_REVIEW_TEMPERATURE: "1"
-          # cross-provider consensus: deepseek + kimi via ollama cloud,
-          # grok via requesty. transient Ollama Cloud 5xx/429s are now
-          # retried by isTransientRetryableError (see review.ts) so we
-          # don't have to defensively reorder around them.
+          # cross-provider consensus. deepseek-v4-pro routed through
+          # Requesty because Ollama Cloud's deepseek-v4-pro:cloud has been
+          # observed sustaining 503 "Server overloaded" through all retries
+          # (3 attempts, 3 distinct upstream refs — not a transient blip).
+          # kimi stays on ollama cloud where it serves reliably.
           RUSTY_REVIEW_MODELS: >-
-            ollama/deepseek-v4-pro:cloud,
+            requesty/deepseek/deepseek-v4-pro,
             requesty/xai/grok-4.3,
             ollama/kimi-k2.6:cloud
           RUSTY_REVIEW_TEMPERATURES: "0.3,0.3,1"
@@ -57,7 +58,7 @@ jobs:
           # the structured-output JSON. see #152.
           RUSTY_LLM_MAX_STEPS: "10"
           RUSTY_JUDGE_ENABLED: "true"
-          RUSTY_JUDGE_MODEL: ollama/deepseek-v4-pro:cloud
+          RUSTY_JUDGE_MODEL: requesty/deepseek/deepseek-v4-pro
           RUSTY_JUDGE_TEMPERATURE: "0.1"
           RUSTY_LLM_TRIAGE_MODEL: requesty/google/gemini-3.1-flash-lite-preview
           RUSTY_TRIAGE_TEMPERATURE: "0"
