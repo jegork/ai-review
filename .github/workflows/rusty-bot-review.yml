@@ -68,3 +68,12 @@ jobs:
           RUSTY_GRAPH_CONTEXT: "true"
           RUSTY_GRAPH_CONTEXT_TOKEN_BUDGET: "2000"
           RUSTY_GRAPH_CONTEXT_MAX_CANDIDATES: "8"
+          # collect cross-model overlap data on every self-review. each
+          # consensus pass logs its raw findings (file/line/severity/
+          # message) before clustering, so we can measure agreementRate
+          # empirically and tune cluster.ts thresholds. needs LOG_LEVEL=debug
+          # because the per-pass payload is bigger than info-level deserves.
+          # see CONSENSUS-QUALITY-WRITEUP.md for the experiments this
+          # unblocks.
+          RUSTY_LOG_RAW_FINDINGS: "true"
+          LOG_LEVEL: debug
