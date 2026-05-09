@@ -40,18 +40,15 @@ jobs:
 
           RUSTY_LLM_MODEL: requesty/google/gemini-3.1-flash-lite-preview
           RUSTY_REVIEW_TEMPERATURE: "1"
-          # cross-provider consensus. ordering matters: planConsensusPasses
-          # picks the FIRST n models for n-pass consensus (n=2 for ordinary
-          # chunks, n=3 for security/large chunks). put requesty's grok in
-          # slot 1 because Ollama Cloud has been observed returning transient
-          # 503 "Server overloaded" — keeping the first slot on a more
-          # reliable provider means a single Ollama hiccup doesn't fail the
-          # whole 2-of-2 ordinary review.
+          # cross-provider consensus: deepseek + kimi via ollama cloud,
+          # grok via requesty. transient Ollama Cloud 5xx/429s are now
+          # retried by isTransientRetryableError (see review.ts) so we
+          # don't have to defensively reorder around them.
           RUSTY_REVIEW_MODELS: >-
+            ollama/deepseek-v4-pro:cloud,
             requesty/xai/grok-4.3,
-            ollama/kimi-k2.6:cloud,
-            ollama/deepseek-v4-pro:cloud
-          RUSTY_REVIEW_TEMPERATURES: "0.3,1,0.3"
+            ollama/kimi-k2.6:cloud
+          RUSTY_REVIEW_TEMPERATURES: "0.3,0.3,1"
           RUSTY_REVIEW_ADAPTIVE_PASSES: "true"
           RUSTY_LLM_STRUCTURING_MODEL: requesty/google/gemini-3.1-flash-lite-preview
           # cap tool-using trajectories so tool-happy models (Kimi/Anthropic)
