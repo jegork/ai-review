@@ -181,6 +181,33 @@ export async function runConsensusReview(
   const observationsByPass = results.map((r) => r.observations);
   const passRecommendations = results.map((r) => r.recommendation);
 
+  // gated by RUSTY_LOG_RAW_FINDINGS=true. emits per-pass finding lists
+  // BEFORE clustering so we can tell whether models are actually
+  // producing different findings (clustering's job is hard) vs. all
+  // saying the same thing (clustering's job is easy). prerequisite for
+  // tuning the consensus threshold / Jaccard similarity / line proximity
+  // window — see CONSENSUS-QUALITY-WRITEUP.md. defaults to no-op.
+  if (process.env.RUSTY_LOG_RAW_FINDINGS === "true") {
+    for (let i = 0; i < results.length; i++) {
+      logger.debug(
+        {
+          prId: prMetadata.id,
+          passIndex: i,
+          model: passModelConfigs[i].displayName,
+          findingCount: results[i].findings.length,
+          findings: results[i].findings.map((f) => ({
+            file: f.file,
+            line: f.line,
+            severity: f.severity,
+            category: f.category,
+            message: f.message,
+          })),
+        },
+        "raw consensus pass findings before clustering",
+      );
+    }
+  }
+
   const findingClusters = clusterFindings(findingsByPass);
   const observationClusters = clusterObservations(observationsByPass);
 

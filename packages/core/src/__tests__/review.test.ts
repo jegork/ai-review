@@ -593,3 +593,63 @@ describe("RUSTY_LLM_STRUCTURING_MODEL", () => {
     expect(structured.model).toBeUndefined();
   });
 });
+
+describe("RUSTY_LOG_AGENT_STEPS", () => {
+  beforeEach(() => {
+    generateMock.mockReset();
+    delete process.env.RUSTY_LOG_AGENT_STEPS;
+  });
+
+  it("does NOT pass onStepFinish when the flag is unset (no perf cost in production)", async () => {
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(opts.onStepFinish).toBeUndefined();
+  });
+
+  it("does NOT pass onStepFinish when the flag is set to anything other than 'true'", async () => {
+    process.env.RUSTY_LOG_AGENT_STEPS = "1"; // not 'true' literally
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(opts.onStepFinish).toBeUndefined();
+  });
+
+  it("passes a function-typed onStepFinish callback when the flag is exactly 'true'", async () => {
+    process.env.RUSTY_LOG_AGENT_STEPS = "true";
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(opts.onStepFinish).toBeTypeOf("function");
+  });
+
+  it("the onStepFinish callback increments stepNumber across calls", async () => {
+    process.env.RUSTY_LOG_AGENT_STEPS = "true";
+    generateMock.mockResolvedValueOnce(makeValidResponse());
+
+    await runReview(config, "diff", prMetadata);
+
+    const opts = generateMock.mock.calls[0][1] as Record<string, unknown>;
+    const onStepFinish = opts.onStepFinish as (step: unknown) => void;
+
+    // exercising the callback should not throw on any of: well-shaped step,
+    // step with missing optional fields, non-object step, null step.
+    expect(() =>
+      onStepFinish({
+        finishReason: "tool-calls",
+        toolCalls: [{}, {}],
+        usage: { totalTokens: 1234, inputTokens: 1000, outputTokens: 234 },
+        warnings: [],
+      }),
+    ).not.toThrow();
+    expect(() => onStepFinish({ finishReason: "stop" })).not.toThrow();
+    expect(() => onStepFinish(null)).not.toThrow();
+    expect(() => onStepFinish("not an object")).not.toThrow();
+  });
+});

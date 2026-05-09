@@ -275,6 +275,8 @@ The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, th
 | `RUSTY_LLM_BODY_TIMEOUT_MS` | undici body timeout for outbound `fetch`; resets per chunk so generations longer than this still complete as long as chunks keep arriving | `600000` |
 | `RUSTY_OLLAMA_BASE_URL` | base URL for the `ollama/*` provider — set to `https://ollama.com` for [Ollama Cloud](https://ollama.com), or a remote host for self-hosted Ollama | `http://127.0.0.1:11434` |
 | `RUSTY_OLLAMA_API_KEY` | bearer token for the `ollama/*` provider (required for Ollama Cloud, ignored for unauthenticated local instances); falls back to `OLLAMA_API_KEY` | — |
+| `RUSTY_LOG_AGENT_STEPS` | when `true`, log a line per agent step (`stepNumber`, `finishReason`, `toolCallCount`, token usage); diagnostic for slow / tool-looping passes | `false` |
+| `RUSTY_LOG_RAW_FINDINGS` | when `true`, log each consensus pass's findings before clustering (file/line/severity/category/message); diagnostic for tuning Jaccard / line-proximity thresholds | `false` |
 | `RUSTY_JIRA_BASE_URL` | Jira instance URL | — |
 | `RUSTY_JIRA_EMAIL` | Jira auth email | — |
 | `RUSTY_JIRA_API_TOKEN` | Jira API token | — |
@@ -572,6 +574,32 @@ Each CLI entry point calls `configureGlobalHttp()` at startup, which installs an
 These apply to **all** outbound `fetch` calls (LLM routes + GitHub/GitLab/ADO APIs). Raising the timeout never harms a fast request — it only delays the failure mode for slow ones.
 
 If you keep seeing headers-timeout failures on a specific consensus pass, bump `RUSTY_LLM_HEADERS_TIMEOUT_MS` to `900000` or `1200000`. If the failure persists past 15 minutes, the upstream model is genuinely stuck (not slow) — the right fix is to drop that model from `RUSTY_REVIEW_MODELS` rather than extend the timeout further.
+
+### Diagnostic Logging
+
+Two opt-in flags surface internal state for debugging slow consensus runs and tuning ensemble behavior. Both default off so production cost is zero.
+
+**`RUSTY_LOG_AGENT_STEPS=true`** — one log line per agent step inside every `runReview` call:
+
+```jsonc
+{ "stepNumber": 0, "finishReason": "tool-calls", "toolCallCount": 3, "totalTokens": 12450, ... }
+{ "stepNumber": 1, "finishReason": "tool-calls", "toolCallCount": 1, "totalTokens": 8200, ... }
+{ "stepNumber": 2, "finishReason": "stop", "toolCallCount": 0, "totalTokens": 6100, ... }
+```
+
+Useful when a pass takes minutes and you can't tell whether the model is making forward progress (decreasing tool calls, reasonable token counts per step) or spinning in a tool-call loop (constant or growing tool calls, no `"stop"` ever). Particularly diagnostic for the `finishReason: "tool-calls"` failure mode where a tool-happy model burns its step budget without emitting a final answer — the per-step trace tells you whether `RUSTY_LLM_MAX_STEPS` saved the day or got hit.
+
+**`RUSTY_LOG_RAW_FINDINGS=true`** — emits each consensus pass's findings list **before clustering**, at debug level:
+
+```jsonc
+{ "passIndex": 0, "model": "ollama/deepseek-v4-pro:cloud", "findingCount": 4, "findings": [ ... ], ... }
+{ "passIndex": 1, "model": "requesty/xai/grok-4.3", "findingCount": 6, "findings": [ ... ], ... }
+{ "passIndex": 2, "model": "ollama/kimi-k2.6:cloud", "findingCount": 3, "findings": [ ... ], ... }
+```
+
+Lets you tell whether the models are actually disagreeing (different findings → clustering's job is hard, threshold may be too strict) vs. saying the same thing in different words (overlap exists but Jaccard threshold may be missing it). Prerequisite for tuning `cluster.ts` — see `CONSENSUS-QUALITY-WRITEUP.md` for proposed experiments.
+
+The pino logger has to be at `debug` level for this one — set `LOG_LEVEL=debug` alongside the flag if you're not seeing the output.
 
 ### OpenGrep Pre-scan
 
