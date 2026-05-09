@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.12.1](https://github.com/jegork/rusty-bot/compare/v1.12.0...v1.12.1) (2026-05-09)
+
+
+### Bug Fixes
+
+* **core:** raise undici headers/body timeouts to 10 min for slow LLM routes ([#171](https://github.com/jegork/rusty-bot/issues/171)) ([5615eae](https://github.com/jegork/rusty-bot/commit/5615eae3d17784e96d916b726536c53e5d7164b8))
+
+
+### Performance
+
+* **core:** emit diff context once instead of duplicating across hunk blocks ([#169](https://github.com/jegork/rusty-bot/issues/169)) ([10477b7](https://github.com/jegork/rusty-bot/commit/10477b7393b66f5755b74dbdc1ac6867299fa9e1))
+
 ## [1.12.0](https://github.com/jegork/rusty-bot/compare/v1.11.1...v1.12.0) (2026-05-09)
 
 
