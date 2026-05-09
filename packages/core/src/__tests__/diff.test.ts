@@ -290,13 +290,149 @@ describe("countTokens", () => {
 });
 
 describe("compressDiff", () => {
-  it("compresses patches into formatted output", () => {
+  it("emits the file header and a __new hunk__ block for an additions-only diff", () => {
     const patches = parseDiff(singleFileDiff);
     const result = compressDiff(patches, 10000);
     expect(result.compressed).toContain("## src/index.ts");
     expect(result.compressed).toContain("__new hunk__");
-    expect(result.compressed).toContain("__old hunk__");
+    // singleFileDiff has zero removed lines — old block must be omitted entirely
+    expect(result.compressed).not.toContain("__old hunk__");
     expect(result.skippedFiles).toEqual([]);
+  });
+
+  it("emits __old hunk__ only when a hunk has removals", () => {
+    const patches = parseDiff(multiFileDiff);
+    const result = compressDiff(patches, 10000);
+    // multiFileDiff has file2.ts with a removal
+    expect(result.compressed).toContain("__old hunk__");
+    expect(result.compressed).toContain("__new hunk__");
+  });
+
+  it("omits __new hunk__ when a hunk has only removals (no context, no additions)", () => {
+    // hand-built patch avoids the parser's trailing-newline phantom-context quirk
+    const patches: FilePatch[] = [
+      {
+        path: "src/all-gone.ts",
+        additions: 0,
+        deletions: 2,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 1,
+            oldLines: 2,
+            newStart: 0,
+            newLines: 0,
+            content: "-line one\n-line two",
+          },
+        ],
+      },
+    ];
+    const result = compressDiff(patches, 10000);
+    expect(result.compressed).toContain("## src/all-gone.ts");
+    expect(result.compressed).toContain("__old hunk__");
+    expect(result.compressed).not.toContain("__new hunk__");
+  });
+
+  it("emits each context line exactly once (no duplication across blocks)", () => {
+    // mixed hunk: context + addition + removal — context must appear once total
+    const patches: FilePatch[] = [
+      {
+        path: "src/mixed.ts",
+        additions: 1,
+        deletions: 1,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 10,
+            oldLines: 4,
+            newStart: 10,
+            newLines: 4,
+            content: [" unchanged-before", "-removed-line", "+added-line", " unchanged-after"].join(
+              "\n",
+            ),
+          },
+        ],
+      },
+    ];
+    const { compressed } = compressDiff(patches, 10000);
+    const lines = compressed.split("\n");
+    expect(lines.filter((l) => l.includes("unchanged-before"))).toHaveLength(1);
+    expect(lines.filter((l) => l.includes("unchanged-after"))).toHaveLength(1);
+    // both blocks present
+    expect(compressed).toContain("__new hunk__");
+    expect(compressed).toContain("__old hunk__");
+  });
+
+  it("places sibling signature annotations only in the new-side block", () => {
+    const patches: FilePatch[] = [
+      {
+        path: "src/sig.ts",
+        additions: 1,
+        deletions: 0,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 5,
+            oldLines: 1,
+            newStart: 5,
+            newLines: 2,
+            content: ["~ // ... function outer() {", " context-line", "+added"].join("\n"),
+          },
+        ],
+      },
+    ];
+    const { compressed } = compressDiff(patches, 10000);
+    expect(compressed.match(/~ \/\/ \.\.\. function outer/g)).toHaveLength(1);
+    // new block only — pure-add hunk has no old block
+    expect(compressed).not.toContain("__old hunk__");
+  });
+
+  it("advances new-side line numbers across context lines", () => {
+    // context advances both counters even though only the new-side prefix is emitted
+    const patches: FilePatch[] = [
+      {
+        path: "src/counter.ts",
+        additions: 1,
+        deletions: 0,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 100,
+            oldLines: 3,
+            newStart: 100,
+            newLines: 4,
+            content: [" first context", " second context", "+added line"].join("\n"),
+          },
+        ],
+      },
+    ];
+    const { compressed } = compressDiff(patches, 10000);
+    expect(compressed).toContain("100  first context");
+    expect(compressed).toContain("101  second context");
+    expect(compressed).toContain("102 +added line");
+  });
+
+  it("removed lines are prefixed with old-side line numbers", () => {
+    const patches: FilePatch[] = [
+      {
+        path: "src/removal.ts",
+        additions: 0,
+        deletions: 2,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 50,
+            oldLines: 4,
+            newStart: 50,
+            newLines: 2,
+            content: [" before", "-gone-1", "-gone-2", " after"].join("\n"),
+          },
+        ],
+      },
+    ];
+    const { compressed } = compressDiff(patches, 10000);
+    expect(compressed).toContain("51 -gone-1");
+    expect(compressed).toContain("52 -gone-2");
   });
 
   it("skips files when budget is exhausted", () => {
