@@ -171,10 +171,9 @@ function makeFoundryFetch(opts: FoundryBodyOptions): typeof globalThis.fetch {
 
 export function resolveModel(
   config: ModelConfig,
-):
-  | string
-  | ReturnType<ReturnType<typeof createAzure>>
-    {
+): string | ReturnType<ReturnType<typeof createAzure>> {
+  // both createAzure(...)(...) and createOllama(...)(...) return the ai-sdk-v6
+  // LanguageModelV3 shape, so a single ReturnType<...> annotation is enough.
   switch (config.type) {
     case "router":
       return config.model;
