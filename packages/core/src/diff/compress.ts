@@ -9,40 +9,45 @@ function formatHunks(patch: FilePatch): string {
 
   for (const hunk of patch.hunks) {
     const lines = hunk.content.split("\n");
-    const oldLines: string[] = [];
-    const newLines: string[] = [];
+    // context, additions, and sibling signatures collect into the new-side block;
+    // removals collect into the old-side block. context lines are NOT duplicated
+    // across blocks — the model can read context once from the new-hunk block and
+    // still understand removals from the old-hunk block via line numbers.
+    const oldRemovedLines: string[] = [];
+    const newSideLines: string[] = [];
     let oldLine = hunk.oldStart;
     let newLine = hunk.newStart;
 
     for (const line of lines) {
       if (line.startsWith("-")) {
-        oldLines.push(`${oldLine} ${line}`);
+        oldRemovedLines.push(`${oldLine} ${line}`);
         oldLine++;
       } else if (line.startsWith("+")) {
-        newLines.push(`${newLine} ${line}`);
+        newSideLines.push(`${newLine} ${line}`);
         newLine++;
       } else if (line.startsWith("\\")) {
         // no-newline marker, keep in whichever section was last
         continue;
       } else if (line.startsWith("~")) {
-        // sibling signature annotation: emit without line number, do not advance counters
-        oldLines.push(line);
-        newLines.push(line);
+        // sibling signature annotation from tree-sitter scope expansion. emit without
+        // line number, do not advance counters. only needed in the new-side block —
+        // it's a hint about the surrounding scope, not historical state.
+        newSideLines.push(line);
       } else {
-        oldLines.push(`${oldLine} ${line}`);
-        newLines.push(`${newLine} ${line}`);
+        // unchanged context: advance both counters but emit only on the new side.
+        newSideLines.push(`${newLine} ${line}`);
         oldLine++;
         newLine++;
       }
     }
 
-    if (oldLines.length > 0) {
-      parts.push("__old hunk__");
-      parts.push(...oldLines);
-    }
-    if (newLines.length > 0) {
+    if (newSideLines.length > 0) {
       parts.push("__new hunk__");
-      parts.push(...newLines);
+      parts.push(...newSideLines);
+    }
+    if (oldRemovedLines.length > 0) {
+      parts.push("__old hunk__");
+      parts.push(...oldRemovedLines);
     }
   }
 
