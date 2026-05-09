@@ -273,6 +273,8 @@ The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, th
 | `RUSTY_INCREMENTAL_REVIEW` | review only the diff since the last reviewed commit (GitHub, GitLab) or PR iteration (Azure DevOps); previous summary + findings are carried forward as context | `true` |
 | `RUSTY_LLM_HEADERS_TIMEOUT_MS` | undici headers timeout for outbound `fetch` (LLM router + provider APIs) — raised above the 300s default to accommodate slow upstream models on large prompts | `600000` |
 | `RUSTY_LLM_BODY_TIMEOUT_MS` | undici body timeout for outbound `fetch`; resets per chunk so generations longer than this still complete as long as chunks keep arriving | `600000` |
+| `RUSTY_OLLAMA_BASE_URL` | base URL for the `ollama/*` provider — set to `https://ollama.com` for [Ollama Cloud](https://ollama.com), or a remote host for self-hosted Ollama | `http://127.0.0.1:11434` |
+| `RUSTY_OLLAMA_API_KEY` | bearer token for the `ollama/*` provider (required for Ollama Cloud, ignored for unauthenticated local instances); falls back to `OLLAMA_API_KEY` | — |
 | `RUSTY_JIRA_BASE_URL` | Jira instance URL | — |
 | `RUSTY_JIRA_EMAIL` | Jira auth email | — |
 | `RUSTY_JIRA_API_TOKEN` | Jira API token | — |
@@ -370,14 +372,35 @@ RUSTY_AZURE_ANTHROPIC_DEPLOYMENT=claude-sonnet-4-5
 
 Uses `DefaultAzureCredential` to fetch a fresh token (scope `https://cognitiveservices.azure.com/.default`) for every request, just like the Azure OpenAI managed identity path.
 
-**7. OpenAI-compatible endpoint** — for LiteLLM, vLLM, Ollama, or any proxy:
+**7. OpenAI-compatible endpoint** — for LiteLLM, vLLM, or any proxy:
 ```bash
 RUSTY_LLM_BASE_URL=http://localhost:4000/v1
 RUSTY_LLM_MODEL=gpt-4o
 RUSTY_LLM_API_KEY=optional-key
 ```
 
-**8. Mastra model router (default)** — direct provider API keys:
+**8. Ollama (local or [Ollama Cloud](https://ollama.com))** — uses the native [`ai-sdk-ollama`](https://www.npmjs.com/package/ai-sdk-ollama) provider, so it supports tool calling and can be mixed per-pass with other providers in `RUSTY_REVIEW_MODELS`:
+```bash
+# local Ollama (default)
+RUSTY_LLM_MODEL=ollama/llama3.2
+
+# Ollama Cloud
+RUSTY_LLM_MODEL=ollama/gpt-oss:120b
+RUSTY_OLLAMA_BASE_URL=https://ollama.com
+RUSTY_OLLAMA_API_KEY=...   # get one at https://ollama.com/account
+```
+
+To mix Ollama with other providers in a consensus ensemble:
+
+```bash
+RUSTY_OLLAMA_BASE_URL=https://ollama.com
+RUSTY_OLLAMA_API_KEY=...
+RUSTY_REVIEW_MODELS=anthropic/claude-sonnet-4-5,ollama/gpt-oss:120b,requesty/google/gemini-3.1-pro
+```
+
+Structured output: by default Ollama uses prompt-injected JSON via the structuring model (set `RUSTY_LLM_STRUCTURING_MODEL` to a known-good model like `requesty/google/gemini-3.1-flash-lite-preview`). Opt into native JSON schema for specific models with `RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT=ollama/gpt-oss*`.
+
+**9. Mastra model router (default)** — direct provider API keys:
 ```bash
 RUSTY_LLM_MODEL=anthropic/claude-sonnet-4-20250514
 ANTHROPIC_API_KEY=sk-ant-...

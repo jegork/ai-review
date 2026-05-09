@@ -1,6 +1,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createAzure } from "@ai-sdk/azure";
 import { DefaultAzureCredential } from "@azure/identity";
+import { createOllama } from "ai-sdk-ollama";
 
 export type ModelConfig =
   | { type: "router"; model: string }
@@ -10,7 +11,8 @@ export type ModelConfig =
   | { type: "azure-foundry-managed-identity"; resourceName: string; deploymentName: string }
   | { type: "azure-anthropic-api-key"; baseUrl: string; deploymentName: string; apiKey: string }
   | { type: "azure-anthropic-managed-identity"; baseUrl: string; deploymentName: string }
-  | { type: "openai-compatible"; baseUrl: string; model: string; apiKey?: string };
+  | { type: "openai-compatible"; baseUrl: string; model: string; apiKey?: string }
+  | { type: "ollama"; baseUrl?: string; model: string; apiKey?: string };
 
 export function resolveModelConfig(): ModelConfig {
   const model = process.env.RUSTY_LLM_MODEL ?? "anthropic/claude-sonnet-4-20250514";
@@ -76,6 +78,20 @@ export function resolveModelConfig(): ModelConfig {
       type: "azure-anthropic-managed-identity",
       baseUrl: azureAnthropicBaseUrl,
       deploymentName: process.env.RUSTY_AZURE_ANTHROPIC_DEPLOYMENT,
+    };
+  }
+
+  // ollama (local default; cloud when RUSTY_OLLAMA_BASE_URL=https://ollama.com).
+  // routed via the native ai-sdk-ollama provider instead of the openai-compat
+  // path so tool-calling + provider-specific options (mirostat, num_ctx, etc.)
+  // are available, and so consensus passes can mix ollama models with other
+  // providers per-route.
+  if (model.startsWith("ollama/")) {
+    return {
+      type: "ollama",
+      model: model.replace("ollama/", ""),
+      baseUrl: process.env.RUSTY_OLLAMA_BASE_URL,
+      apiKey: process.env.RUSTY_OLLAMA_API_KEY ?? process.env.OLLAMA_API_KEY,
     };
   }
 
@@ -155,7 +171,10 @@ function makeFoundryFetch(opts: FoundryBodyOptions): typeof globalThis.fetch {
 
 export function resolveModel(
   config: ModelConfig,
-): string | ReturnType<ReturnType<typeof createAzure>> {
+):
+  | string
+  | ReturnType<ReturnType<typeof createAzure>>
+    {
   switch (config.type) {
     case "router":
       return config.model;
@@ -251,6 +270,14 @@ export function resolveModel(
 
     case "openai-compatible":
       return config.model;
+
+    case "ollama": {
+      const ollama = createOllama({
+        ...(config.baseUrl && { baseURL: config.baseUrl }),
+        ...(config.apiKey && { apiKey: config.apiKey }),
+      });
+      return ollama(config.model);
+    }
   }
 }
 
@@ -300,6 +327,11 @@ export function supportsNativeStructuredOutput(config: ModelConfig): boolean {
       return false;
     case "openai-compatible":
       return true;
+    case "ollama":
+      // ollama models vary widely in JSON-schema reliability. default to
+      // prompt-injected JSON via the structuring model; opt in per-model with
+      // RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT=ollama/gpt-oss* etc.
+      return false;
     case "router":
       return NATIVE_STRUCTURED_OUTPUT_ROUTER_PREFIXES.some((prefix) =>
         config.model.startsWith(prefix),
@@ -322,6 +354,8 @@ function modelMatchKey(config: ModelConfig): string {
     case "azure-anthropic-api-key":
     case "azure-anthropic-managed-identity":
       return `azure-anthropic/${config.deploymentName}`;
+    case "ollama":
+      return `ollama/${config.model}`;
   }
 }
 
@@ -489,5 +523,7 @@ export function getModelDisplayName(config: ModelConfig): string {
       return `azure-anthropic/${config.deploymentName}`;
     case "openai-compatible":
       return `${config.baseUrl}/${config.model}`;
+    case "ollama":
+      return `ollama/${config.model}`;
   }
 }
