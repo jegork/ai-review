@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.12.0](https://github.com/jegork/rusty-bot/compare/v1.11.1...v1.12.0) (2026-05-09)
+
+
+### Features
+
+* **incremental:** carry prior summary + findings forward across re-reviews ([#168](https://github.com/jegork/rusty-bot/issues/168)) ([5792009](https://github.com/jegork/rusty-bot/commit/5792009cb5ed0066647102b3a583f92f94d91df1))
+
+
+### Performance
+
+* **judge:** send per-finding diff excerpts instead of the full PR diff ([#166](https://github.com/jegork/rusty-bot/issues/166)) ([21dff1a](https://github.com/jegork/rusty-bot/commit/21dff1a74d37c35e79f307236749c5aad114a2cd))
+
 ## [1.11.1](https://github.com/jegork/rusty-bot/compare/v1.11.0...v1.11.1) (2026-05-07)
 
 
