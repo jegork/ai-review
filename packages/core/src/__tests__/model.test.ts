@@ -42,6 +42,9 @@ function clearEnv() {
   delete process.env.RUSTY_LLM_JSON_PROMPT_INJECTION;
   delete process.env.RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT;
   delete process.env.RUSTY_LLM_DISABLE_THINKING;
+  delete process.env.RUSTY_OLLAMA_BASE_URL;
+  delete process.env.RUSTY_OLLAMA_API_KEY;
+  delete process.env.OLLAMA_API_KEY;
 }
 
 describe("resolveModelConfig", () => {
@@ -219,6 +222,67 @@ describe("resolveModelConfig", () => {
       expect(config.deploymentName).toBe("Kimi-K2.6");
     }
   });
+
+  it("builds ollama config from `ollama/` prefix with no env vars (local default)", () => {
+    process.env.RUSTY_LLM_MODEL = "ollama/llama3.2";
+    const config = resolveModelConfig();
+    expect(config).toEqual({
+      type: "ollama",
+      model: "llama3.2",
+      baseUrl: undefined,
+      apiKey: undefined,
+    });
+  });
+
+  it("preserves colons in ollama model identifiers (e.g. gpt-oss:120b)", () => {
+    process.env.RUSTY_LLM_MODEL = "ollama/gpt-oss:120b";
+    const config = resolveModelConfig();
+    expect(config.type).toBe("ollama");
+    if (config.type === "ollama") {
+      expect(config.model).toBe("gpt-oss:120b");
+    }
+  });
+
+  it("threads RUSTY_OLLAMA_BASE_URL into the ollama config (cloud routing)", () => {
+    process.env.RUSTY_LLM_MODEL = "ollama/gpt-oss:120b";
+    process.env.RUSTY_OLLAMA_BASE_URL = "https://ollama.com";
+    process.env.RUSTY_OLLAMA_API_KEY = "ol-secret";
+    const config = resolveModelConfig();
+    expect(config).toEqual({
+      type: "ollama",
+      model: "gpt-oss:120b",
+      baseUrl: "https://ollama.com",
+      apiKey: "ol-secret",
+    });
+  });
+
+  it("falls back to OLLAMA_API_KEY when RUSTY_OLLAMA_API_KEY is unset", () => {
+    process.env.RUSTY_LLM_MODEL = "ollama/llama3.2";
+    process.env.OLLAMA_API_KEY = "fallback-key";
+    const config = resolveModelConfig();
+    expect(config.type).toBe("ollama");
+    if (config.type === "ollama") {
+      expect(config.apiKey).toBe("fallback-key");
+    }
+  });
+
+  it("prefers RUSTY_OLLAMA_API_KEY over OLLAMA_API_KEY when both set", () => {
+    process.env.RUSTY_LLM_MODEL = "ollama/llama3.2";
+    process.env.RUSTY_OLLAMA_API_KEY = "rusty-key";
+    process.env.OLLAMA_API_KEY = "fallback-key";
+    const config = resolveModelConfig();
+    if (config.type === "ollama") {
+      expect(config.apiKey).toBe("rusty-key");
+    }
+  });
+
+  it("ollama prefix wins over RUSTY_LLM_BASE_URL (the openai-compatible path)", () => {
+    process.env.RUSTY_LLM_MODEL = "ollama/llama3.2";
+    process.env.RUSTY_LLM_BASE_URL = "http://litellm.local/v1";
+    process.env.RUSTY_LLM_API_KEY = "litellm-key";
+    const config = resolveModelConfig();
+    expect(config.type).toBe("ollama");
+  });
 });
 
 describe("resolveReviewPassModelConfigs", () => {
@@ -247,6 +311,28 @@ describe("resolveReviewPassModelConfigs", () => {
       "openai/pass-2",
       "anthropic/default",
     ]);
+  });
+
+  it("mixes ollama with router providers across consensus passes", () => {
+    process.env.RUSTY_OLLAMA_BASE_URL = "https://ollama.com";
+    process.env.RUSTY_OLLAMA_API_KEY = "ol-key";
+    process.env.RUSTY_REVIEW_MODELS =
+      "anthropic/claude-sonnet-4-5,ollama/gpt-oss:120b,requesty/google/gemini-3.1-pro";
+
+    const configs = resolveReviewPassModelConfigs(3);
+
+    expect(configs[0].config.type).toBe("router");
+    expect(configs[1].config.type).toBe("ollama");
+    expect(configs[2].config.type).toBe("router");
+    expect(configs.map((c) => c.displayName)).toEqual([
+      "anthropic/claude-sonnet-4-5",
+      "ollama/gpt-oss:120b",
+      "requesty/google/gemini-3.1-pro",
+    ]);
+    if (configs[1].config.type === "ollama") {
+      expect(configs[1].config.baseUrl).toBe("https://ollama.com");
+      expect(configs[1].config.apiKey).toBe("ol-key");
+    }
   });
 
   it("applies per-pass temperature and top-p overrides", () => {
@@ -553,6 +639,29 @@ describe("supportsNativeStructuredOutput", () => {
         deploymentName: "Kimi-K2.6",
       }),
     ).toBe(false);
+  });
+
+  it("returns false for ollama configs (defaults to prompt-injected JSON)", () => {
+    expect(
+      supportsNativeStructuredOutput({
+        type: "ollama",
+        model: "gpt-oss:120b",
+        baseUrl: "https://ollama.com",
+        apiKey: "k",
+      }),
+    ).toBe(false);
+  });
+
+  it("opts ollama into native structured output via RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT", () => {
+    process.env.RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT = "ollama/gpt-oss*";
+    const config = {
+      type: "ollama" as const,
+      model: "gpt-oss:120b",
+      baseUrl: "https://ollama.com",
+    };
+    // resolveJsonPromptInjection inverts supportsNativeStructuredOutput when the
+    // override matches — so the native path becomes active for matched models.
+    expect(resolveJsonPromptInjection(config)).toBe(false);
   });
 });
 
@@ -888,6 +997,17 @@ describe("getModelDisplayName", () => {
         deploymentName: "Kimi-K2.6",
       }),
     ).toBe("azure-foundry/Kimi-K2.6");
+  });
+
+  it("returns ollama/<model> preserving colons for ollama configs", () => {
+    expect(
+      getModelDisplayName({
+        type: "ollama",
+        model: "gpt-oss:120b",
+        baseUrl: "https://ollama.com",
+        apiKey: "k",
+      }),
+    ).toBe("ollama/gpt-oss:120b");
   });
 });
 

@@ -250,6 +250,24 @@ class FakeApiCallError extends Error {
   }
 }
 
+/** matches the shape thrown by ai-sdk-ollama: an OllamaError wrapping a
+ * ResponseError whose status_code (snake_case, ollama-js convention) is the
+ * upstream HTTP status. set `directStatusCode` to put status_code directly on
+ * the OllamaError instead of via cause — both shapes have been observed. */
+class FakeOllamaError extends Error {
+  cause?: { status_code: number };
+  status_code?: number;
+  constructor(message: string, statusCode: number, options: { directStatusCode?: boolean } = {}) {
+    super(message);
+    this.name = "OllamaError";
+    if (options.directStatusCode) {
+      this.status_code = statusCode;
+    } else {
+      this.cause = { status_code: statusCode };
+    }
+  }
+}
+
 describe("runReview retry on transient LLM errors", () => {
   beforeEach(() => {
     generateMock.mockReset();
@@ -340,6 +358,63 @@ describe("runReview retry on transient LLM errors", () => {
 
     await settle(runReview(config, "diff", prMetadata));
     expect(generateMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("retries an OllamaError 503 from cause.status_code (Ollama Cloud overload)", async () => {
+    generateMock
+      .mockRejectedValueOnce(new FakeOllamaError("Server overloaded, please retry shortly", 503))
+      .mockResolvedValueOnce(makeValidResponse());
+
+    await settle(runReview(config, "diff", prMetadata));
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries an OllamaError 429 (rate limited)", async () => {
+    generateMock
+      .mockRejectedValueOnce(new FakeOllamaError("Too many requests", 429))
+      .mockResolvedValueOnce(makeValidResponse());
+
+    await settle(runReview(config, "diff", prMetadata));
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries an OllamaError with status_code set directly on the error (not via cause)", async () => {
+    generateMock
+      .mockRejectedValueOnce(new FakeOllamaError("Bad gateway", 502, { directStatusCode: true }))
+      .mockResolvedValueOnce(makeValidResponse());
+
+    await settle(runReview(config, "diff", prMetadata));
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a ResponseError 503 (the inner ollama-js error name) directly", async () => {
+    const inner = Object.assign(new Error("upstream overloaded"), {
+      name: "ResponseError",
+      status_code: 503,
+    });
+    generateMock.mockRejectedValueOnce(inner).mockResolvedValueOnce(makeValidResponse());
+
+    await settle(runReview(config, "diff", prMetadata));
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry an OllamaError with a non-retryable status (e.g. 400 bad request)", async () => {
+    generateMock.mockRejectedValueOnce(new FakeOllamaError("model not found", 404));
+
+    await expect(settle(runReview(config, "diff", prMetadata))).rejects.toThrow("model not found");
+    expect(generateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry an OllamaError with no status_code anywhere", async () => {
+    const orphan = Object.assign(new Error("malformed upstream response"), {
+      name: "OllamaError",
+    });
+    generateMock.mockRejectedValueOnce(orphan);
+
+    await expect(settle(runReview(config, "diff", prMetadata))).rejects.toThrow(
+      "malformed upstream response",
+    );
+    expect(generateMock).toHaveBeenCalledTimes(1);
   });
 });
 
