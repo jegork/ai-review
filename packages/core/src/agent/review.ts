@@ -14,7 +14,14 @@ import {
   applyModelConstraints,
 } from "./model.js";
 import type { ModelConfig, ModelSettings } from "./model.js";
-import type { ReviewConfig, PRMetadata, TicketInfo, ReviewResult, GitProvider } from "../types.js";
+import type {
+  ReviewConfig,
+  PRMetadata,
+  TicketInfo,
+  ReviewResult,
+  GitProvider,
+  PriorReviewContext,
+} from "../types.js";
 import type { OpenGrepFinding } from "../opengrep/types.js";
 import { createSearchCodeTool, createGetFileContextTool } from "./tools.js";
 import { ToolCache } from "./tool-cache.js";
@@ -166,6 +173,8 @@ export interface RunReviewOptions {
   openGrepFindings?: OpenGrepFinding[];
   /** Ranked dependency context selected under a token budget for deep review. */
   rankedContext?: string;
+  /** PR-wide context carried forward from a previous review (incremental re-reviews only). */
+  priorContext?: PriorReviewContext;
   /** override used by consensus pass planning; defaults to RUSTY_LLM_MODEL. */
   modelConfig?: ModelConfig;
   /** override used by consensus pass planning; defaults to review env settings. */
@@ -204,6 +213,7 @@ export async function runReview(
     options?.openGrepFindings,
     options?.chunkFiles,
     tier === "deep-review" ? options?.rankedContext : undefined,
+    options?.priorContext,
   );
   const modelConfig = options?.modelConfig ?? resolveModelConfig();
   const modelName = getModelDisplayName(modelConfig);

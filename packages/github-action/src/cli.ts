@@ -2,6 +2,7 @@ import { Octokit } from "octokit";
 import type {
   FilePatch,
   FocusArea,
+  PriorReviewContext,
   ReviewConfig,
   TicketProvider,
   TicketRef,
@@ -35,6 +36,7 @@ import {
   isConventionalTitle,
   parseDiff,
   filterAnchorableFindings,
+  buildPriorContextFromReview,
 } from "@rusty-bot/core";
 import { GitHubProvider, createOctokitIssueFetcher } from "@rusty-bot/github";
 import {
@@ -223,13 +225,22 @@ export async function runAction(config: ActionConfig): Promise<number> {
     reviewConfig.conventionFile = conventionFile;
   }
 
-  // read incremental marker before deleting old bot comments — otherwise we lose the sha
+  // read incremental marker + prior context before deleting old bot comments —
+  // otherwise we lose the sha and the carry-forward state
   let lastReviewedSha: string | null = null;
+  let priorContext: PriorReviewContext | null = null;
   if (config.incrementalReview && metadata.headSha) {
     try {
       lastReviewedSha = await provider.getLastReviewedSha();
     } catch (err) {
       log.warn({ err }, "failed to read last-reviewed sha, falling back to full review");
+    }
+    if (lastReviewedSha) {
+      try {
+        priorContext = await provider.getPriorReviewContext();
+      } catch (err) {
+        log.warn({ err }, "failed to read prior review context; continuing without it");
+      }
     }
   }
 
@@ -387,6 +398,7 @@ export async function runAction(config: ActionConfig): Promise<number> {
           mcpServers,
           maxTokens: MAX_TOKENS,
           openGrepFindings,
+          priorContext: incrementalUsed && priorContext ? priorContext : undefined,
         },
       );
 
@@ -417,6 +429,7 @@ export async function runAction(config: ActionConfig): Promise<number> {
         mcpServers,
         maxTokens: MAX_TOKENS,
         openGrepFindings,
+        priorContext: incrementalUsed && priorContext ? priorContext : undefined,
       },
     );
   }
@@ -442,7 +455,12 @@ export async function runAction(config: ActionConfig): Promise<number> {
   const summaryMarkdown = formatSummaryComment(review, { ticketResolution });
   await provider.postSummaryComment(
     summaryMarkdown,
-    metadata.headSha ? { lastReviewedSha: metadata.headSha } : undefined,
+    metadata.headSha
+      ? {
+          lastReviewedSha: metadata.headSha,
+          priorContext: buildPriorContextFromReview(review),
+        }
+      : undefined,
   );
 
   const inlineCandidates = review.findings.filter((f) => f.line > 0);

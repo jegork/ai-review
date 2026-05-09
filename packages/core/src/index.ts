@@ -26,6 +26,8 @@ export type {
   CodeSearchResult,
   GitProvider,
   PostSummaryCommentOptions,
+  PriorReviewContext,
+  PriorReviewContextFinding,
   TicketProvider,
   DroppedFinding,
   ConsensusMetadata,

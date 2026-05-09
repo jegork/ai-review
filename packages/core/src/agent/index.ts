@@ -38,3 +38,10 @@ export { clusterFindings, clusterObservations } from "./cluster.js";
 export type { FindingCluster, ObservationCluster } from "./cluster.js";
 export { judgeFindings, judgeReviewResult, resolveJudgeConfig } from "./judge.js";
 export type { JudgeConfig, JudgeResult } from "./judge.js";
+export {
+  buildPriorContextFromReview,
+  encodePriorReviewContext,
+  extractPriorReviewContext,
+  PRIOR_CONTEXT_LIMITS,
+  PRIOR_CONTEXT_MARKER_RE,
+} from "./prior-context.js";

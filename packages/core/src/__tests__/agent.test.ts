@@ -5,7 +5,7 @@ import {
   buildCachedSystemMessages,
 } from "../agent/prompts.js";
 import { ReviewOutputSchema } from "../agent/schema.js";
-import type { ReviewConfig, PRMetadata, TicketInfo } from "../types.js";
+import type { ReviewConfig, PRMetadata, PriorReviewContext, TicketInfo } from "../types.js";
 
 const baseConfig: ReviewConfig = {
   style: "balanced",
@@ -505,5 +505,69 @@ describe("ReviewOutputSchema", () => {
     };
     const result = ReviewOutputSchema.safeParse(invalid);
     expect(result.success).toBe(false);
+  });
+});
+
+describe("buildUserMessage with priorContext", () => {
+  const priorContext: PriorReviewContext = {
+    summary: "PR adds JWT auth flow with refresh tokens.",
+    recommendation: "address_before_merge",
+    findings: [
+      {
+        file: "src/auth.ts",
+        line: 17,
+        severity: "critical",
+        message: "missing csrf check",
+      },
+    ],
+  };
+
+  function buildWithPriorContext(ctx?: PriorReviewContext) {
+    return buildUserMessage(
+      "diff content",
+      prMetadata,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ctx,
+    );
+  }
+
+  it("renders the prior-context section when provided", () => {
+    const msg = buildWithPriorContext(priorContext);
+    expect(msg).toContain("## Prior review context");
+    expect(msg).toContain(priorContext.summary);
+    expect(msg).toContain("Previous recommendation:** address_before_merge");
+  });
+
+  it("does not render the section when prior context is omitted (no leak)", () => {
+    const msg = buildWithPriorContext(undefined);
+    expect(msg).not.toContain("## Prior review context");
+  });
+
+  it("instructs the agent to describe the WHOLE PR in its summary", () => {
+    const msg = buildWithPriorContext(priorContext);
+    expect(msg).toContain("WHOLE PR");
+  });
+
+  it("places prior context before the diff so the agent reads it as background", () => {
+    const msg = buildWithPriorContext(priorContext);
+    const ctxIdx = msg.indexOf("## Prior review context");
+    const diffIdx = msg.indexOf("## Diff");
+    expect(ctxIdx).toBeGreaterThan(-1);
+    expect(diffIdx).toBeGreaterThan(ctxIdx);
+  });
+
+  it("renders each prior finding with file, line, severity, and message", () => {
+    const msg = buildWithPriorContext(priorContext);
+    expect(msg).toContain("`src/auth.ts`:17 (critical) — missing csrf check");
+  });
+
+  it("omits the issues list when prior context has no findings", () => {
+    const msg = buildWithPriorContext({ ...priorContext, findings: [] });
+    expect(msg).not.toContain("Issues already surfaced");
   });
 });

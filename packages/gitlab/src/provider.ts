@@ -6,8 +6,14 @@ import type {
   Hunk,
   CodeSearchResult,
   PostSummaryCommentOptions,
+  PriorReviewContext,
 } from "@rusty-bot/core";
-import { formatInlineComment, logger } from "@rusty-bot/core";
+import {
+  encodePriorReviewContext,
+  extractPriorReviewContext,
+  formatInlineComment,
+  logger,
+} from "@rusty-bot/core";
 import type { z } from "zod";
 import {
   GitLabMergeRequestSchema,
@@ -252,6 +258,18 @@ export class GitLabProvider implements GitProvider {
     return null;
   }
 
+  async getPriorReviewContext(): Promise<PriorReviewContext | null> {
+    const notes = await this.request(`${this.mrBase}/notes?per_page=100`, GitLabNotesSchema);
+    for (const note of notes) {
+      if (note.system) continue;
+      const body = note.body;
+      if (!body?.includes(BOT_MARKER)) continue;
+      const ctx = extractPriorReviewContext(body);
+      if (ctx) return ctx;
+    }
+    return null;
+  }
+
   async getFileContent(path: string, ref: string): Promise<string | null> {
     try {
       const url = `${this.projectBase}/repository/files/${encodeURIComponent(
@@ -284,6 +302,9 @@ export class GitLabProvider implements GitProvider {
     const headerLines = [BOT_MARKER];
     if (options?.lastReviewedSha) {
       headerLines.push(buildLastShaMarker(options.lastReviewedSha));
+    }
+    if (options?.priorContext) {
+      headerLines.push(encodePriorReviewContext(options.priorContext));
     }
     const body = `${headerLines.join("\n")}\n${markdown}`;
     await this.fetchApi(`${this.mrBase}/notes`, {

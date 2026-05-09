@@ -1,4 +1,10 @@
-import type { FilePatch, FocusArea, ReviewConfig, TicketRef } from "@rusty-bot/core";
+import type {
+  FilePatch,
+  FocusArea,
+  PriorReviewContext,
+  ReviewConfig,
+  TicketRef,
+} from "@rusty-bot/core";
 import { ReviewStyleSchema } from "@rusty-bot/core";
 import {
   filterFiles,
@@ -25,6 +31,7 @@ import {
   generateConventionalTitle,
   isConventionalTitle,
   filterAnchorableFindings,
+  buildPriorContextFromReview,
 } from "@rusty-bot/core";
 import { AzureDevOpsProvider } from "./provider.js";
 
@@ -103,9 +110,11 @@ async function main(): Promise<void> {
     config.conventionFile = conventionFile;
   }
 
-  // read incremental marker before deleting old bot comments — otherwise we lose the iteration id
+  // read incremental marker + prior context before deleting old bot comments —
+  // otherwise we lose the iteration id and the carry-forward state
   let lastReviewedIteration: string | null = null;
   let latestIteration: string | null = null;
+  let priorContext: PriorReviewContext | null = null;
   if (incrementalReview) {
     try {
       [lastReviewedIteration, latestIteration] = await Promise.all([
@@ -114,6 +123,13 @@ async function main(): Promise<void> {
       ]);
     } catch (err) {
       log.warn({ err }, "failed to read iteration state, falling back to full review");
+    }
+    if (lastReviewedIteration) {
+      try {
+        priorContext = await provider.getPriorReviewContext();
+      } catch (err) {
+        log.warn({ err }, "failed to read prior review context; continuing without it");
+      }
     }
   } else {
     try {
@@ -299,6 +315,7 @@ async function main(): Promise<void> {
           mcpServers,
           maxTokens: MAX_TOKENS,
           openGrepFindings,
+          priorContext: incrementalUsed && priorContext ? priorContext : undefined,
         },
       );
 
@@ -329,6 +346,7 @@ async function main(): Promise<void> {
         mcpServers,
         maxTokens: MAX_TOKENS,
         openGrepFindings,
+        priorContext: incrementalUsed && priorContext ? priorContext : undefined,
       },
     );
   }
@@ -354,7 +372,12 @@ async function main(): Promise<void> {
   const summaryMarkdown = formatSummaryComment(review, { ticketResolution });
   await provider.postSummaryComment(
     summaryMarkdown,
-    latestIteration ? { lastReviewedIteration: latestIteration } : undefined,
+    latestIteration
+      ? {
+          lastReviewedIteration: latestIteration,
+          priorContext: buildPriorContextFromReview(review),
+        }
+      : undefined,
   );
 
   const { anchored: inlineFindings, dropped } = filterAnchorableFindings(

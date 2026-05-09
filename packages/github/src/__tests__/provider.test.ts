@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { GitHubProvider } from "../provider.js";
 import type { Octokit } from "octokit";
-import type { Finding } from "@rusty-bot/core";
+import type { Finding, PriorReviewContext } from "@rusty-bot/core";
+import { encodePriorReviewContext, extractPriorReviewContext } from "@rusty-bot/core";
 
 function createMockOctokit() {
   return {
@@ -118,6 +119,97 @@ describe("GitHubProvider", () => {
         "<!-- rusty-bot:last-sha:abc123def4560000000000000000000000000000 -->",
       );
       expect(call.body).toContain("## Review\nLooks good!");
+    });
+
+    it("embeds the prior-context marker when provided", async () => {
+      octokit.request.mockResolvedValueOnce({ data: {} });
+
+      const priorContext: PriorReviewContext = {
+        summary: "earlier review summary",
+        recommendation: "address_before_merge",
+        findings: [{ file: "src/a.ts", line: 1, severity: "warning", message: "issue" }],
+      };
+
+      await provider.postSummaryComment("## Review\nLooks good!", {
+        lastReviewedSha: "abc123def4560000000000000000000000000000",
+        priorContext,
+      });
+
+      const call = octokit.request.mock.calls[0][1] as { body: string };
+      expect(call.body).toContain("<!-- rusty-bot:last-sha:");
+      expect(call.body).toMatch(/<!--\s*rusty-bot:context:/);
+      const decoded = extractPriorReviewContext(call.body);
+      expect(decoded).toEqual(priorContext);
+    });
+
+    it("does not embed the prior-context marker when omitted", async () => {
+      octokit.request.mockResolvedValueOnce({ data: {} });
+      await provider.postSummaryComment("## Review\nLooks good!", {
+        lastReviewedSha: "abc123def4560000000000000000000000000000",
+      });
+      const call = octokit.request.mock.calls[0][1] as { body: string };
+      expect(call.body).not.toContain("rusty-bot:context:");
+    });
+  });
+
+  describe("getPriorReviewContext", () => {
+    const priorContext: PriorReviewContext = {
+      summary: "earlier review",
+      recommendation: "looks_good",
+      findings: [{ file: "x.ts", line: 1, severity: "suggestion", message: "ok" }],
+    };
+
+    it("returns null when no comments exist", async () => {
+      octokit.request.mockResolvedValueOnce({ data: [] });
+      expect(await provider.getPriorReviewContext()).toBeNull();
+    });
+
+    it("returns null when bot comments exist but lack the context marker", async () => {
+      octokit.request.mockResolvedValueOnce({
+        data: [{ id: 1, body: "<!-- rusty-bot-review -->\nold review, no context marker" }],
+      });
+      expect(await provider.getPriorReviewContext()).toBeNull();
+    });
+
+    it("returns null when the context marker is malformed", async () => {
+      octokit.request.mockResolvedValueOnce({
+        data: [
+          {
+            id: 1,
+            body: "<!-- rusty-bot-review -->\n<!-- rusty-bot:context:!!!notbase64!!! -->",
+          },
+        ],
+      });
+      expect(await provider.getPriorReviewContext()).toBeNull();
+    });
+
+    it("extracts the most recent prior context when multiple bot comments exist", async () => {
+      const olderCtx: PriorReviewContext = {
+        summary: "OLDER review",
+        recommendation: "critical_issues",
+        findings: [],
+      };
+      octokit.request.mockResolvedValueOnce({
+        data: [
+          {
+            id: 1,
+            body: `<!-- rusty-bot-review -->\n${encodePriorReviewContext(olderCtx)}`,
+          },
+          { id: 2, body: "human comment" },
+          {
+            id: 3,
+            body: `<!-- rusty-bot-review -->\n${encodePriorReviewContext(priorContext)}`,
+          },
+        ],
+      });
+      expect(await provider.getPriorReviewContext()).toEqual(priorContext);
+    });
+
+    it("ignores a context marker outside a bot comment", async () => {
+      octokit.request.mockResolvedValueOnce({
+        data: [{ id: 1, body: encodePriorReviewContext(priorContext) }],
+      });
+      expect(await provider.getPriorReviewContext()).toBeNull();
     });
   });
 

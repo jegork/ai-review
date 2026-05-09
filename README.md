@@ -16,7 +16,7 @@ Built on [Mastra](https://mastra.ai/) (TypeScript).
 - **OpenGrep pre-scan** — runs [OpenGrep](https://opengrep.dev/) SAST on changed files before LLM review, feeds findings for triage (gracefully skipped when not installed)
 - **Multi-provider LLM** — OpenAI, Anthropic, Google, or any provider supported by Mastra
 - **PR description generation** — optionally generate a structured PR description from the diff when the description is empty or a placeholder (off by default)
-- **Incremental review** — on subsequent pushes the bot reviews only the diff since the previously-reviewed state (commit on GitHub, PR iteration on Azure DevOps) instead of the entire PR, cutting tokens on multi-commit PRs (on by default; opt out with `RUSTY_INCREMENTAL_REVIEW=false`)
+- **Incremental review** — on subsequent pushes the bot reviews only the diff since the previously-reviewed state (commit on GitHub/GitLab, PR iteration on Azure DevOps) instead of the entire PR, cutting tokens on multi-commit PRs. The previous summary, recommendation, and surfaced findings are carried forward so the agent keeps PR-wide context without re-reading the full diff (on by default; opt out with `RUSTY_INCREMENTAL_REVIEW=false`)
 - **GitHub + GitLab + Azure DevOps + local CLI** — webhook server for GitHub, pipeline task for Azure DevOps, GitLab CI job, a drop-in GitHub Action, or a `rusty-bot` CLI that runs reviews against any local git repo
 - **Web dashboard** — configure repos, review styles, focus areas, and view history
 
@@ -270,7 +270,7 @@ The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, th
 | `RUSTY_IGNORE_PATTERNS` | comma-separated glob patterns to skip | — |
 | `RUSTY_FAIL_ON_CRITICAL` | exit 1 on critical findings (pipeline/action mode) | `true` |
 | `RUSTY_REVIEW_DRAFTS` | review draft PRs in GitHub Action mode | `false` |
-| `RUSTY_INCREMENTAL_REVIEW` | review only the diff since the last reviewed commit (GitHub) or PR iteration (Azure DevOps) | `true` |
+| `RUSTY_INCREMENTAL_REVIEW` | review only the diff since the last reviewed commit (GitHub, GitLab) or PR iteration (Azure DevOps); previous summary + findings are carried forward as context | `true` |
 | `RUSTY_JIRA_BASE_URL` | Jira instance URL | — |
 | `RUSTY_JIRA_EMAIL` | Jira auth email | — |
 | `RUSTY_JIRA_API_TOKEN` | Jira API token | — |
@@ -515,6 +515,25 @@ RUSTY_JUDGE_MODEL=anthropic/claude-3-5-haiku-20241022  # optional, cheaper model
 **Cost:** The judge uses a single LLM call with structured output (no tools). Using a cheap model like Haiku adds ~1–3% to total cost. Using the same model as the reviewer adds ~30–50%.
 
 When the judge is disabled (default), the pipeline behaves exactly as before with zero overhead.
+
+### Incremental Review
+
+When a PR gets new commits after a previous review, the bot only fetches the diff since the last reviewed commit (or PR iteration on Azure DevOps) instead of the full PR. To keep PR-wide context without paying for the full diff, the previous review's **summary**, **recommendation**, and **surfaced findings** are carried forward and shown to the agent as established background.
+
+**How it works:**
+
+1. After every review, the bot embeds two hidden markers in its summary comment:
+   - `<!-- rusty-bot:last-sha:... -->` (or `last-iteration` on ADO) — pinpoints what was reviewed
+   - `<!-- rusty-bot:context:... -->` — base64-encoded JSON of the prior summary + findings (capped: 4 000-char summary, 50 findings, 250-char message each)
+2. On the next push, the bot reads both markers from its previous comment, fetches only the new diff, and injects a `## Prior review context` section into the agent's prompt. The agent is explicitly told its summary must describe the **whole** PR, not just the new diff.
+3. The prior-findings list is annotated as "do NOT re-raise unless this commit changes the underlying code", which suppresses duplicate findings across re-reviews.
+
+**Caps and trade-offs:**
+
+- Only the **most recent** prior review is carried forward — chained re-reviews compound the prior summary at every step (the previous summary already absorbed the one before it).
+- Carry-forward state is provider-side: it survives bot-comment cleanup because the markers are read **before** old comments are deleted on each run.
+- If a force-push or rebase makes the prior SHA unreachable, the bot transparently falls back to a full review — there is no fragile state.
+- Disable with `RUSTY_INCREMENTAL_REVIEW=false`; the bot then re-reviews the full PR every time and posts no carry-forward markers.
 
 ### OpenGrep Pre-scan
 
