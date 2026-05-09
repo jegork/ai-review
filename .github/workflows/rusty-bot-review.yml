@@ -31,20 +31,33 @@ jobs:
           # mastra's native requesty provider reads this directly; no base-url
           # wiring needed when the model id already starts with "requesty/"
           REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY }}
-          RUSTY_LLM_MODEL: requesty/fireworks/kimi-k2.6
+          # ollama cloud — bearer auth via Authorization header. set
+          # RUSTY_OLLAMA_BASE_URL=https://ollama.com so any `ollama/*` model
+          # in RUSTY_REVIEW_MODELS routes via the hosted endpoint instead of
+          # the local default (http://127.0.0.1:11434).
+          RUSTY_OLLAMA_BASE_URL: https://ollama.com
+          RUSTY_OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+
+          RUSTY_LLM_MODEL: requesty/google/gemini-3.1-flash-lite-preview
           RUSTY_REVIEW_TEMPERATURE: "1"
-          RUSTY_REVIEW_MODELS: requesty/fireworks/kimi-k2.6,requesty/xai/grok-4.3,requesty/minimaxi/MiniMax-M2.7
-          RUSTY_LLM_JSON_PROMPT_INJECTION: requesty/fireworks/kimi-k2.6
-          RUSTY_REVIEW_TEMPERATURES: "1,0.2,0.3"
+          # cross-provider consensus: two passes via ollama cloud (deepseek + kimi),
+          # one via requesty (grok). different vendors → different finding
+          # distributions → richer overlap before clustering.
+          RUSTY_REVIEW_MODELS: >-
+            ollama/deepseek-v4-pro:cloud,
+            requesty/xai/grok-4.3,
+            ollama/kimi-k2.6:cloud
+          RUSTY_REVIEW_TEMPERATURES: "0.3,0.3,1"
           RUSTY_REVIEW_ADAPTIVE_PASSES: "true"
+          RUSTY_LLM_STRUCTURING_MODEL: requesty/google/gemini-3.1-flash-lite-preview
           # cap tool-using trajectories so tool-happy models (Kimi/Anthropic)
           # can't terminate with finishReason="tool-calls" and zero text. the
           # final allowed step gets toolChoice="none" so the model has to emit
           # the structured-output JSON. see #152.
-          RUSTY_LLM_MAX_STEPS: "8"
+          RUSTY_LLM_MAX_STEPS: "10"
           RUSTY_JUDGE_ENABLED: "true"
-          RUSTY_JUDGE_MODEL: requesty/anthropic/claude-sonnet-4-6
-          RUSTY_JUDGE_TEMPERATURE: "0"
+          RUSTY_JUDGE_MODEL: ollama/deepseek-v4-pro:cloud
+          RUSTY_JUDGE_TEMPERATURE: "0.1"
           RUSTY_LLM_TRIAGE_MODEL: requesty/google/gemini-3.1-flash-lite-preview
           RUSTY_TRIAGE_TEMPERATURE: "0"
           RUSTY_REVIEW_STYLE: balanced
