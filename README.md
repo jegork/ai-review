@@ -410,6 +410,19 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 Supports 99+ providers: `openai/gpt-4o`, `google/gemini-2.5-flash`, `openrouter/...`, etc.
 
+### Model + Provider Routing Notes
+
+The same model id can route through different inference providers (e.g. `requesty/deepseek/deepseek-v4-pro` vs. `requesty/fireworks/deepseek-v4-pro`). They are **not interchangeable** — different provider backends serve the same model with different latency profiles, tool-calling reliability, and rate limits. When picking a route for `RUSTY_REVIEW_MODELS` or `RUSTY_JUDGE_MODEL`, the choice between proxy backends matters as much as the choice between models.
+
+Empirically observed gotchas:
+
+- **`requesty/fireworks/deepseek-v4-pro` tool-loops on review-tier calls.** With `RUSTY_LLM_MAX_STEPS=10` and active `searchCode` / `getFileContext` tools, observed reviewer passes hanging for 10-15 minutes before the step cap fires. Use `requesty/deepseek/deepseek-v4-pro` (the official DeepSeek provider on Requesty) for the review path instead. Fireworks-routed deepseek is fine for the **judge** because the judge has no tools and can't tool-loop.
+- **`ollama/deepseek-v4-pro:cloud` (Ollama Cloud) was observed sustaining 503 "Server overloaded" through full retry budget** during peak load. The 503 is genuinely retried by `isTransientRetryableError`, but if all attempts fail you've lost the pass. Capacity has fluctuated; flip to a Requesty-backed deepseek if Ollama Cloud's hosted instance is congested.
+- **`moonshot/kimi-k2.5` requires `temperature=1`.** Lower values are rejected by the upstream and the call fails. The `HARD_TEMPERATURE_LOCKS` table in `model.ts` rewrites the temperature on this exact pattern; it does NOT catch `kimi-k2.6` or proxy variants like `requesty/fireworks/kimi-k2.6`. Empirically the k2.x series benefits from `temperature=1` regardless of the route — set it explicitly via `RUSTY_REVIEW_TEMPERATURES` for any kimi-shaped pass.
+- **Single-provider ensembles defeat consensus diversity.** If you set `RUSTY_REVIEW_MODELS` to three Anthropic models, the cluster algorithm has very little signal to filter — different sizes of the same model agree more than different vendors. Mix providers (Anthropic / xAI / Moonshot / DeepSeek / OpenAI / Google) for the consensus path to be useful.
+
+If you observe a new failure pattern tied to a specific provider+model combination, add an entry here so the next person doesn't burn an afternoon on the same shape.
+
 ### Model Inference Settings
 
 Set a global temperature/top-p for all agents, or override per agent. Per-agent values take priority over the global fallback.
