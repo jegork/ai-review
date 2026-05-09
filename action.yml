@@ -41,7 +41,12 @@ inputs:
 # See the README for the full list of RUSTY_* env vars.
 runs:
   using: docker
-  image: docker://ghcr.io/jegork/rusty-bot:latest
+  # build from local source on every invocation so PR branches that change
+  # the provider/model resolution (e.g. this PR's ollama integration) are
+  # actually exercised by the self-review. published `:latest` is rebuilt
+  # only on push to main; using it here would silently run stale code on
+  # PRs that touch the action's runtime.
+  image: Dockerfile
   env:
     RUSTY_MODE: github-action
     GITHUB_TOKEN: ${{ inputs.github-token }}
