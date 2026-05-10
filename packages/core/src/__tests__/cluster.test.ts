@@ -265,6 +265,99 @@ describe("clusterFindings", () => {
     const outsideWindow = clusterFindings([[f1], [f3]]);
     expect(outsideWindow).toHaveLength(2);
   });
+
+  // CONSENSUS-QUALITY-WRITEUP.md experiment 1: cluster.messageTokens used to be
+  // frozen at the first finding's tokens, so similarity for any later joiner
+  // was always measured against pass 1's specific wording. This block verifies
+  // the union-on-join behavior — pass 3 can now reach the cluster via pass 2's
+  // wording even when its similarity to pass 1 alone is below threshold.
+
+  it("widens the comparison vocabulary as findings join the cluster", () => {
+    // f1: "alpha beta gamma delta"
+    // f2: "alpha beta epsilon zeta"   (shares 2/6 with f1 → 0.333, just above 0.3)
+    // f3: "epsilon zeta eta theta"    (shares 0/8 with f1 alone → 0; shares 2/6 with f2 → 0.333)
+    // pre-fix: f3 compared against f1 only → no match → 3 separate clusters
+    // post-fix: f3 compared against f1∪f2 = 6 tokens → 2/8 = 0.25 (still under threshold!)
+    //          so the union must be wide enough to actually flip a case.
+    const f1 = makeFinding({ message: "alpha beta gamma delta" });
+    const f2 = makeFinding({ message: "alpha beta epsilon zeta theta" });
+    const f3 = makeFinding({ message: "epsilon zeta theta iota kappa" });
+
+    // sanity: each pairwise jaccard
+    expect(jaccardSimilarity(tokenize(f1.message), tokenize(f3.message))).toBeLessThan(0.3);
+    expect(jaccardSimilarity(tokenize(f2.message), tokenize(f3.message))).toBeGreaterThanOrEqual(
+      0.3,
+    );
+
+    const result = clusterFindings([[f1], [f2], [f3]]);
+
+    // After the union fix, the f1+f2 cluster's tokens are
+    // {alpha, beta, gamma, delta, epsilon, zeta, theta} (7 tokens).
+    // f3 (5 tokens) intersects {epsilon, zeta, theta} = 3, union = 9 → 0.333 ≥ 0.3.
+    // So f3 joins the same cluster — vote count = 3.
+    expect(result).toHaveLength(1);
+    expect(result[0].voteCount).toBe(3);
+    expect(result[0].variants).toHaveLength(3);
+  });
+
+  it("vote count remains distinct-passes after the token union (no double-counting)", () => {
+    // multiple findings from the same pass joining the same cluster should
+    // still count as one vote; the union must not change distinct-pass semantics.
+    const f1 = makeFinding({ message: "alpha beta gamma delta" });
+    const f2a = makeFinding({ message: "alpha beta epsilon" });
+    const f2b = makeFinding({ message: "epsilon zeta gamma delta" });
+
+    const result = clusterFindings([[f1], [f2a, f2b]]);
+    expect(result).toHaveLength(1);
+    expect(result[0].voteCount).toBe(2);
+    // all three findings end up as variants
+    expect(result[0].variants).toHaveLength(3);
+  });
+
+  it("does not over-merge unrelated findings on the same file:line via the wider vocabulary", () => {
+    // sanity bound: even with token union, two genuinely unrelated findings on
+    // the same file at nearby lines should still cluster separately if their
+    // wording doesn't share enough with the cluster's accumulated vocabulary.
+    const f1 = makeFinding({
+      line: 10,
+      message: "potential null reference dereference handler",
+    });
+    const f2 = makeFinding({
+      line: 11,
+      message: "potential null reference different bug elsewhere",
+    });
+    const f3 = makeFinding({
+      line: 12,
+      message: "missing await async race condition",
+    });
+
+    const result = clusterFindings([[f1], [f2], [f3]]);
+
+    // f1 + f2 cluster (high overlap), f3 stays separate (no shared tokens
+    // with the f1+f2 union).
+    expect(result).toHaveLength(2);
+    const cluster1 = result.find((c) => c.variants.length === 2);
+    const cluster2 = result.find((c) => c.variants.length === 1);
+    expect(cluster1).toBeDefined();
+    expect(cluster2).toBeDefined();
+  });
+
+  it("union expands within a single pass as well as across passes", () => {
+    // joins within one pass also expand the comparison vocabulary, so a later
+    // entry in the same pass benefits from the union.
+    const f1 = makeFinding({ message: "alpha beta gamma" });
+    const f2 = makeFinding({ message: "alpha gamma delta epsilon" });
+    const f3 = makeFinding({ message: "delta epsilon zeta theta" });
+
+    const result = clusterFindings([[f1, f2, f3]]);
+
+    // f1 + f2 cluster, then f3 has 2/6 overlap with the union (delta, epsilon)
+    // = 0.333 ≥ 0.3 → joins the same cluster.
+    expect(result).toHaveLength(1);
+    // single-pass run, distinct-pass vote count = 1 even with 3 variants
+    expect(result[0].voteCount).toBe(1);
+    expect(result[0].variants).toHaveLength(3);
+  });
 });
 
 describe("clusterObservations", () => {

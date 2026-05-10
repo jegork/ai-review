@@ -82,6 +82,14 @@ function clusterItems<T extends Clusterable>(
 
         if (similarity >= threshold) {
           cluster.items.push({ item, passIndex });
+          // Union the joining item's tokens into the cluster's comparison set.
+          // Without this, similarity on later joins is always measured against
+          // the first-arriving finding's specific wording — meaning a 3rd pass
+          // that's much closer to the 2nd pass's wording than the 1st can still
+          // miss the cluster. With diverse cross-model ensembles, that's a
+          // structural disadvantage. See CONSENSUS-QUALITY-WRITEUP.md
+          // experiment 1.
+          for (const t of tokens) cluster.messageTokens.add(t);
           matched = true;
           break;
         }
