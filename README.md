@@ -420,8 +420,26 @@ Empirically observed gotchas:
 - **`ollama/deepseek-v4-pro:cloud` (Ollama Cloud) was observed sustaining 503 "Server overloaded" through full retry budget** during peak load. The 503 is genuinely retried by `isTransientRetryableError`, but if all attempts fail you've lost the pass. Capacity has fluctuated; flip to a Requesty-backed deepseek if Ollama Cloud's hosted instance is congested.
 - **`moonshot/kimi-k2.5` requires `temperature=1`.** Lower values are rejected by the upstream and the call fails. The `HARD_TEMPERATURE_LOCKS` table in `model.ts` rewrites the temperature on this exact pattern; it does NOT catch `kimi-k2.6` or proxy variants like `requesty/fireworks/kimi-k2.6`. Empirically the k2.x series benefits from `temperature=1` regardless of the route — set it explicitly via `RUSTY_REVIEW_TEMPERATURES` for any kimi-shaped pass.
 - **Single-provider ensembles defeat consensus diversity.** If you set `RUSTY_REVIEW_MODELS` to three Anthropic models, the cluster algorithm has very little signal to filter — different sizes of the same model agree more than different vendors. Mix providers (Anthropic / xAI / Moonshot / DeepSeek / OpenAI / Google) for the consensus path to be useful.
+- **Skim tier inherits `RUSTY_REVIEW_MODELS[0]`.** When the cascade triages a file as "skim" rather than "deep-review", the skim pass uses a single-pass review with the **first** entry in `RUSTY_REVIEW_MODELS` (`consensus.ts:113-120`). If slot 1 is a slow model (`deepseek-v4-pro` reasoning takes minutes per call), skim becomes slow too — even though the skim tier is supposed to be the fast triage path. Put a quick model (grok, kimi, gemini) in slot 1 and let the slower / more analytical models live in slots 2-3 where they only fire on consensus deep-review chunks.
 
 If you observe a new failure pattern tied to a specific provider+model combination, add an entry here so the next person doesn't burn an afternoon on the same shape.
+
+### OpenRouter as an alternative gateway
+
+Same shape as Requesty — Mastra's router fallback handles `openrouter/*` model ids automatically when `OPENROUTER_API_KEY` is set. No code change needed.
+
+```bash
+OPENROUTER_API_KEY=sk-or-v1-...
+RUSTY_LLM_MODEL=openrouter/anthropic/claude-sonnet-4-5
+RUSTY_REVIEW_MODELS=openrouter/x-ai/grok-4.3,openrouter/moonshotai/kimi-k2.6,openrouter/deepseek/deepseek-v4-pro
+```
+
+You can mix gateways in one ensemble — `requesty/...`, `openrouter/...`, `ollama/...`, and direct provider ids all resolve per-pass through their own routes.
+
+Caveats:
+- **Native structured output is off by default for OpenRouter.** `supportsNativeStructuredOutput` doesn't include `openrouter/` in its allow-list because OpenRouter's proxying of `response_format: json_schema` varies by underlying model. Route through the structuring model (`RUSTY_LLM_STRUCTURING_MODEL`) instead, or opt in per-pattern with `RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT=openrouter/anthropic/*` if you've verified the upstream honors it.
+- **OpenRouter's load balancer picks an inference backend per request**, so the same `openrouter/deepseek/deepseek-v4-pro` request can land on Fireworks, DeepSeek's own API, Together, etc. — bringing the same provider-routing-matters lesson with it. Pin a specific backend with the `:nitro` suffix (fastest available) or the OpenRouter-native `provider` parameter if you need determinism.
+- **No bot-level prompt-cache integration**, the way `requesty/*` gets `auto_cache: true`. OpenRouter has its own caching for some models — handled upstream, no env var to flip on the bot side.
 
 ### Model Inference Settings
 
