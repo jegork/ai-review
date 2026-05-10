@@ -275,6 +275,8 @@ The CLI reads the same env vars as the other harnesses — `RUSTY_LLM_MODEL`, th
 | `RUSTY_LLM_BODY_TIMEOUT_MS` | undici body timeout for outbound `fetch`; resets per chunk so generations longer than this still complete as long as chunks keep arriving | `600000` |
 | `RUSTY_OLLAMA_BASE_URL` | base URL for the `ollama/*` provider — set to `https://ollama.com` for [Ollama Cloud](https://ollama.com), or a remote host for self-hosted Ollama | `http://127.0.0.1:11434` |
 | `RUSTY_OLLAMA_API_KEY` | bearer token for the `ollama/*` provider (required for Ollama Cloud, ignored for unauthenticated local instances); falls back to `OLLAMA_API_KEY` | — |
+| `RUSTY_LOG_AGENT_STEPS` | when `true`, log a line per agent step (`stepNumber`, `finishReason`, `toolCallCount`, token usage); diagnostic for slow / tool-looping passes | `false` |
+| `RUSTY_LOG_RAW_FINDINGS` | when `true`, log each consensus pass's findings before clustering (file/line/severity/category/message); diagnostic for tuning Jaccard / line-proximity thresholds | `false` |
 | `RUSTY_JIRA_BASE_URL` | Jira instance URL | — |
 | `RUSTY_JIRA_EMAIL` | Jira auth email | — |
 | `RUSTY_JIRA_API_TOKEN` | Jira API token | — |
@@ -407,6 +409,37 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 Supports 99+ providers: `openai/gpt-4o`, `google/gemini-2.5-flash`, `openrouter/...`, etc.
+
+### Model + Provider Routing Notes
+
+The same model id can route through different inference providers (e.g. `requesty/deepseek/deepseek-v4-pro` vs. `requesty/fireworks/deepseek-v4-pro`). They are **not interchangeable** — different provider backends serve the same model with different latency profiles, tool-calling reliability, and rate limits. When picking a route for `RUSTY_REVIEW_MODELS` or `RUSTY_JUDGE_MODEL`, the choice between proxy backends matters as much as the choice between models.
+
+Empirically observed gotchas:
+
+- **`requesty/fireworks/deepseek-v4-pro` tool-loops on review-tier calls.** With `RUSTY_LLM_MAX_STEPS=10` and active `searchCode` / `getFileContext` tools, observed reviewer passes hanging for 10-15 minutes before the step cap fires. Use `requesty/deepseek/deepseek-v4-pro` (the official DeepSeek provider on Requesty) for the review path instead. Fireworks-routed deepseek is fine for the **judge** because the judge has no tools and can't tool-loop.
+- **`ollama/deepseek-v4-pro:cloud` (Ollama Cloud) was observed sustaining 503 "Server overloaded" through full retry budget** during peak load. The 503 is genuinely retried by `isTransientRetryableError`, but if all attempts fail you've lost the pass. Capacity has fluctuated; flip to a Requesty-backed deepseek if Ollama Cloud's hosted instance is congested.
+- **`moonshot/kimi-k2.5` requires `temperature=1`.** Lower values are rejected by the upstream and the call fails. The `HARD_TEMPERATURE_LOCKS` table in `model.ts` rewrites the temperature on this exact pattern; it does NOT catch `kimi-k2.6` or proxy variants like `requesty/fireworks/kimi-k2.6`. Empirically the k2.x series benefits from `temperature=1` regardless of the route — set it explicitly via `RUSTY_REVIEW_TEMPERATURES` for any kimi-shaped pass.
+- **Single-provider ensembles defeat consensus diversity.** If you set `RUSTY_REVIEW_MODELS` to three Anthropic models, the cluster algorithm has very little signal to filter — different sizes of the same model agree more than different vendors. Mix providers (Anthropic / xAI / Moonshot / DeepSeek / OpenAI / Google) for the consensus path to be useful.
+- **Skim tier inherits `RUSTY_REVIEW_MODELS[0]`.** When the cascade triages a file as "skim" rather than "deep-review", the skim pass uses a single-pass review with the **first** entry in `RUSTY_REVIEW_MODELS` (`consensus.ts:113-120`). If slot 1 is a slow model (`deepseek-v4-pro` reasoning takes minutes per call), skim becomes slow too — even though the skim tier is supposed to be the fast triage path. Put a quick model (grok, kimi, gemini) in slot 1 and let the slower / more analytical models live in slots 2-3 where they only fire on consensus deep-review chunks.
+
+If you observe a new failure pattern tied to a specific provider+model combination, add an entry here so the next person doesn't burn an afternoon on the same shape.
+
+### OpenRouter as an alternative gateway
+
+Same shape as Requesty — Mastra's router fallback handles `openrouter/*` model ids automatically when `OPENROUTER_API_KEY` is set. No code change needed.
+
+```bash
+OPENROUTER_API_KEY=sk-or-v1-...
+RUSTY_LLM_MODEL=openrouter/anthropic/claude-sonnet-4-5
+RUSTY_REVIEW_MODELS=openrouter/x-ai/grok-4.3,openrouter/moonshotai/kimi-k2.6,openrouter/deepseek/deepseek-v4-pro
+```
+
+You can mix gateways in one ensemble — `requesty/...`, `openrouter/...`, `ollama/...`, and direct provider ids all resolve per-pass through their own routes.
+
+Caveats:
+- **Native structured output is off by default for OpenRouter.** `supportsNativeStructuredOutput` doesn't include `openrouter/` in its allow-list because OpenRouter's proxying of `response_format: json_schema` varies by underlying model. Route through the structuring model (`RUSTY_LLM_STRUCTURING_MODEL`) instead, or opt in per-pattern with `RUSTY_LLM_NATIVE_STRUCTURED_OUTPUT=openrouter/anthropic/*` if you've verified the upstream honors it.
+- **OpenRouter's load balancer picks an inference backend per request**, so the same `openrouter/deepseek/deepseek-v4-pro` request can land on Fireworks, DeepSeek's own API, Together, etc. — bringing the same provider-routing-matters lesson with it. Pin a specific backend with the `:nitro` suffix (fastest available) or the OpenRouter-native `provider` parameter if you need determinism.
+- **No bot-level prompt-cache integration**, the way `requesty/*` gets `auto_cache: true`. OpenRouter has its own caching for some models — handled upstream, no env var to flip on the bot side.
 
 ### Model Inference Settings
 
@@ -572,6 +605,32 @@ Each CLI entry point calls `configureGlobalHttp()` at startup, which installs an
 These apply to **all** outbound `fetch` calls (LLM routes + GitHub/GitLab/ADO APIs). Raising the timeout never harms a fast request — it only delays the failure mode for slow ones.
 
 If you keep seeing headers-timeout failures on a specific consensus pass, bump `RUSTY_LLM_HEADERS_TIMEOUT_MS` to `900000` or `1200000`. If the failure persists past 15 minutes, the upstream model is genuinely stuck (not slow) — the right fix is to drop that model from `RUSTY_REVIEW_MODELS` rather than extend the timeout further.
+
+### Diagnostic Logging
+
+Two opt-in flags surface internal state for debugging slow consensus runs and tuning ensemble behavior. Both default off so production cost is zero.
+
+**`RUSTY_LOG_AGENT_STEPS=true`** — one log line per agent step inside every `runReview` call:
+
+```jsonc
+{ "stepNumber": 0, "finishReason": "tool-calls", "toolCallCount": 3, "totalTokens": 12450, ... }
+{ "stepNumber": 1, "finishReason": "tool-calls", "toolCallCount": 1, "totalTokens": 8200, ... }
+{ "stepNumber": 2, "finishReason": "stop", "toolCallCount": 0, "totalTokens": 6100, ... }
+```
+
+Useful when a pass takes minutes and you can't tell whether the model is making forward progress (decreasing tool calls, reasonable token counts per step) or spinning in a tool-call loop (constant or growing tool calls, no `"stop"` ever). Particularly diagnostic for the `finishReason: "tool-calls"` failure mode where a tool-happy model burns its step budget without emitting a final answer — the per-step trace tells you whether `RUSTY_LLM_MAX_STEPS` saved the day or got hit.
+
+**`RUSTY_LOG_RAW_FINDINGS=true`** — emits each consensus pass's findings list **before clustering**, at debug level:
+
+```jsonc
+{ "passIndex": 0, "model": "ollama/deepseek-v4-pro:cloud", "findingCount": 4, "findings": [ ... ], ... }
+{ "passIndex": 1, "model": "requesty/xai/grok-4.3", "findingCount": 6, "findings": [ ... ], ... }
+{ "passIndex": 2, "model": "ollama/kimi-k2.6:cloud", "findingCount": 3, "findings": [ ... ], ... }
+```
+
+Lets you tell whether the models are actually disagreeing (different findings → clustering's job is hard, threshold may be too strict) vs. saying the same thing in different words (overlap exists but Jaccard threshold may be missing it). Prerequisite for tuning `cluster.ts` — see `CONSENSUS-QUALITY-WRITEUP.md` for proposed experiments.
+
+The pino logger has to be at `debug` level for this one — set `LOG_LEVEL=debug` alongside the flag if you're not seeing the output.
 
 ### OpenGrep Pre-scan
 

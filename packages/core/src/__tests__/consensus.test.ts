@@ -456,3 +456,75 @@ describe("runConsensusReview failure tolerance", () => {
     }
   });
 });
+
+describe("RUSTY_LOG_RAW_FINDINGS", () => {
+  beforeEach(() => {
+    callCount = 0;
+    mockBehavior = "default";
+    delete process.env.RUSTY_REVIEW_MODELS;
+    delete process.env.RUSTY_LOG_RAW_FINDINGS;
+    process.env.RUSTY_REVIEW_ADAPTIVE_PASSES = "false";
+    vi.clearAllMocks();
+  });
+
+  it("does not emit raw-findings logs by default", async () => {
+    const { logger } = await import("../logger.js");
+    const debugSpy = vi.spyOn(logger, "debug");
+
+    await runConsensusReview([], { ...config, consensusPasses: 3 }, prMetadata, "diff content");
+
+    const rawFindingCalls = debugSpy.mock.calls.filter(
+      (c) =>
+        typeof c[1] === "string" && c[1].includes("raw consensus pass findings before clustering"),
+    );
+    expect(rawFindingCalls).toHaveLength(0);
+    debugSpy.mockRestore();
+  });
+
+  it("emits one debug log per pass with file/line/severity/category/message when flag is 'true'", async () => {
+    process.env.RUSTY_LOG_RAW_FINDINGS = "true";
+    const { logger } = await import("../logger.js");
+    const debugSpy = vi.spyOn(logger, "debug");
+
+    await runConsensusReview([], { ...config, consensusPasses: 3 }, prMetadata, "diff content");
+
+    const rawFindingCalls = debugSpy.mock.calls.filter(
+      (c) =>
+        typeof c[1] === "string" && c[1].includes("raw consensus pass findings before clustering"),
+    );
+    expect(rawFindingCalls).toHaveLength(3);
+
+    for (let i = 0; i < 3; i++) {
+      const bindings = rawFindingCalls[i][0] as Record<string, unknown>;
+      expect(bindings.passIndex).toBe(i);
+      expect(bindings.prId).toBe("42");
+      expect(bindings.findingCount).toBeTypeOf("number");
+      const findings = bindings.findings as Record<string, unknown>[];
+      expect(findings).toBeInstanceOf(Array);
+      // each finding entry must carry exactly the documented redacted fields
+      for (const f of findings) {
+        expect(f).toHaveProperty("file");
+        expect(f).toHaveProperty("line");
+        expect(f).toHaveProperty("severity");
+        expect(f).toHaveProperty("category");
+        expect(f).toHaveProperty("message");
+      }
+    }
+    debugSpy.mockRestore();
+  });
+
+  it("treats values other than the literal string 'true' as off", async () => {
+    process.env.RUSTY_LOG_RAW_FINDINGS = "1"; // not 'true'
+    const { logger } = await import("../logger.js");
+    const debugSpy = vi.spyOn(logger, "debug");
+
+    await runConsensusReview([], { ...config, consensusPasses: 3 }, prMetadata, "diff content");
+
+    const rawFindingCalls = debugSpy.mock.calls.filter(
+      (c) =>
+        typeof c[1] === "string" && c[1].includes("raw consensus pass findings before clustering"),
+    );
+    expect(rawFindingCalls).toHaveLength(0);
+    debugSpy.mockRestore();
+  });
+});

@@ -98,6 +98,45 @@ function readLlmMaxSteps(): number | undefined {
   return Math.floor(n);
 }
 
+/**
+ * gated by `RUSTY_LOG_AGENT_STEPS=true`. when on, every agent step emits a
+ * log line with `stepNumber`, `finishReason`, `toolCallCount`, and token
+ * usage. lets us tell whether a long-running pass is making forward progress
+ * (steady stream of `finishReason="tool-calls"` then a final `"stop"`) or
+ * spinning in a tool-call loop without ever stopping. defaults to no-op so
+ * the perf cost in production is zero.
+ *
+ * see FOLLOWUPS #3 (the Kimi tool-call termination diagnosis) and the
+ * consensus quality writeup — this is the missing diagnostic for both.
+ */
+function buildStepLogger(bindings: Record<string, unknown>): ((step: unknown) => void) | undefined {
+  if (process.env.RUSTY_LOG_AGENT_STEPS !== "true") return undefined;
+  let stepNumber = 0;
+  return (step) => {
+    if (typeof step !== "object" || step === null) return;
+    const s = step as {
+      finishReason?: unknown;
+      toolCalls?: { length?: number };
+      usage?: { totalTokens?: number; inputTokens?: number; outputTokens?: number };
+      warnings?: unknown[];
+    };
+    log.info(
+      {
+        ...bindings,
+        stepNumber,
+        finishReason: s.finishReason,
+        toolCallCount: s.toolCalls?.length ?? 0,
+        totalTokens: s.usage?.totalTokens,
+        inputTokens: s.usage?.inputTokens,
+        outputTokens: s.usage?.outputTokens,
+        warningCount: Array.isArray(s.warnings) ? s.warnings.length : 0,
+      },
+      "agent step finished",
+    );
+    stepNumber++;
+  };
+}
+
 // when set, mastra runs a separate structuring agent on top of the main
 // review agent's output: the main agent produces freeform prose (with tools
 // available, no schema pressure) and a cheap structuring model translates
@@ -293,6 +332,7 @@ export async function runReview(
     tier,
     ...(structuringConfig && { structuringModel: getModelDisplayName(structuringConfig) }),
   };
+  const onStepFinish = buildStepLogger(logBindings);
   const response = await generateWithTransientRetry(
     () =>
       generateWithStructuredOutputRetry(async () => {
@@ -305,6 +345,7 @@ export async function runReview(
           ...(Object.keys(modelSettings).length > 0 && { modelSettings }),
           ...(maxSteps !== undefined && { maxSteps }),
           ...(prepareStep && { prepareStep }),
+          ...(onStepFinish && { onStepFinish }),
         });
         // mastra's prompt-injected JSON path can silently return object:undefined
         // when the model emits unparseable text instead of throwing the schema

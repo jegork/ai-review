@@ -40,12 +40,13 @@ jobs:
 
           RUSTY_LLM_MODEL: requesty/google/gemini-3.1-flash-lite-preview
           RUSTY_REVIEW_TEMPERATURE: "1"
-          # cross-provider consensus: deepseek + kimi via ollama cloud,
-          # grok via requesty. transient Ollama Cloud 5xx/429s are now
-          # retried by isTransientRetryableError (see review.ts) so we
-          # don't have to defensively reorder around them.
+          # cross-vendor consensus. deepseek via the official DeepSeek
+          # provider on Requesty (NOT fireworks — fireworks routing
+          # tool-loops on the same model id, see Model + Provider Routing
+          # Notes in README). grok via Requesty. kimi via Ollama Cloud
+          # for direct moonshot routing.
           RUSTY_REVIEW_MODELS: >-
-            ollama/deepseek-v4-pro:cloud,
+            requesty/deepseek/deepseek-v4-pro,
             requesty/xai/grok-4.3,
             ollama/kimi-k2.6:cloud
           RUSTY_REVIEW_TEMPERATURES: "0.3,0.3,1"
@@ -57,7 +58,9 @@ jobs:
           # the structured-output JSON. see #152.
           RUSTY_LLM_MAX_STEPS: "10"
           RUSTY_JUDGE_ENABLED: "true"
-          RUSTY_JUDGE_MODEL: ollama/deepseek-v4-pro:cloud
+          # judge has no tools, so requesty/fireworks/deepseek-v4-pro is fine
+          # here even though it tool-loops on the review path.
+          RUSTY_JUDGE_MODEL: requesty/fireworks/deepseek-v4-pro
           RUSTY_JUDGE_TEMPERATURE: "0.1"
           RUSTY_LLM_TRIAGE_MODEL: requesty/google/gemini-3.1-flash-lite-preview
           RUSTY_TRIAGE_TEMPERATURE: "0"
@@ -68,3 +71,12 @@ jobs:
           RUSTY_GRAPH_CONTEXT: "true"
           RUSTY_GRAPH_CONTEXT_TOKEN_BUDGET: "2000"
           RUSTY_GRAPH_CONTEXT_MAX_CANDIDATES: "8"
+          # collect cross-model overlap data on every self-review. each
+          # consensus pass logs its raw findings (file/line/severity/
+          # message) before clustering, so we can measure agreementRate
+          # empirically and tune cluster.ts thresholds. needs LOG_LEVEL=debug
+          # because the per-pass payload is bigger than info-level deserves.
+          # see CONSENSUS-QUALITY-WRITEUP.md for the experiments this
+          # unblocks.
+          RUSTY_LOG_RAW_FINDINGS: "true"
+          LOG_LEVEL: debug
