@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.14.0](https://github.com/jegork/rusty-bot/compare/v1.13.0...v1.14.0) (2026-05-11)
+
+
+### Features
+
+* instrument per-pass findings + per-step finishReason behind debug flags ([#174](https://github.com/jegork/rusty-bot/issues/174)) ([72926d2](https://github.com/jegork/rusty-bot/commit/72926d2cb79ad412fad76330f9cd42b97c35f341))
+
+
+### Bug Fixes
+
+* **core:** union joining-finding tokens into cluster comparison vocabulary ([#176](https://github.com/jegork/rusty-bot/issues/176)) ([38c6f97](https://github.com/jegork/rusty-bot/commit/38c6f9796c7d5c4239d85c747c14b040c27858c5))
+
 ## [1.13.0](https://github.com/jegork/rusty-bot/compare/v1.12.1...v1.13.0) (2026-05-09)
 
 
