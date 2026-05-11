@@ -31,6 +31,8 @@ jobs:
           # mastra's native requesty provider reads this directly; no base-url
           # wiring needed when the model id already starts with "requesty/"
           REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
           # ollama cloud — bearer auth via Authorization header. set
           # RUSTY_OLLAMA_BASE_URL=https://ollama.com so any `ollama/*` model
           # in RUSTY_REVIEW_MODELS routes via the hosted endpoint instead of
@@ -46,7 +48,7 @@ jobs:
           # Notes in README). grok via Requesty. kimi via Ollama Cloud
           # for direct moonshot routing.
           RUSTY_REVIEW_MODELS: >-
-            requesty/deepseek/deepseek-v4-pro,
+            openrouter/deepseek/deepseek-v4-pro,
             requesty/xai/grok-4.3,
             ollama/kimi-k2.6:cloud
           RUSTY_REVIEW_TEMPERATURES: "0.3,0.3,1"
@@ -60,7 +62,7 @@ jobs:
           RUSTY_JUDGE_ENABLED: "true"
           # judge has no tools, so requesty/fireworks/deepseek-v4-pro is fine
           # here even though it tool-loops on the review path.
-          RUSTY_JUDGE_MODEL: requesty/fireworks/deepseek-v4-pro
+          RUSTY_JUDGE_MODEL: openrouter/deepseek/deepseek-v4-pro
           RUSTY_JUDGE_TEMPERATURE: "0.1"
           RUSTY_LLM_TRIAGE_MODEL: requesty/google/gemini-3.1-flash-lite-preview
           RUSTY_TRIAGE_TEMPERATURE: "0"
