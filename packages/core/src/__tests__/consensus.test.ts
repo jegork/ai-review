@@ -385,7 +385,7 @@ describe("runConsensusReview failure tolerance", () => {
     expect(result.consensusMetadata?.passRecommendations).toHaveLength(2);
   });
 
-  it("throws when too few passes succeed to meet the threshold", async () => {
+  it("degrades gracefully when only one pass survives and below threshold (1/3)", async () => {
     const { runReview } = await import("../agent/review.js");
     (runReview as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
@@ -394,10 +394,52 @@ describe("runConsensusReview failure tolerance", () => {
 
     const consensusConfig = { ...config, consensusPasses: 3 };
 
-    // 1 successful pass, threshold=2 ⇒ cannot form consensus
-    await expect(
-      runConsensusReview([], consensusConfig, prMetadata, "diff content"),
-    ).rejects.toThrow(/consensus/i);
+    // 1 successful pass, configured threshold=2 ⇒ effective threshold drops to 1,
+    // surviving pass's single-vote findings pass through clustering. judge would
+    // filter downstream, but consensus itself no longer aborts.
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].voteCount).toBe(1);
+    expect(result.consensusMetadata?.degraded).toBe(true);
+    expect(result.consensusMetadata?.threshold).toBe(2);
+    expect(result.consensusMetadata?.effectiveThreshold).toBe(1);
+    expect(result.consensusMetadata?.failedPasses).toBe(2);
+  });
+
+  it("degrades gracefully on 1/2 (the production failure mode this PR addresses)", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
+      .mockRejectedValueOnce(
+        new Error("structured output parser returned no object (model likely emitted text…)"),
+      );
+
+    const consensusConfig = { ...config, consensusPasses: 2 };
+
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.consensusMetadata?.degraded).toBe(true);
+    expect(result.consensusMetadata?.threshold).toBe(2);
+    expect(result.consensusMetadata?.effectiveThreshold).toBe(1);
+    expect(result.consensusMetadata?.failedPasses).toBe(1);
+  });
+
+  it("does NOT mark a 2/3 run as degraded when it still meets threshold", async () => {
+    const { runReview } = await import("../agent/review.js");
+    (runReview as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }))
+      .mockRejectedValueOnce(new Error("structured output failed"))
+      .mockResolvedValueOnce(makeResult({ findings: [sharedFinding], tokenCount: 100 }));
+
+    const consensusConfig = { ...config, consensusPasses: 3 };
+
+    const result = await runConsensusReview([], consensusConfig, prMetadata, "diff content");
+
+    expect(result.consensusMetadata?.degraded).toBe(false);
+    expect(result.consensusMetadata?.threshold).toBe(2);
+    expect(result.consensusMetadata?.effectiveThreshold).toBe(2);
   });
 
   it("throws when every pass fails", async () => {

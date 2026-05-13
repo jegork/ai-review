@@ -432,6 +432,10 @@ describe("judgeReviewResult", () => {
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+
+        effectiveThreshold: 2,
+
+        degraded: false,
         agreementRate: 1,
         recommendationElevated: true,
         passRecommendations: [
@@ -455,6 +459,8 @@ describe("judgeReviewResult", () => {
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+        effectiveThreshold: 2,
+        degraded: false,
         agreementRate: 1,
         recommendationElevated: false,
         passRecommendations: [

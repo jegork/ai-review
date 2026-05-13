@@ -31,7 +31,16 @@ export interface DroppedFinding {
 
 export interface ConsensusMetadata {
   passes: number;
+  /** configured threshold (`ceil(passes/2)` by default) — may not match the
+   * threshold actually applied to clustering if the review degraded. */
   threshold: number;
+  /** threshold actually used to filter clusters. equals `threshold` in healthy
+   * runs; lower when partial pass failures triggered graceful degradation. */
+  effectiveThreshold: number;
+  /** true when fewer passes succeeded than the configured threshold required
+   * and the review proceeded with a lowered effective threshold instead of
+   * aborting. judge filtering becomes the primary quality gate in this case. */
+  degraded: boolean;
   agreementRate: number;
   recommendationElevated: boolean;
   passRecommendations: Recommendation[];

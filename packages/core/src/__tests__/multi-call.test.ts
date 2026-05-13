@@ -514,6 +514,8 @@ describe("mergeResults", () => {
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+        effectiveThreshold: 2,
+        degraded: false,
         agreementRate: 0,
         recommendationElevated: true,
         passRecommendations: [
@@ -585,6 +587,8 @@ describe("mergeResults", () => {
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+        effectiveThreshold: 2,
+        degraded: false,
         agreementRate: 0,
         recommendationElevated: true,
         passRecommendations: [

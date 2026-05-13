@@ -168,10 +168,37 @@ export async function runConsensusReview(
     }
   }
 
-  if (results.length < threshold) {
-    throw new AggregateError(
-      failures,
-      `consensus review failed: only ${results.length}/${passes} passes succeeded (threshold ${threshold})`,
+  if (results.length === 0) {
+    throw new AggregateError(failures, `consensus review failed: 0/${passes} passes succeeded`);
+  }
+
+  // graceful degradation: when at least one pass survived but we're below the
+  // configured threshold, fall back to the surviving pass count instead of
+  // throwing. Single flaky upstream calls (e.g. STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED
+  // on a model that emitted unparseable text) shouldn't abort the whole review.
+  // the judge runs downstream of clustering and filters single-vote findings on
+  // its own confidence rubric, so quality control is preserved.
+  const effectiveThreshold = Math.min(threshold, results.length);
+  const degraded = effectiveThreshold < threshold;
+  if (degraded) {
+    const survivingModels = settled
+      .map((s, i) => (s.status === "fulfilled" ? passModelConfigs[i].displayName : null))
+      .filter((m): m is string => m !== null);
+    const failedModels = settled
+      .map((s, i) => (s.status === "rejected" ? passModelConfigs[i].displayName : null))
+      .filter((m): m is string => m !== null);
+    logger.warn(
+      {
+        passes,
+        configuredThreshold: threshold,
+        effectiveThreshold,
+        succeededPasses: results.length,
+        failedPasses: failures.length,
+        survivingModels,
+        failedModels,
+        prId: prMetadata.id,
+      },
+      "consensus review degraded — surviving passes below configured threshold; judge will filter",
     );
   }
 
@@ -211,8 +238,8 @@ export async function runConsensusReview(
   const findingClusters = clusterFindings(findingsByPass);
   const observationClusters = clusterObservations(observationsByPass);
 
-  const survivingClusters = findingClusters.filter((c) => c.voteCount >= threshold);
-  const droppedClusters = findingClusters.filter((c) => c.voteCount < threshold);
+  const survivingClusters = findingClusters.filter((c) => c.voteCount >= effectiveThreshold);
+  const droppedClusters = findingClusters.filter((c) => c.voteCount < effectiveThreshold);
 
   const survivingFindings: Finding[] = survivingClusters.map((c) => ({
     ...c.representative,
@@ -228,7 +255,7 @@ export async function runConsensusReview(
   }));
 
   const survivingObservations: Observation[] = observationClusters
-    .filter((c) => c.voteCount >= threshold)
+    .filter((c) => c.voteCount >= effectiveThreshold)
     .map((c) => ({ ...c.representative, voteCount: c.voteCount }));
 
   const allFiles = new Set(results.flatMap((r) => r.filesReviewed));
@@ -236,7 +263,11 @@ export async function runConsensusReview(
 
   const totalRawObservations = observationsByPass.reduce((sum, pass) => sum + pass.length, 0);
 
-  const recommendation = deriveRecommendation(survivingFindings, passRecommendations, threshold);
+  const recommendation = deriveRecommendation(
+    survivingFindings,
+    passRecommendations,
+    effectiveThreshold,
+  );
   const recommendationElevated = survivingFindings.length === 0 && recommendation !== "looks_good";
 
   const agreementRate =
@@ -246,6 +277,8 @@ export async function runConsensusReview(
     {
       passes,
       threshold,
+      effectiveThreshold,
+      degraded,
       failedPasses,
       totalClusters: findingClusters.length,
       surviving: survivingFindings.length,
@@ -281,6 +314,8 @@ export async function runConsensusReview(
     consensusMetadata: {
       passes,
       threshold,
+      effectiveThreshold,
+      degraded,
       agreementRate,
       recommendationElevated,
       passRecommendations,
