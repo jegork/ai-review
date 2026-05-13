@@ -42,13 +42,13 @@ jobs:
 
           RUSTY_LLM_MODEL: requesty/google/gemini-3.1-flash-lite-preview
           RUSTY_REVIEW_TEMPERATURE: "1"
-          # cross-vendor consensus. deepseek via the official DeepSeek
-          # provider on Requesty (NOT fireworks — fireworks routing
-          # tool-loops on the same model id, see Model + Provider Routing
-          # Notes in README). grok via Requesty. kimi via Ollama Cloud
-          # for direct moonshot routing.
+          # cross-vendor consensus. deepseek-v4-flash via OpenRouter
+          # (cheaper, shallower variant of v4-pro — v4-pro on Novita /
+          # Requesty's fireworks route was 4× direct API price and
+          # tool-looped at MAX_STEPS=10; see Model + Provider Routing
+          # Notes in README). grok via Requesty. kimi via Ollama Cloud.
           RUSTY_REVIEW_MODELS: >-
-            openrouter/deepseek/deepseek-v4-pro,
+            openrouter/deepseek/deepseek-v4-flash,
             requesty/xai/grok-4.3,
             ollama/kimi-k2.6:cloud
           RUSTY_REVIEW_TEMPERATURES: "0.3,0.3,1"
@@ -60,8 +60,9 @@ jobs:
           # the structured-output JSON. see #152.
           RUSTY_LLM_MAX_STEPS: "10"
           RUSTY_JUDGE_ENABLED: "true"
-          # judge has no tools, so requesty/fireworks/deepseek-v4-pro is fine
-          # here even though it tool-loops on the review path.
+          # judge has no tools (single call per PR, no tool-loop risk),
+          # so the Novita-routed v4-pro price premium is bounded — one call
+          # is fine even though slot 1 had to move off v4-pro to v4-flash.
           RUSTY_JUDGE_MODEL: openrouter/deepseek/deepseek-v4-pro
           RUSTY_JUDGE_TEMPERATURE: "0.1"
           RUSTY_LLM_TRIAGE_MODEL: requesty/google/gemini-3.1-flash-lite-preview
