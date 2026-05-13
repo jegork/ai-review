@@ -26,37 +26,42 @@ function findOverlappingHunks(hunks: Hunk[], line: number, endLine: number): Hun
 
 function formatHunkExcerpt(hunk: Hunk): string[] {
   const lines = hunk.content.split("\n");
-  const oldLines: string[] = [];
-  const newLines: string[] = [];
+  // mirrors compress.ts formatHunks: context, additions, and sibling signatures
+  // go into the new-side block; removals into the old-side block. context is
+  // emitted exactly once — the model can still read removals from the old
+  // block via their line numbers without re-reading every context line.
+  const oldRemovedLines: string[] = [];
+  const newSideLines: string[] = [];
   let oldLine = hunk.oldStart;
   let newLine = hunk.newStart;
   for (const line of lines) {
     if (line.startsWith("-")) {
-      oldLines.push(`${oldLine} ${line}`);
+      oldRemovedLines.push(`${oldLine} ${line}`);
       oldLine++;
     } else if (line.startsWith("+")) {
-      newLines.push(`${newLine} ${line}`);
+      newSideLines.push(`${newLine} ${line}`);
       newLine++;
     } else if (line.startsWith("\\")) {
       continue;
     } else if (line.startsWith("~")) {
-      oldLines.push(line);
-      newLines.push(line);
+      // sibling-signature annotation: emit once on the new side without
+      // advancing counters
+      newSideLines.push(line);
     } else {
-      oldLines.push(`${oldLine} ${line}`);
-      newLines.push(`${newLine} ${line}`);
+      // unchanged context: advance both counters, emit only on the new side
+      newSideLines.push(`${newLine} ${line}`);
       oldLine++;
       newLine++;
     }
   }
   const parts: string[] = [];
-  if (oldLines.length > 0) {
-    parts.push("__old hunk__");
-    parts.push(...oldLines);
-  }
-  if (newLines.length > 0) {
+  if (newSideLines.length > 0) {
     parts.push("__new hunk__");
-    parts.push(...newLines);
+    parts.push(...newSideLines);
+  }
+  if (oldRemovedLines.length > 0) {
+    parts.push("__old hunk__");
+    parts.push(...oldRemovedLines);
   }
   return parts;
 }
