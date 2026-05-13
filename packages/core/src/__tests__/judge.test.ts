@@ -588,6 +588,8 @@ describe("buildFindingExcerpt", () => {
     expect(excerpt.startsWith("## src/app.ts")).toBe(true);
     expect(excerpt).toContain("__new hunk__");
     expect(excerpt).toContain('1 +import { z } from "zod";');
+    // pure-add hunk (PATCHES has 2 additions, 0 deletions) — old block must be omitted
+    expect(excerpt).not.toContain("__old hunk__");
   });
 
   it("returns the not-found sentinel when the file isn't in the patches", () => {
@@ -629,6 +631,94 @@ describe("buildFindingExcerpt", () => {
     expect(excerpt).toContain("__old hunk__");
     expect(excerpt).toContain("__new hunk__");
     expect(excerpt).toContain("-removed mid");
+  });
+
+  it("emits each context line exactly once across both hunk blocks", () => {
+    // mixed hunk: context + addition + removal — context must appear once total
+    const patches: FilePatch[] = [
+      {
+        path: "src/mixed.ts",
+        additions: 1,
+        deletions: 1,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 10,
+            oldLines: 4,
+            newStart: 10,
+            newLines: 4,
+            content: [
+              " unchanged-before-MARKER",
+              "-removed-line",
+              "+added-line",
+              " unchanged-after-MARKER",
+            ].join("\n"),
+          },
+        ],
+      },
+    ];
+    const finding = makeFinding({ file: "src/mixed.ts", line: 10 });
+    const excerpt = buildFindingExcerpt(patches, finding);
+    const lines = excerpt.split("\n");
+    expect(lines.filter((l) => l.includes("unchanged-before-MARKER"))).toHaveLength(1);
+    expect(lines.filter((l) => l.includes("unchanged-after-MARKER"))).toHaveLength(1);
+    expect(excerpt).toContain("__new hunk__");
+    expect(excerpt).toContain("__old hunk__");
+  });
+
+  it("renders removed lines with old-side line numbers in __old hunk__", () => {
+    const patches: FilePatch[] = [
+      {
+        path: "src/removal.ts",
+        additions: 0,
+        deletions: 2,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 50,
+            oldLines: 3,
+            newStart: 50,
+            newLines: 1,
+            content: ["-gone-1", "-gone-2", " surviving-line"].join("\n"),
+          },
+        ],
+      },
+    ];
+    const finding = makeFinding({ file: "src/removal.ts", line: 50 });
+    const excerpt = buildFindingExcerpt(patches, finding);
+    // removed lines use old-side line numbers (50 + offset)
+    expect(excerpt).toContain("50 -gone-1");
+    expect(excerpt).toContain("51 -gone-2");
+    // the surviving context line goes to the new block with its new-side number
+    expect(excerpt).toContain("50  surviving-line");
+    // both blocks present
+    expect(excerpt).toContain("__old hunk__");
+    expect(excerpt).toContain("__new hunk__");
+  });
+
+  it("places sibling-signature annotations on the new side only", () => {
+    const patches: FilePatch[] = [
+      {
+        path: "src/sig.ts",
+        additions: 1,
+        deletions: 0,
+        isBinary: false,
+        hunks: [
+          {
+            oldStart: 5,
+            oldLines: 1,
+            newStart: 5,
+            newLines: 2,
+            content: ["~ // ... function outer() {", " context-line", "+added"].join("\n"),
+          },
+        ],
+      },
+    ];
+    const finding = makeFinding({ file: "src/sig.ts", line: 5 });
+    const excerpt = buildFindingExcerpt(patches, finding);
+    expect(excerpt.match(/~ \/\/ \.\.\. function outer/g)).toHaveLength(1);
+    // pure-add hunk → no __old hunk__ block at all
+    expect(excerpt).not.toContain("__old hunk__");
   });
 });
 
