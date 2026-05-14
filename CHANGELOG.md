@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.14.1](https://github.com/jegork/rusty-bot/compare/v1.14.0...v1.14.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* **consensus:** degrade gracefully when at least one pass survives ([#180](https://github.com/jegork/rusty-bot/issues/180)) ([4f06647](https://github.com/jegork/rusty-bot/commit/4f066479626d626fcfea1d2bba41b8ca06a5d9ab))
+* **formatter:** credit only successful pass models, annotate failures ([#183](https://github.com/jegork/rusty-bot/issues/183)) ([cb9f8be](https://github.com/jegork/rusty-bot/commit/cb9f8be1ee078ad39d6fa926cc2e9c10e0b4eb39))
+* **github:** retry per-comment on 422 instead of failing the whole review ([#182](https://github.com/jegork/rusty-bot/issues/182)) ([eccaa76](https://github.com/jegork/rusty-bot/commit/eccaa76eb65e1a3dd5a3e9f8097fe4c1391ba1fd))
+
+
+### Performance
+
+* **judge:** emit per-finding excerpt context once (port of [#169](https://github.com/jegork/rusty-bot/issues/169)) ([#178](https://github.com/jegork/rusty-bot/issues/178)) ([d34c4e8](https://github.com/jegork/rusty-bot/commit/d34c4e8fb7c100ec28368773e4cf7d67768658ff))
+* **review:** retry just the structurer on cached prose before rerolling ([#181](https://github.com/jegork/rusty-bot/issues/181)) ([8d09611](https://github.com/jegork/rusty-bot/commit/8d09611e6003bc0e0d4b2412f395a26ef5b01cf9))
+
 ## [1.14.0](https://github.com/jegork/rusty-bot/compare/v1.13.0...v1.14.0) (2026-05-11)
 
 
