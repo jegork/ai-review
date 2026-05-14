@@ -570,4 +570,29 @@ describe("buildUserMessage with priorContext", () => {
     const msg = buildWithPriorContext({ ...priorContext, findings: [] });
     expect(msg).not.toContain("Issues already surfaced");
   });
+
+  it("renders the files-already-reviewed section when filesReviewed is populated", () => {
+    const msg = buildWithPriorContext({
+      ...priorContext,
+      filesReviewed: [
+        "packages/ui/src/components/StopButton.tsx",
+        "apps/web/src/features/live-viewer/hooks.ts",
+      ],
+    });
+    expect(msg).toContain("Files already covered by the prior review");
+    expect(msg).toContain("`packages/ui/src/components/StopButton.tsx`");
+    expect(msg).toContain("`apps/web/src/features/live-viewer/hooks.ts`");
+    // pin the failure-mode-fix wording so the model knows not to flag missing ticket scope
+    expect(msg).toContain("do NOT flag it as missing");
+  });
+
+  it("omits the files-already-reviewed section when filesReviewed is missing (legacy markers)", () => {
+    const msg = buildWithPriorContext(priorContext);
+    expect(msg).not.toContain("Files already covered by the prior review");
+  });
+
+  it("omits the files-already-reviewed section when filesReviewed is an empty array", () => {
+    const msg = buildWithPriorContext({ ...priorContext, filesReviewed: [] });
+    expect(msg).not.toContain("Files already covered by the prior review");
+  });
 });

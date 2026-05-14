@@ -43,6 +43,36 @@ describe("encode/extract roundtrip", () => {
     const decoded = extractPriorReviewContext(encodePriorReviewContext(ctx));
     expect(decoded?.recommendation).toBe("looks_good");
   });
+
+  it("roundtrips filesReviewed when present", () => {
+    const ctx = makeContext({ filesReviewed: ["src/a.ts", "src/b.ts"] });
+    const decoded = extractPriorReviewContext(encodePriorReviewContext(ctx));
+    expect(decoded?.filesReviewed).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+
+  it("omits filesReviewed from the encoded payload when empty (keeps markers small)", () => {
+    const ctx = makeContext({ filesReviewed: [] });
+    const marker = encodePriorReviewContext(ctx);
+    // pull the base64 out and inspect the JSON directly — filesReviewed should not be a key
+    const m = /<!-- rusty-bot:context:([A-Za-z0-9+/=]+) -->/.exec(marker);
+    expect(m).not.toBeNull();
+    const json = Buffer.from(m![1], "base64").toString("utf-8");
+    expect(JSON.parse(json)).not.toHaveProperty("filesReviewed");
+  });
+
+  it("decodes legacy markers without filesReviewed as undefined (backward compat)", () => {
+    const legacy = Buffer.from(
+      JSON.stringify({
+        summary: "old marker",
+        recommendation: "looks_good",
+        findings: [],
+      }),
+      "utf-8",
+    ).toString("base64");
+    const decoded = extractPriorReviewContext(`<!-- rusty-bot:context:${legacy} -->`);
+    expect(decoded).not.toBeNull();
+    expect(decoded?.filesReviewed).toBeUndefined();
+  });
 });
 
 describe("encodePriorReviewContext truncation", () => {
@@ -88,6 +118,21 @@ describe("encodePriorReviewContext truncation", () => {
     );
     expect(decoded?.findings[0].message.length).toBeLessThan(huge.length);
     expect(decoded?.findings[0].message.endsWith("…")).toBe(true);
+  });
+
+  it("caps filesReviewed at FILES_REVIEWED_COUNT_CAP entries", () => {
+    const filesReviewed = Array.from(
+      { length: PRIOR_CONTEXT_LIMITS.filesReviewedCountCap + 25 },
+      (_, i) => `src/f${i}.ts`,
+    );
+    const decoded = extractPriorReviewContext(
+      encodePriorReviewContext(makeContext({ filesReviewed })),
+    );
+    expect(decoded?.filesReviewed).toHaveLength(PRIOR_CONTEXT_LIMITS.filesReviewedCountCap);
+    expect(decoded?.filesReviewed?.[0]).toBe("src/f0.ts");
+    expect(decoded?.filesReviewed?.at(-1)).toBe(
+      `src/f${PRIOR_CONTEXT_LIMITS.filesReviewedCountCap - 1}.ts`,
+    );
   });
 });
 
@@ -136,6 +181,32 @@ describe("extractPriorReviewContext failure modes", () => {
     ).toString("base64");
     expect(extractPriorReviewContext(`<!-- rusty-bot:context:${bad} -->`)).toBeNull();
   });
+
+  it("returns null when filesReviewed is present but not an array", () => {
+    const bad = Buffer.from(
+      JSON.stringify({
+        summary: "x",
+        recommendation: "looks_good",
+        findings: [],
+        filesReviewed: "src/a.ts",
+      }),
+      "utf-8",
+    ).toString("base64");
+    expect(extractPriorReviewContext(`<!-- rusty-bot:context:${bad} -->`)).toBeNull();
+  });
+
+  it("returns null when filesReviewed contains non-strings", () => {
+    const bad = Buffer.from(
+      JSON.stringify({
+        summary: "x",
+        recommendation: "looks_good",
+        findings: [],
+        filesReviewed: ["ok.ts", 42],
+      }),
+      "utf-8",
+    ).toString("base64");
+    expect(extractPriorReviewContext(`<!-- rusty-bot:context:${bad} -->`)).toBeNull();
+  });
 });
 
 describe("buildPriorContextFromReview", () => {
@@ -173,6 +244,7 @@ describe("buildPriorContextFromReview", () => {
         message: "missing csrf check",
       },
     ]);
+    expect(ctx.filesReviewed).toEqual(["src/auth.ts"]);
   });
 
   it("produces an empty findings array when the review has none", () => {
@@ -188,5 +260,26 @@ describe("buildPriorContextFromReview", () => {
       tokenCount: 0,
     };
     expect(buildPriorContextFromReview(review).findings).toEqual([]);
+  });
+
+  it("carries forward filesReviewed verbatim from the review result", () => {
+    const review: ReviewResult = {
+      summary: "PR-wide summary",
+      recommendation: "looks_good",
+      findings: [],
+      observations: [],
+      ticketCompliance: [],
+      missingTests: [],
+      filesReviewed: [
+        "packages/ui/src/components/StopButton.tsx",
+        "apps/web/src/features/live-viewer/hooks.ts",
+      ],
+      modelUsed: "test-model",
+      tokenCount: 0,
+    };
+    expect(buildPriorContextFromReview(review).filesReviewed).toEqual([
+      "packages/ui/src/components/StopButton.tsx",
+      "apps/web/src/features/live-viewer/hooks.ts",
+    ]);
   });
 });

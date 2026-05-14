@@ -153,6 +153,12 @@ export interface PriorReviewContext {
   summary: string;
   recommendation: Recommendation;
   findings: PriorReviewContextFinding[];
+  /** file paths covered by the prior review pass. lets the next incremental
+   * re-review know which work was already evaluated, so it doesn't flag features
+   * from linked tickets as "missing" when those features landed in earlier
+   * commits and were already approved. optional for backward compat with markers
+   * encoded before this field existed; decoders treat missing as undefined. */
+  filesReviewed?: string[];
 }
 
 export interface Hunk {
