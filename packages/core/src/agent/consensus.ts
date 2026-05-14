@@ -320,6 +320,14 @@ export async function runConsensusReview(
       recommendationElevated,
       passRecommendations,
       passModels: passModelConfigs.map((m) => m.displayName),
+      // only credit models whose pass actually produced a result. an upstream
+      // failure (e.g. an invalid model id on openrouter, a 422 from the
+      // provider, a timeout) leaves the slot in `settled` as rejected — we
+      // omit those from successfulPassModels so the formatter doesn't
+      // attribute the review to a model that never ran.
+      successfulPassModels: settled
+        .map((s, i) => (s.status === "fulfilled" ? passModelConfigs[i].displayName : null))
+        .filter((m): m is string => m !== null),
       ...(passPlan.reason ? { passPlanReason: passPlan.reason } : {}),
       failedPasses,
     },
