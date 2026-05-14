@@ -74,6 +74,11 @@ jobs:
           RUSTY_GRAPH_CONTEXT_MAX_CANDIDATES: "8"
           # per-step finishReason / toolCallCount logging. Surfaces tool-loop
           # behavior (e.g. the deepseek-v4-pro on Fireworks pathology that
-          # exhausted MAX_STEPS=10 with verification searches). emits at info
-          # level so no LOG_LEVEL override needed.
+          # exhausted MAX_STEPS=10 with verification searches).
           RUSTY_LOG_AGENT_STEPS: "true"
+          # consensus-quality experiment: dump per-pass raw findings BEFORE
+          # clustering so we can tell whether models are producing different
+          # findings (hard clustering job) vs. the same ones (easy job).
+          # see CONSENSUS-QUALITY-WRITEUP.md.
+          RUSTY_LOG_RAW_FINDINGS: "true"
+          LOG_LEVEL: debug
