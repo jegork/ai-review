@@ -7,6 +7,7 @@ export const PRIOR_CONTEXT_MARKER_RE = /<!--\s*rusty-bot:context:([A-Za-z0-9+/=]
 const SUMMARY_CHAR_CAP = 4_000;
 const FINDING_MESSAGE_CHAR_CAP = 250;
 const FINDINGS_COUNT_CAP = 50;
+const FILES_REVIEWED_COUNT_CAP = 100;
 const TRUNCATED_SUFFIX = "\n\n[truncated]";
 const ELLIPSIS = "…";
 
@@ -34,6 +35,7 @@ export function buildPriorContextFromReview(review: ReviewResult): PriorReviewCo
       severity: f.severity,
       message: f.message,
     })),
+    filesReviewed: review.filesReviewed,
   };
 }
 
@@ -48,6 +50,9 @@ export function encodePriorReviewContext(ctx: PriorReviewContext): string {
       severity: f.severity,
       message: truncateMessage(f.message),
     })),
+    ...(ctx.filesReviewed && ctx.filesReviewed.length > 0
+      ? { filesReviewed: ctx.filesReviewed.slice(0, FILES_REVIEWED_COUNT_CAP) }
+      : {}),
   };
   const json = JSON.stringify(truncated);
   const b64 = Buffer.from(json, "utf-8").toString("base64");
@@ -73,7 +78,15 @@ function isContext(value: unknown): value is PriorReviewContext {
   if (typeof v.recommendation !== "string") return false;
   if (!RECOMMENDATIONS.has(v.recommendation)) return false;
   if (!Array.isArray(v.findings)) return false;
-  return v.findings.every(isFinding);
+  if (!v.findings.every(isFinding)) return false;
+  // filesReviewed is optional (older markers don't have it); when present must
+  // be an array of strings — anything else means the payload was tampered with
+  // or produced by a buggy encoder, both of which should fall back to null.
+  if (v.filesReviewed !== undefined) {
+    if (!Array.isArray(v.filesReviewed)) return false;
+    if (!v.filesReviewed.every((p) => typeof p === "string")) return false;
+  }
+  return true;
 }
 
 /** extract a prior-context marker from a comment body. returns null on absence or any malformedness. */
@@ -93,4 +106,5 @@ export const PRIOR_CONTEXT_LIMITS = {
   summaryCharCap: SUMMARY_CHAR_CAP,
   findingMessageCharCap: FINDING_MESSAGE_CHAR_CAP,
   findingsCountCap: FINDINGS_COUNT_CAP,
+  filesReviewedCountCap: FILES_REVIEWED_COUNT_CAP,
 } as const;

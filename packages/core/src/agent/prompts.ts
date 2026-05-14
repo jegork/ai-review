@@ -208,6 +208,17 @@ function buildPriorContextSection(ctx: PriorReviewContext): string {
 
   parts.push(`\n**Previous recommendation:** ${ctx.recommendation}`);
 
+  if (ctx.filesReviewed && ctx.filesReviewed.length > 0) {
+    parts.push(
+      "\n**Files already covered by the prior review** (work in these paths has already been evaluated; " +
+        "if a linked ticket describes work in one of them, assume it was reviewed in an earlier commit and " +
+        "do NOT flag it as missing from this PR):",
+    );
+    for (const path of ctx.filesReviewed) {
+      parts.push(`- \`${path}\``);
+    }
+  }
+
   if (ctx.findings.length > 0) {
     parts.push(
       "\n**Issues already surfaced** (do NOT re-raise unless this commit changes the underlying code; " +
