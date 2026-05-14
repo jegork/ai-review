@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.3](https://github.com/jegork/rusty-bot/compare/v1.14.2...v1.14.3) (2026-05-14)
+
+
+### Bug Fixes
+
+* **prior-context:** carry forward filesReviewed so incremental re-reviews keep coverage memory ([#187](https://github.com/jegork/rusty-bot/issues/187)) ([7a17a8d](https://github.com/jegork/rusty-bot/commit/7a17a8d03d6277a0b302aabb090f65af195638ce))
+
 ## [1.14.2](https://github.com/jegork/rusty-bot/compare/v1.14.1...v1.14.2) (2026-05-14)
 
 
