@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.2](https://github.com/jegork/rusty-bot/compare/v1.14.1...v1.14.2) (2026-05-14)
+
+
+### Bug Fixes
+
+* **review:** inject final-step prompt addendum to prevent investigation-state summaries ([#185](https://github.com/jegork/rusty-bot/issues/185)) ([a8df9a7](https://github.com/jegork/rusty-bot/commit/a8df9a7c6b5787be5d3162da293ac67609c9fe93))
+* when prepareStep forces tool-free mode on the final step, also override ([a8df9a7](https://github.com/jegork/rusty-bot/commit/a8df9a7c6b5787be5d3162da293ac67609c9fe93))
+
 ## [1.14.1](https://github.com/jegork/rusty-bot/compare/v1.14.0...v1.14.1) (2026-05-14)
 
 
