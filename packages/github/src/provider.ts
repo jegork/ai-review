@@ -24,6 +24,59 @@ function buildLastShaMarker(sha: string): string {
   return `<!-- rusty-bot:last-sha:${sha} -->`;
 }
 
+interface InlineCommentPayload {
+  path: string;
+  line: number;
+  side: "RIGHT";
+  body: string;
+  start_line?: number;
+  start_side?: "RIGHT";
+}
+
+function buildInlineCommentPayload(finding: Finding): InlineCommentPayload {
+  const isMultiLine = finding.endLine && finding.endLine !== finding.line;
+  const payload: InlineCommentPayload = {
+    path: finding.file,
+    line: finding.endLine ?? finding.line,
+    side: "RIGHT",
+    body: formatInlineComment(finding),
+  };
+  if (isMultiLine) {
+    payload.start_line = finding.line;
+    payload.start_side = "RIGHT";
+  }
+  return payload;
+}
+
+/** GitHub's review endpoint returns 422 with `errors: ["Path could not be
+ * resolved"]` when a comment's path/line combo doesn't match its view of the
+ * PR's diff (file not present, line outside any hunk, or an edge case where
+ * our local hunk-index disagrees with GitHub's position model). Detect this
+ * specifically so we don't treat unrelated 422s (e.g., validation errors on
+ * body length) as recoverable. */
+function isPathResolutionError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as {
+    status?: unknown;
+    response?: { data?: { errors?: unknown } };
+  };
+  if (e.status !== 422) return false;
+  const errs = e.response?.data?.errors;
+  if (!Array.isArray(errs)) return false;
+  return errs.some(
+    (entry) =>
+      typeof entry === "string" && entry.toLowerCase().includes("path could not be resolved"),
+  );
+}
+
+function pickPayloadDiagnostics(p: InlineCommentPayload): Record<string, unknown> {
+  return {
+    path: p.path,
+    line: p.line,
+    ...(p.start_line !== undefined && { startLine: p.start_line }),
+  };
+}
+
 interface GitHubProviderConfig {
   octokit: Octokit;
   owner: string;
@@ -276,20 +329,61 @@ export class GitHubProvider implements GitProvider {
   async postInlineComments(findings: Finding[]): Promise<void> {
     if (findings.length === 0) return;
 
-    const comments = findings.map((finding) => {
-      const isMultiLine = finding.endLine && finding.endLine !== finding.line;
-      return {
-        path: finding.file,
-        line: finding.endLine ?? finding.line,
-        side: "RIGHT" as const,
-        body: formatInlineComment(finding),
-        ...(isMultiLine && {
-          start_line: finding.line,
-          start_side: "RIGHT" as const,
-        }),
-      };
-    });
+    const comments = findings.map(buildInlineCommentPayload);
 
+    // happy path: one review with all comments. GitHub's batch endpoint is
+    // all-or-nothing — if any single comment fails path/line validation,
+    // the entire POST returns 422 and no comments are posted.
+    try {
+      await this.postReviewWithComments(comments);
+      return;
+    } catch (err) {
+      if (!isPathResolutionError(err)) throw err;
+      if (comments.length === 1) {
+        // a single bad comment — nothing to salvage. log and drop it so the
+        // already-posted summary comment isn't undone by a fatal action error.
+        log.warn(
+          { err, sample: pickPayloadDiagnostics(comments[0]) },
+          "github rejected the only inline comment with path-resolution; dropping it (summary comment remains)",
+        );
+        return;
+      }
+      log.warn(
+        { err, commentCount: comments.length },
+        "batch review post rejected by github (likely one or more anchors didn't resolve), retrying each comment individually",
+      );
+    }
+
+    // fallback: post each comment as its own single-comment review. comments
+    // that github rejects get logged and dropped; survivors land as separate
+    // reviews. UX trade-off vs. the lost-everything alternative is worth it.
+    let posted = 0;
+    const dropped: { payload: ReturnType<typeof buildInlineCommentPayload>; err: unknown }[] = [];
+    for (const comment of comments) {
+      try {
+        await this.postReviewWithComments([comment]);
+        posted++;
+      } catch (err) {
+        if (!isPathResolutionError(err)) throw err;
+        dropped.push({ payload: comment, err });
+      }
+    }
+
+    if (dropped.length > 0) {
+      log.warn(
+        {
+          droppedCount: dropped.length,
+          postedCount: posted,
+          samples: dropped.slice(0, 3).map((d) => pickPayloadDiagnostics(d.payload)),
+        },
+        "github rejected some inline comments by path/line resolution; posted the rest individually",
+      );
+    }
+  }
+
+  private async postReviewWithComments(
+    comments: ReturnType<typeof buildInlineCommentPayload>[],
+  ): Promise<void> {
     await this.octokit.request("POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews", {
       owner: this.owner,
       repo: this.repo,
