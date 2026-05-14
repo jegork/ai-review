@@ -548,6 +548,81 @@ describe("GitHubProvider", () => {
       // batch attempt only — no retry on a different 422 class
       expect(octokit.request).toHaveBeenCalledTimes(1);
     });
+
+    it("drops every comment when the fallback loop also fails for all of them", async () => {
+      // batch 422, then every individual post 422s too. each one path-resolution.
+      // expected behavior: log every drop, post nothing, do NOT throw — summary
+      // comment is already up and the action shouldn't go red for an inline-only
+      // failure class.
+      octokit.request
+        .mockRejectedValueOnce(makePathResolutionError()) // batch
+        .mockRejectedValueOnce(makePathResolutionError()) // individual 1
+        .mockRejectedValueOnce(makePathResolutionError()) // individual 2
+        .mockRejectedValueOnce(makePathResolutionError()); // individual 3
+
+      await provider.postInlineComments([
+        makeFinding({ file: "bad-a.ts" }),
+        makeFinding({ file: "bad-b.ts" }),
+        makeFinding({ file: "bad-c.ts" }),
+      ]);
+
+      // 1 batch + 3 individual = 4 requests
+      expect(octokit.request).toHaveBeenCalledTimes(4);
+      // none of the individuals succeeded — the function returns normally
+      // without throwing. (no assertion on rejection)
+    });
+
+    it("emits a single-line payload (no start_line/start_side) when endLine is null", async () => {
+      octokit.request.mockResolvedValueOnce({ data: {} });
+
+      await provider.postInlineComments([
+        makeFinding({ file: "src/single.ts", line: 42, endLine: null }),
+      ]);
+
+      const call = octokit.request.mock.calls[0][1] as {
+        comments: {
+          path: string;
+          line: number;
+          side: string;
+          start_line?: number;
+          start_side?: string;
+        }[];
+      };
+      expect(call.comments).toHaveLength(1);
+      expect(call.comments[0]).toEqual(
+        expect.objectContaining({
+          path: "src/single.ts",
+          line: 42,
+          side: "RIGHT",
+        }),
+      );
+      expect(call.comments[0].start_line).toBeUndefined();
+      expect(call.comments[0].start_side).toBeUndefined();
+    });
+
+    it("treats endLine: 0 as single-line (falsy guard, no start_line/start_side)", async () => {
+      // 0 is a degenerate value — could come from a model that emitted a bare
+      // zero instead of null. The multi-line gate
+      // (`finding.endLine && finding.endLine !== finding.line`) treats 0 as
+      // falsy and correctly omits start_line/start_side, so we don't emit a
+      // bogus multi-line payload that github would reject.
+      // (Note: the `line` field uses `endLine ?? line` so endLine=0 *does*
+      // land in `line`. That's tangential to the single-line property and
+      // would be caught upstream by filterAnchorableFindings; not asserted
+      // here to keep the test focused on the multi-line gating behavior.)
+      octokit.request.mockResolvedValueOnce({ data: {} });
+
+      await provider.postInlineComments([
+        makeFinding({ file: "src/deg.ts", line: 7, endLine: 0 as unknown as null }),
+      ]);
+
+      const call = octokit.request.mock.calls[0][1] as {
+        comments: { start_line?: number; start_side?: string }[];
+      };
+      expect(call.comments).toHaveLength(1);
+      expect(call.comments[0].start_line).toBeUndefined();
+      expect(call.comments[0].start_side).toBeUndefined();
+    });
   });
 
   describe("getLinkedIssueNumbers", () => {
