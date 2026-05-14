@@ -93,6 +93,10 @@ describe("formatSummaryComment", () => {
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+
+        effectiveThreshold: 2,
+
+        degraded: false,
         agreementRate: 0.6,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "looks_good", "address_before_merge"],
@@ -114,6 +118,10 @@ describe("formatSummaryComment", () => {
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+
+        effectiveThreshold: 2,
+
+        degraded: false,
         agreementRate: 1,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "looks_good", "looks_good"],
@@ -152,6 +160,10 @@ describe("formatSummaryComment", () => {
       consensusMetadata: {
         passes: 1,
         threshold: 1,
+
+        effectiveThreshold: 1,
+
+        degraded: false,
         agreementRate: 1,
         recommendationElevated: false,
         passRecommendations: ["looks_good"],
@@ -567,6 +579,10 @@ describe("formatSummaryComment with dropped findings", () => {
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+
+        effectiveThreshold: 2,
+
+        degraded: false,
         agreementRate: 0.5,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "looks_good", "looks_good"],
@@ -594,6 +610,10 @@ describe("formatSummaryComment with dropped findings", () => {
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+
+        effectiveThreshold: 2,
+
+        degraded: false,
         agreementRate: 1,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "looks_good", "looks_good"],
@@ -618,6 +638,10 @@ describe("formatSummaryComment with dropped findings", () => {
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+
+        effectiveThreshold: 2,
+
+        degraded: false,
         agreementRate: 0.5,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "looks_good", "looks_good"],
@@ -661,6 +685,10 @@ describe("formatSummaryComment with elevated recommendation but no surviving fin
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+
+        effectiveThreshold: 2,
+
+        degraded: false,
         agreementRate: 0,
         recommendationElevated: true,
         passRecommendations: [
@@ -755,6 +783,10 @@ describe("formatSummaryComment with elevated recommendation but no surviving fin
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+
+        effectiveThreshold: 2,
+
+        degraded: false,
         agreementRate: 0.5,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "address_before_merge", "address_before_merge"],
@@ -777,6 +809,10 @@ describe("formatSummaryComment with elevated recommendation but no surviving fin
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+
+        effectiveThreshold: 2,
+
+        degraded: false,
         agreementRate: 0,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "looks_good", "looks_good"],
@@ -797,6 +833,10 @@ describe("formatSummaryComment with consensus metadata in footer", () => {
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+
+        effectiveThreshold: 2,
+
+        degraded: false,
         agreementRate: 0.67,
         recommendationElevated: false,
         passRecommendations: ["looks_good", "looks_good", "address_before_merge"],
@@ -816,6 +856,10 @@ describe("formatSummaryComment with consensus metadata in footer", () => {
       consensusMetadata: {
         passes: 3,
         threshold: 2,
+
+        effectiveThreshold: 2,
+
+        degraded: false,
         agreementRate: 1,
         recommendationElevated: true,
         passRecommendations: [
