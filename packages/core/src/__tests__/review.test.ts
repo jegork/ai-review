@@ -2,11 +2,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ReviewConfig, PRMetadata } from "../types.js";
 
 const generateMock = vi.fn();
+const generateTextMock = vi.fn();
 
 vi.mock("@mastra/core/agent", () => ({
   Agent: vi.fn().mockImplementation(function () {
     return { generate: generateMock };
   }),
+}));
+
+vi.mock("ai", () => ({
+  generateText: generateTextMock,
+  // Output.object({ schema }) — opaque marker the structurer uses. We don't
+  // need to validate its shape here; the structurer-only retry just hands it
+  // off to generateText (which is mocked). Returning a sentinel keeps the
+  // import call working without pulling in the real `ai` runtime.
+  Output: { object: (opts: unknown) => ({ __output: opts }) },
 }));
 
 const resolveJsonPromptInjectionMock = vi.fn(() => false);
@@ -173,6 +183,138 @@ describe("runReview retry on STRUCTURED_OUTPUT_SCHEMA_VALIDATION_FAILED", () => 
     await expect(runReview(config, "diff", prMetadata)).rejects.toThrow(
       /structured output parser returned no object/,
     );
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("runReview structurer-only retry", () => {
+  const validParsedReview = makeValidResponse().object;
+
+  beforeEach(() => {
+    generateMock.mockReset();
+    generateTextMock.mockReset();
+    delete process.env.RUSTY_LLM_STRUCTURING_MODEL;
+  });
+
+  it("uses structurer-only retry on cached prose instead of rerunning the full agent", async () => {
+    process.env.RUSTY_LLM_STRUCTURING_MODEL = "test-structurer";
+    generateMock.mockResolvedValueOnce({
+      object: undefined,
+      text: "the reviewer's prose that the structurer failed to parse",
+      usage: { totalTokens: 100, inputTokens: 80, outputTokens: 20 },
+    });
+    generateTextMock.mockResolvedValueOnce({
+      output: validParsedReview,
+      usage: { totalTokens: 30, inputTokens: 25, outputTokens: 5 },
+    });
+
+    const result = await runReview(config, "diff", prMetadata);
+
+    expect(result.recommendation).toBe("looks_good");
+    // expensive agent.generate called ONCE (not twice as the legacy path did)
+    expect(generateMock).toHaveBeenCalledTimes(1);
+    // cheap generateObject call took over the retry
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the full agent reroll when structurer-only retry also fails", async () => {
+    process.env.RUSTY_LLM_STRUCTURING_MODEL = "test-structurer";
+    generateMock
+      .mockResolvedValueOnce({
+        object: undefined,
+        text: "first-attempt prose",
+        usage: { totalTokens: 100 },
+      })
+      .mockResolvedValueOnce(makeValidResponse());
+    generateTextMock.mockRejectedValueOnce(new Error("structurer threw on retry"));
+
+    const result = await runReview(config, "diff", prMetadata);
+
+    expect(result.recommendation).toBe("looks_good");
+    // structurer-only retry was attempted once
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+    // when it failed, existing expensive retry path kicked in
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does NOT attempt structurer-only retry when no structuring model is configured", async () => {
+    // legacy path: no RUSTY_LLM_STRUCTURING_MODEL → existing 2-attempt retry only
+    generateMock
+      .mockResolvedValueOnce({
+        object: undefined,
+        text: "some prose",
+        usage: { totalTokens: 50 },
+      })
+      .mockResolvedValueOnce(makeValidResponse());
+
+    const result = await runReview(config, "diff", prMetadata);
+
+    expect(result.recommendation).toBe("looks_good");
+    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does NOT attempt structurer-only retry when reviewer returned no prose", async () => {
+    process.env.RUSTY_LLM_STRUCTURING_MODEL = "test-structurer";
+    generateMock
+      .mockResolvedValueOnce({
+        object: undefined,
+        text: "",
+        usage: { totalTokens: 30 },
+      })
+      .mockResolvedValueOnce(makeValidResponse());
+
+    const result = await runReview(config, "diff", prMetadata);
+
+    expect(result.recommendation).toBe("looks_good");
+    // no prose → skip structurer-only retry, go straight to expensive reroll
+    expect(generateTextMock).not.toHaveBeenCalled();
+    expect(generateMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("merges structurer-only retry token usage into the reported total", async () => {
+    process.env.RUSTY_LLM_STRUCTURING_MODEL = "test-structurer";
+    generateMock.mockResolvedValueOnce({
+      object: undefined,
+      text: "the reviewer's prose",
+      usage: { totalTokens: 100, inputTokens: 80, outputTokens: 20 },
+    });
+    generateTextMock.mockResolvedValueOnce({
+      output: validParsedReview,
+      usage: { totalTokens: 30, inputTokens: 25, outputTokens: 5 },
+    });
+
+    const result = await runReview(config, "diff", prMetadata);
+
+    // tokenCount should include both the agent's tokens AND the structurer retry's tokens
+    expect(result.tokenCount).toBe(130);
+  });
+
+  it("still throws when structurer-only retry succeeds with a non-schema-conforming object via the validation error path", async () => {
+    // edge case: generateObject succeeds but returns something incompatible.
+    // ai-sdk's generateObject validates against the schema and throws if it
+    // doesn't match, so this case is mostly defensive — but verifies that a
+    // throw from generateObject is caught and falls through to the full retry.
+    process.env.RUSTY_LLM_STRUCTURING_MODEL = "test-structurer";
+    generateMock
+      .mockResolvedValueOnce({
+        object: undefined,
+        text: "prose",
+        usage: { totalTokens: 50 },
+      })
+      .mockResolvedValueOnce({
+        object: undefined,
+        text: "more prose",
+        usage: { totalTokens: 50 },
+      });
+    // both structurer retries fail (one per expensive attempt)
+    generateTextMock.mockRejectedValue(new Error("schema validation failed"));
+
+    await expect(runReview(config, "diff", prMetadata)).rejects.toThrow(
+      /structured output parser returned no object/,
+    );
+    // each expensive attempt should try the cheap structurer retry once
+    expect(generateTextMock).toHaveBeenCalledTimes(2);
     expect(generateMock).toHaveBeenCalledTimes(2);
   });
 });

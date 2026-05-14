@@ -1,5 +1,7 @@
 import { Agent } from "@mastra/core/agent";
 import type { ToolsInput } from "@mastra/core/agent";
+import { generateText, Output } from "ai";
+import type { z } from "zod";
 import { ReviewOutputSchema, SkimReviewOutputSchema } from "./schema.js";
 import { buildSystemPrompt, buildUserMessage, buildCachedSystemMessages } from "./prompts.js";
 import {
@@ -182,6 +184,86 @@ function summarizeFailedResponse(r: unknown): Record<string, unknown> {
   };
 }
 
+interface StructurerRetryUsage {
+  totalTokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
+interface StructurerRetryResult {
+  object: unknown;
+  usage?: StructurerRetryUsage;
+}
+
+/**
+ * Retry just the structuring step on the reviewer's prose. The agent
+ * already produced `prose` (the expensive part — multi-step tool-using
+ * trajectory). When the primary structurer returned no object, retrying
+ * with the same prose at the structurer level is ~$0.005 vs ~$0.10 for a
+ * full reviewer reroll. The agent's tool trajectory and bias toward
+ * extractable prose are preserved across the cheap retry.
+ *
+ * Returns null when the retry itself fails — caller falls through to the
+ * existing expensive retry path so we still get the previous behavior as
+ * a backstop.
+ */
+async function retryStructurerOnProse(
+  prose: string,
+  schema: z.ZodType,
+  structuringConfig: ModelConfig,
+  bindings: Record<string, unknown>,
+): Promise<StructurerRetryResult | null> {
+  try {
+    const result = await generateText({
+      model: resolveModel(structuringConfig),
+      output: Output.object({ schema }),
+      prompt:
+        "Convert the following code review into the requested JSON structure. " +
+        "Preserve every finding, observation, and field exactly as written.\n\n" +
+        prose,
+    });
+    log.info(
+      {
+        ...bindings,
+        structurerRetryTokens: result.usage.totalTokens,
+      },
+      "structurer-only retry succeeded after primary returned no object",
+    );
+    return { object: result.output, usage: result.usage };
+  } catch (err) {
+    log.warn(
+      { ...bindings, err },
+      "structurer-only retry also failed; falling back to full reviewer reroll",
+    );
+    return null;
+  }
+}
+
+/** merge the structurer-only retry's usage into the original Mastra response.
+ * preserves the original response shape so downstream consumers see one
+ * coherent usage object that reflects the actual tokens billed. */
+function augmentResponseWithStructurerRetry<T extends { usage?: StructurerRetryUsage }>(
+  original: T,
+  retry: StructurerRetryResult,
+): T & { object: unknown } {
+  const origUsage = original.usage ?? {};
+  const retryUsage = retry.usage ?? {};
+  const sumOpt = (a?: number, b?: number): number | undefined => {
+    if (a === undefined && b === undefined) return undefined;
+    return (a ?? 0) + (b ?? 0);
+  };
+  return {
+    ...original,
+    object: retry.object,
+    usage: {
+      ...origUsage,
+      totalTokens: sumOpt(origUsage.totalTokens, retryUsage.totalTokens),
+      inputTokens: sumOpt(origUsage.inputTokens, retryUsage.inputTokens),
+      outputTokens: sumOpt(origUsage.outputTokens, retryUsage.outputTokens),
+    },
+  };
+}
+
 async function generateWithStructuredOutputRetry<T>(
   fn: () => Promise<T>,
   bindings: Record<string, unknown> = {},
@@ -356,6 +438,29 @@ export async function runReview(
             { ...logBindings, ...summarizeFailedResponse(r) },
             "structured output produced no object — captured diagnostic snapshot",
           );
+
+          // CHEAP RETRY: structurer-only on the reviewer's prose. The expensive
+          // tool trajectory already ran and produced text — re-running the whole
+          // agent.generate (the existing fallback below) costs ~20× more than
+          // just retrying the structurer on the cached prose. Only fires when
+          // a structuring model is configured AND we actually have prose to
+          // restructure. On failure, falls through to the existing retry path.
+          const proseFromR = (r as { text?: unknown }).text;
+          if (structuringConfig && typeof proseFromR === "string" && proseFromR.length > 0) {
+            const retried = await retryStructurerOnProse(
+              proseFromR,
+              schema,
+              structuringConfig,
+              logBindings,
+            );
+            if (retried) {
+              return augmentResponseWithStructurerRetry(
+                r as { usage?: StructurerRetryUsage },
+                retried,
+              ) as typeof r;
+            }
+          }
+
           const err = new Error(
             "structured output parser returned no object (model likely emitted text outside the JSON block or truncated)",
           );
