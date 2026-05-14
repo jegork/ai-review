@@ -44,7 +44,16 @@ export interface ConsensusMetadata {
   agreementRate: number;
   recommendationElevated: boolean;
   passRecommendations: Recommendation[];
+  /** display names of every configured pass model, in slot order — includes
+   * models whose pass failed. Use `successfulPassModels` for user-facing
+   * attribution where credit should reflect what actually ran. */
   passModels?: string[];
+  /** display names of pass models that produced a result (subset of
+   * `passModels` in the same relative order). When `failedPasses > 0`, this
+   * is what consumers should render as "reviewers" — `passModels` alone
+   * would credit models whose call threw. Optional for backward compat with
+   * older serialized metadata; consensus.ts always populates it. */
+  successfulPassModels?: string[];
   passPlanReason?: string;
   /** number of consensus passes that threw before producing a result */
   failedPasses: number;

@@ -333,11 +333,15 @@ export function formatSummaryComment(
   lines.push("");
   lines.push("---");
   lines.push("");
-  const passModels = review.consensusMetadata?.passModels;
+  // prefer successfulPassModels (only models whose pass actually returned a
+  // result) so failed passes aren't credited. fall back to passModels for
+  // historical metadata that pre-dates the field, then to review.modelUsed.
+  const successfulModels = review.consensusMetadata?.successfulPassModels;
+  const configuredModels = review.consensusMetadata?.passModels;
+  const reviewerSource =
+    successfulModels && successfulModels.length > 0 ? successfulModels : (configuredModels ?? []);
   const reviewerLabel =
-    passModels && passModels.length > 0
-      ? Array.from(new Set(passModels)).join(", ")
-      : review.modelUsed;
+    reviewerSource.length > 0 ? Array.from(new Set(reviewerSource)).join(", ") : review.modelUsed;
   const parts = [`Reviewed by ${reviewerLabel} · ${review.tokenCount} tokens (review)`];
   if (review.judgeTokenCount !== undefined) {
     parts.push(`${review.judgeTokenCount} tokens (judge)`);
@@ -347,10 +351,17 @@ export function formatSummaryComment(
   }
   if (review.consensusMetadata) {
     const cm = review.consensusMetadata;
-    parts.push(`consensus ${cm.passes} passes`);
+    parts.push(
+      cm.failedPasses > 0
+        ? `consensus ${cm.passes} passes (${cm.failedPasses} failed)`
+        : `consensus ${cm.passes} passes`,
+    );
     parts.push(`${Math.round(cm.agreementRate * 100)}% agreement`);
     if (cm.recommendationElevated) {
       parts.push("recommendation elevated from pass votes");
+    }
+    if (cm.degraded) {
+      parts.push("degraded — judge filtering only");
     }
   }
   if (review.openGrepStats?.available && review.openGrepStats.findingCount > 0) {

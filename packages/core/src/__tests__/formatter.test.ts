@@ -177,6 +177,95 @@ describe("formatSummaryComment", () => {
     expect(result).toContain("Reviewed by openai/gpt-5-mini · 12345 tokens");
   });
 
+  it("credits only successfulPassModels when a configured pass failed", () => {
+    // exactly the BuildFind #527 case: configured 3 passes, openrouter/xai/grok-4.3
+    // is an invalid model id → pass 2 dies. The summary should NOT credit grok.
+    const review = makeReview({
+      modelUsed: "ollama/deepseek-v4-flash:cloud",
+      tokenCount: 112622,
+      consensusMetadata: {
+        passes: 3,
+        threshold: 2,
+        effectiveThreshold: 2,
+        degraded: false,
+        agreementRate: 0,
+        recommendationElevated: false,
+        passRecommendations: ["address_before_merge", "address_before_merge"],
+        passModels: [
+          "ollama/deepseek-v4-flash:cloud",
+          "openrouter/xai/grok-4.3",
+          "ollama/kimi-k2.6:cloud",
+        ],
+        successfulPassModels: ["ollama/deepseek-v4-flash:cloud", "ollama/kimi-k2.6:cloud"],
+        failedPasses: 1,
+      },
+    });
+
+    const footerLine = formatSummaryComment(review)
+      .split("\n")
+      .find((l) => l.startsWith("Reviewed by "));
+    expect(footerLine).toBeDefined();
+    expect(footerLine).toContain("ollama/deepseek-v4-flash:cloud");
+    expect(footerLine).toContain("ollama/kimi-k2.6:cloud");
+    // the failed model must NOT appear in the credit line
+    expect(footerLine).not.toContain("openrouter/xai/grok-4.3");
+    // and the consensus annotation should note the failure
+    expect(footerLine).toContain("consensus 3 passes (1 failed)");
+  });
+
+  it("falls back to passModels for older metadata without successfulPassModels", () => {
+    // backward-compat: existing serialized metadata predating the new field
+    // should still render — fall back to passModels (current behavior preserved).
+    const review = makeReview({
+      modelUsed: "openai/gpt-5-mini",
+      tokenCount: 30000,
+      consensusMetadata: {
+        passes: 2,
+        threshold: 2,
+        effectiveThreshold: 2,
+        degraded: false,
+        agreementRate: 1,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good", "looks_good"],
+        passModels: ["openai/gpt-5-mini", "anthropic/claude-sonnet-4-6"],
+        // successfulPassModels intentionally absent
+        failedPasses: 0,
+      },
+    });
+
+    const result = formatSummaryComment(review);
+
+    expect(result).toContain("Reviewed by openai/gpt-5-mini, anthropic/claude-sonnet-4-6");
+  });
+
+  it("annotates degraded reviews in the consensus footer line", () => {
+    const review = makeReview({
+      modelUsed: "openai/gpt-5-mini",
+      tokenCount: 20000,
+      consensusMetadata: {
+        passes: 2,
+        threshold: 2,
+        effectiveThreshold: 1,
+        degraded: true,
+        agreementRate: 1,
+        recommendationElevated: false,
+        passRecommendations: ["looks_good"],
+        passModels: ["openai/gpt-5-mini", "anthropic/claude-sonnet-4-6"],
+        successfulPassModels: ["openai/gpt-5-mini"],
+        failedPasses: 1,
+      },
+    });
+
+    const footerLine = formatSummaryComment(review)
+      .split("\n")
+      .find((l) => l.startsWith("Reviewed by "));
+    expect(footerLine).toBeDefined();
+    expect(footerLine).toContain("Reviewed by openai/gpt-5-mini");
+    expect(footerLine).not.toContain("claude-sonnet");
+    expect(footerLine).toContain("consensus 2 passes (1 failed)");
+    expect(footerLine).toContain("degraded — judge filtering only");
+  });
+
   it("renders a clean review with zero findings", () => {
     const review = makeReview({
       recommendation: "looks_good",
