@@ -446,6 +446,108 @@ describe("GitHubProvider", () => {
 
       expect(octokit.request).not.toHaveBeenCalled();
     });
+
+    function makeFinding(overrides: Partial<Finding> = {}): Finding {
+      return {
+        file: "src/index.ts",
+        line: 10,
+        endLine: null,
+        severity: "warning",
+        category: "bugs",
+        message: "issue",
+        suggestedFix: null,
+        ...overrides,
+      };
+    }
+
+    function makePathResolutionError(): Error {
+      const err = new Error("Unprocessable Entity") as Error & {
+        status?: number;
+        response?: unknown;
+      };
+      err.status = 422;
+      err.response = {
+        data: {
+          message: "Unprocessable Entity",
+          errors: ["Path could not be resolved"],
+          status: "422",
+        },
+      };
+      return err;
+    }
+
+    it("falls back to per-comment posts when batch returns 422 path-resolution", async () => {
+      // batch fails, then 3 individual posts: 2 succeed, 1 fails (still 422)
+      octokit.request
+        .mockRejectedValueOnce(makePathResolutionError()) // batch
+        .mockResolvedValueOnce({ data: {} }) // individual 1
+        .mockRejectedValueOnce(makePathResolutionError()) // individual 2 (bad anchor)
+        .mockResolvedValueOnce({ data: {} }); // individual 3
+
+      await provider.postInlineComments([
+        makeFinding({ file: "good-a.ts" }),
+        makeFinding({ file: "bad.ts" }),
+        makeFinding({ file: "good-b.ts" }),
+      ]);
+
+      // batch (1) + 3 individual = 4 calls total
+      expect(octokit.request).toHaveBeenCalledTimes(4);
+      // each individual call uses the same endpoint with a 1-comment batch
+      const individualCalls = octokit.request.mock.calls.slice(1);
+      for (const [, args] of individualCalls) {
+        expect((args as { comments: unknown[] }).comments).toHaveLength(1);
+      }
+    });
+
+    it("silently drops a single bad comment when batch fails with 1 finding", async () => {
+      // batch with 1 comment fails — no fallback to attempt, just drop and log
+      octokit.request.mockRejectedValueOnce(makePathResolutionError());
+
+      await provider.postInlineComments([makeFinding({ file: "bad.ts" })]);
+
+      // only the failed batch attempt happens; no retry
+      expect(octokit.request).toHaveBeenCalledTimes(1);
+    });
+
+    it("propagates non-422 errors from the batch post", async () => {
+      const err = Object.assign(new Error("network"), { status: 503 });
+      octokit.request.mockRejectedValueOnce(err);
+
+      await expect(
+        provider.postInlineComments([makeFinding(), makeFinding({ file: "b.ts" })]),
+      ).rejects.toThrow("network");
+      expect(octokit.request).toHaveBeenCalledTimes(1);
+    });
+
+    it("propagates non-422 errors during per-comment fallback", async () => {
+      // batch fails 422, first individual succeeds, second hits a network error
+      const networkErr = Object.assign(new Error("network"), { status: 500 });
+      octokit.request
+        .mockRejectedValueOnce(makePathResolutionError())
+        .mockResolvedValueOnce({ data: {} })
+        .mockRejectedValueOnce(networkErr);
+
+      await expect(
+        provider.postInlineComments([makeFinding({ file: "a.ts" }), makeFinding({ file: "b.ts" })]),
+      ).rejects.toThrow("network");
+      // batch + 2 individuals (the second threw)
+      expect(octokit.request).toHaveBeenCalledTimes(3);
+    });
+
+    it("does not attempt fallback when error is 422 with non-path-resolution body", async () => {
+      // a 422 that isn't path-resolution (e.g., body too long) should NOT fallback
+      const otherErr = Object.assign(new Error("Unprocessable Entity"), {
+        status: 422,
+        response: { data: { errors: ["body is too long"] } },
+      });
+      octokit.request.mockRejectedValueOnce(otherErr);
+
+      await expect(
+        provider.postInlineComments([makeFinding(), makeFinding({ file: "b.ts" })]),
+      ).rejects.toThrow("Unprocessable Entity");
+      // batch attempt only — no retry on a different 422 class
+      expect(octokit.request).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("getLinkedIssueNumbers", () => {
